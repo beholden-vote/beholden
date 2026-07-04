@@ -1,0 +1,42 @@
+# Node / web
+node_modules/
+web/dist/
+*.local
+.vite/
+
+# Python / ETL
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+pipelines/build/
+
+# ETL + tile pipeline artifacts (data is rebuilt, never committed)
+/dist/
+/data/
+*.duckdb
+*.duckdb.wal
+*.pmtiles
+*.mbtiles
+spike/out/
+spike/*.geojson
+spike/*.fgb
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
