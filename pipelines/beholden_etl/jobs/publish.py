@@ -20,6 +20,19 @@ from ..config import PAGES_DIST, R2_BUCKET
 CACHE_CONTROL = "public, max-age=300, s-maxage=300"
 REQUIRED_ENV = ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
 
+# Public-record data read cross-origin by the SPA (beholden.vote -> data.beholden.vote,
+# a different origin). The bucket must send Access-Control-Allow-Origin or the browser
+# blocks every fetch — including the PMTiles Range requests, which preflight on `range`.
+CORS_CONFIG = {
+    "CORSRules": [{
+        "AllowedOrigins": ["*"],                 # public data; also covers *.pages.dev previews
+        "AllowedMethods": ["GET", "HEAD"],
+        "AllowedHeaders": ["*"],                 # allow the Range preflight
+        "ExposeHeaders": ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
+        "MaxAgeSeconds": 3600,
+    }]
+}
+
 
 def _client():
     import boto3
@@ -52,12 +65,13 @@ def run(data_dir: str | Path = PAGES_DIST, dry_run: bool | None = None) -> int:
         return len(files)
 
     client = _client()
+    client.put_bucket_cors(Bucket=R2_BUCKET, CORSConfiguration=CORS_CONFIG)  # idempotent
     for p in files:
         key = p.relative_to(data_dir).as_posix()          # bucket-root keys
         client.put_object(
             Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
             ContentType=_content_type(p), CacheControl=CACHE_CONTROL)
-    print(f"publish: {len(files)} files -> r2://{R2_BUCKET}/")
+    print(f"publish: cors set + {len(files)} files -> r2://{R2_BUCKET}/")
     return len(files)
 
 
