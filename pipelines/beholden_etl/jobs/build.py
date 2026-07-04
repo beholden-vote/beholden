@@ -7,8 +7,8 @@ Emits, for the current federal legislature:
   coverage.json           per-source freshness vs SLA + artifact counts
 
 Enforces the serving rule via dossiers.validate(): no provenance, no publish.
-Legislative counts are stubbed to zero pending the bills/votes sync (E2) — the
-section still ships with a valid provenance envelope so the contract holds.
+The legislative section carries real sponsored/cosponsored/became-law counts and
+recent bills (E2); key votes and committees are the next slices.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from pathlib import Path
 
 from ..config import CONGRESS, PAGES_DIST, SOURCES, pipeline_version
 from ..build import dossiers, stylefeeds
+from ..sources import congress_gov
 from .transform import DEFAULT_DB
 from .. import store
 
@@ -120,7 +121,42 @@ def _medians(holders: list[dict]) -> dict:
             "chamber": {k: med(v) for k, v in by_chamber.items()}}
 
 
-def _dossier(h: dict, photo: dict, manifest: dict, medians: dict) -> dict:
+def _legislative_stats(con) -> dict[str, dict]:
+    """person_id -> {sponsored, became_law, recent_bills[]} from the bills spine."""
+    stats: dict[str, dict] = {}
+    for pid, sponsored, became_law in con.execute(
+        """SELECT s.person_id, count(*) AS sponsored,
+                  count(*) FILTER (WHERE b.status='law') AS became_law
+           FROM sponsorships s JOIN bills b USING(bill_id)
+           WHERE s.role='sponsor' GROUP BY s.person_id""").fetchall():
+        stats[str(pid)] = {"sponsored": sponsored, "became_law": became_law, "recent_bills": []}
+    for pid, bill_id_, title, status in con.execute(
+        """SELECT s.person_id, b.bill_id, b.title, b.status
+           FROM sponsorships s JOIN bills b USING(bill_id)
+           WHERE s.role='sponsor'
+           QUALIFY row_number() OVER (PARTITION BY s.person_id
+                   ORDER BY b.latest_action_on DESC NULLS LAST, b.bill_id) <= 10""").fetchall():
+        stats.setdefault(str(pid), {"sponsored": 0, "became_law": 0, "recent_bills": []})
+        stats[str(pid)]["recent_bills"].append(
+            {"bill_id": bill_id_, "title": title, "status": status,
+             "url": congress_gov.bill_public_url(bill_id_)})
+    return stats
+
+
+def _cosponsored_counts(raw_dir: Path) -> dict[str, int]:
+    """bioguide -> cosponsored total, read from the landed legislation snapshots."""
+    out: dict[str, int] = {}
+    d = raw_dir / "congress.gov" / "legislation"
+    if d.exists():
+        for f in d.glob("*.json"):
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            if rec.get("bioguide"):
+                out[rec["bioguide"]] = int(rec.get("cosponsored_count") or 0)
+    return out
+
+
+def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
+             leg_spine: dict, cospon: dict) -> dict:
     bio = h.get("bioguide")
     vacant = bool(h["is_vacant_marker"])
     score = None if h["ideology_score"] is None else float(h["ideology_score"])
@@ -151,9 +187,14 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict) -> dict:
         "provenance": _provenance("voteview",
                                   f"https://voteview.com/congress/{h['chamber']}", manifest),
     }
-    legislative = {   # E2 stub: structure + provenance ship now, counts follow
-        "counts": {"sponsored": 0, "cosponsored": 0, "became_law": 0},
-        "recent_bills": [], "key_votes": [], "committees": [],
+    stats = leg_spine.get(h["person_id"], {})
+    legislative = {   # E2: sponsored/became-law + recent bills from the spine;
+                      # cosponsored total from the landed snapshot; votes/committees follow.
+        "counts": {"sponsored": stats.get("sponsored", 0),
+                   "cosponsored": cospon.get(bio, 0),
+                   "became_law": stats.get("became_law", 0)},
+        "recent_bills": stats.get("recent_bills", []),
+        "key_votes": [], "committees": [],
         "provenance": _provenance("congress.gov",
                                   f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
                                   manifest),
@@ -174,11 +215,13 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
 
     con = store.connect(db_path)
     holders = _current_holders(con)
+    leg_spine = _legislative_stats(con)
     con.close()
     medians = _medians(holders)
+    cospon = _cosponsored_counts(raw_dir)
 
     # --- dossiers (all members) ---
-    docs = [_dossier(h, photo, manifest, medians) for h in holders]
+    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon) for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
     # --- style feed + pins for the CD layer (House) ---

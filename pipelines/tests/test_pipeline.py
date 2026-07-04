@@ -92,18 +92,40 @@ MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
 }}
 
 
+# Jane (R000001) sponsored two bills, one now law; Sam has no legislation file
+# at all -> exercises the zero-legislation path (counts 0, still contract-valid).
+LEGISLATION = {
+    "R000001": {"bioguide": "R000001", "cosponsored_count": 42, "sponsored": [
+        {"congress": 119, "type": "HR", "number": "100", "title": "A Bill To Do X",
+         "introducedDate": "2025-02-01", "policyArea": {"name": "Health"},
+         "latestAction": {"actionDate": "2025-06-01", "text": "Became Public Law No: 119-1."}},
+        {"congress": 119, "type": "HR", "number": "200", "title": "A Bill To Do Y",
+         "introducedDate": "2025-03-01",
+         "latestAction": {"actionDate": "2025-04-01", "text": "Referred to the Committee on Ways and Means."}},
+    ]},
+}
+
+
 @pytest.fixture
 def slice_dirs(tmp_path):
     raw = tmp_path / "raw"
     (raw / "unitedstates_legislators").mkdir(parents=True)
     (raw / "voteview").mkdir(parents=True)
+    (raw / "congress.gov" / "legislation").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
     (raw / "voteview" / "HS119_members.csv").write_text(VOTEVIEW)
+    for bio, rec in LEGISLATION.items():
+        (raw / "congress.gov" / "legislation" / f"{bio}.json").write_text(json.dumps(rec))
     (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
     build.run(db_path=db, out_dir=tmp_path / "data", raw_dir=raw)
     return tmp_path
+
+
+def _dossier_named(slice_dirs, name):
+    return next(json.loads(f.read_text()) for f in (slice_dirs / "data" / "dossiers").glob("*.json")
+               if json.loads(f.read_text())["identity"]["full_name"] == name)
 
 
 def test_stylefeed_keys_match_cd_ocd(slice_dirs):
@@ -177,3 +199,30 @@ def test_coverage_reports_freshness_vs_sla(slice_dirs):
         assert isinstance(row["within_sla"], bool)
     # snapshot is 1h old — within every registered SLA (tightest is 24h)
     assert all(row["within_sla"] for row in cov["sources"].values())
+
+
+# --- E2 legislative sync ----------------------------------------------------
+def test_bill_normalization():
+    from beholden_etl.sources import congress_gov as cg
+    law = {"congress": 119, "type": "HR", "number": "100",
+           "latestAction": {"text": "Became Public Law No: 119-1."}}
+    assert cg.bill_id(law) == "us/119/hr/100"
+    assert cg.derive_status(law) == "law"
+    assert cg.derive_status({"latestAction": {"text": "Referred to the Committee"}}) == "committee"
+    assert cg.derive_status({}) == "introduced"                 # conservative default
+    assert cg.bill_public_url("us/119/hr/100") == \
+        "https://www.congress.gov/bill/119th-congress/house-bill/100"
+
+
+def test_legislative_counts_from_spine(slice_dirs):
+    """Sponsored + became-law + recent bills come from the bills spine; the
+    cosponsored total from the landed snapshot. Members with no legislation
+    file report honest zeros and stay contract-valid."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    assert leg["counts"] == {"sponsored": 2, "cosponsored": 42, "became_law": 1}
+    assert len(leg["recent_bills"]) == 2
+    assert leg["recent_bills"][0]["url"].startswith(
+        "https://www.congress.gov/bill/119th-congress/house-bill/")
+    # Sam has no legislation snapshot -> zeros, not fabricated activity
+    assert _dossier_named(slice_dirs, "Sam Sen")["legislative"]["counts"] == \
+        {"sponsored": 0, "cosponsored": 0, "became_law": 0}

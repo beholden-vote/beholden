@@ -44,10 +44,23 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     client = congress_gov.CongressGovClient()
     members = list(client.current_members(CONGRESS))
     _write_json(raw / "congress.gov" / f"members-{CONGRESS}.json", members)
+
+    # --- legislative activity per member (E2): sponsored bills walked in full
+    # (exact became-law counts) + cosponsored total. The long pole of the run. ---
+    leg_dir = raw / "congress.gov" / "legislation"
+    bioguides = [m["bioguideId"] for m in members if m.get("bioguideId")]
+    for i, bio in enumerate(bioguides, 1):
+        _write_json(leg_dir / f"{bio}.json", {
+            "bioguide": bio,
+            "sponsored": client.sponsored_legislation(bio),
+            "cosponsored_count": client.cosponsored_count(bio)})
+        if i % 100 == 0 or i == len(bioguides):
+            print(f"fetch: legislation {i}/{len(bioguides)} members")
+
     manifest["sources"]["congress.gov"] = {
         "retrieved_at": _now(),
         "source_url": f"https://www.congress.gov/members?q=%7B%22congress%22%3A{CONGRESS}%7D",
-        "count": len(members)}
+        "count": len(members), "legislation_members": len(bioguides)}
 
     # --- ideology (Voteview DW-NOMINATE) ---
     csv_text = voteview.member_scores_csv(CONGRESS)

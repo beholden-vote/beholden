@@ -15,6 +15,7 @@ import uuid
 from pathlib import Path
 
 from ..config import CONGRESS, RAW_DIST, SPINE_RESOLUTION_MIN
+from ..sources import congress_gov
 from ..sources import legislators as L
 from ..sources import voteview
 from .. import divisions as D
@@ -153,8 +154,38 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
                 scores.append(row)
         store.insert(con, "ideology_scores", scores)
 
+    # --- legislative: sponsored bills -> bills + sponsorships spine (E2) ---
+    # Only sponsored rows land in the spine (walked in full); the cosponsored
+    # total stays a per-member count in raw, read at build time.
+    bioguide_to_person = {r["id_value"]: r["person_id"]
+                          for r in uniq_idents if r["id_scheme"] == "bioguide"}
+    leg_dir = raw / "congress.gov" / "legislation"
+    if leg_dir.exists():
+        bills: dict[str, dict] = {}
+        sponsorships, seen_sp = [], set()
+        for f in sorted(leg_dir.glob("*.json")):
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            pid = bioguide_to_person.get(rec.get("bioguide"))
+            if not pid:
+                continue                              # member not in the crosswalk spine
+            for item in rec.get("sponsored", []):
+                if not (item.get("type") and item.get("number") and item.get("congress")):
+                    continue                          # can't form a stable bill_id
+                row = congress_gov.bill_row(item)
+                bid = row["bill_id"]
+                bills.setdefault(bid, row)
+                pk = (bid, pid)
+                if pk not in seen_sp:
+                    seen_sp.add(pk)
+                    sponsorships.append({"bill_id": bid, "person_id": pid, "role": "sponsor",
+                                         "is_original": True,
+                                         "sponsored_on": item.get("introducedDate") or None})
+        store.insert(con, "bills", list(bills.values()))
+        store.insert(con, "sponsorships", sponsorships)
+
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-              for t in ("persons", "divisions", "offices", "terms", "ideology_scores")}
+              for t in ("persons", "divisions", "offices", "terms",
+                        "ideology_scores", "bills", "sponsorships")}
     print("transform:", " ".join(f"{k}={v}" for k, v in counts.items()),
           f"(resolution {rate:.4f})")
     con.close()
