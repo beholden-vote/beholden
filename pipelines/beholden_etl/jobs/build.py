@@ -155,8 +155,22 @@ def _cosponsored_counts(raw_dir: Path) -> dict[str, int]:
     return out
 
 
+def _campaign_finance(con) -> dict[str, dict]:
+    """person_id -> {candidate_id, cycles[]} from campaign_finance_cycles (E3)."""
+    out: dict[str, dict] = {}
+    for pid, cycle, cand, raised, spent, cash, as_of in con.execute(
+        """SELECT person_id, cycle, fec_committee_id,
+                  total_raised_cents, total_spent_cents, cash_on_hand_cents, as_of
+           FROM campaign_finance_cycles ORDER BY cycle DESC""").fetchall():
+        entry = out.setdefault(str(pid), {"candidate_id": cand, "cycles": []})
+        entry["cycles"].append({
+            "cycle": cycle, "total_raised_cents": raised, "total_spent_cents": spent,
+            "cash_on_hand_cents": cash, "as_of": str(as_of)})
+    return out
+
+
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
-             leg_spine: dict, cospon: dict) -> dict:
+             leg_spine: dict, cospon: dict, campaign: dict) -> dict:
     bio = h.get("bioguide")
     vacant = bool(h["is_vacant_marker"])
     score = None if h["ideology_score"] is None else float(h["ideology_score"])
@@ -199,11 +213,20 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                                   f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
                                   manifest),
     }
-    return dossiers.build_one(
-        {"person_id": h["person_id"]},
-        {"identity": identity, "ideology": ideology, "legislative": legislative,
-         "graph_ref": f"/graph/neighborhood/{h['person_id']}"},
-        pipeline_version())
+    sections = {"identity": identity, "ideology": ideology, "legislative": legislative,
+                "graph_ref": f"/graph/neighborhood/{h['person_id']}"}
+
+    cf = campaign.get(h["person_id"])
+    if cf and cf["cycles"]:
+        # Money section publishes only when there's real FEC data; absent money
+        # renders as an honest "pending", never a fabricated $0 (contracts §3).
+        sections["money"] = {"campaign_finance": {
+            "cycles": cf["cycles"],
+            "provenance": _provenance(
+                "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest),
+        }}
+
+    return dossiers.build_one({"person_id": h["person_id"]}, sections, pipeline_version())
 
 
 def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
@@ -216,12 +239,13 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     con = store.connect(db_path)
     holders = _current_holders(con)
     leg_spine = _legislative_stats(con)
+    campaign = _campaign_finance(con)
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
 
     # --- dossiers (all members) ---
-    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon) for h in holders]
+    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign) for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
     # --- style feed + pins for the CD layer (House) ---

@@ -67,7 +67,7 @@ def test_schema_loads_with_generated_column():
 
 # --- transform + build vertical slice ---------------------------------------
 LEGS = [
-    {"id": {"bioguide": "R000001", "icpsr": "11"}, "name": {"official_full": "Jane Rep"},
+    {"id": {"bioguide": "R000001", "icpsr": "11", "fec": ["H8TN06001"]}, "name": {"official_full": "Jane Rep"},
      "bio": {"birthday": "1970-05-01"},
      "terms": [{"type": "rep", "start": "2025-01-03", "end": "2027-01-03", "state": "TN", "district": 6, "party": "Republican"}]},
     {"id": {"bioguide": "A000002", "icpsr": "22"}, "name": {"official_full": "Al Large"},
@@ -89,7 +89,13 @@ MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
     "unitedstates_legislators": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 3},
     "congress.gov": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 3},
     "voteview": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 4},
+    "fec": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
 }}
+
+# Jane's FEC candidate totals (dollars, as the API returns them -> stored cents).
+FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals": {
+    "receipts": 1234567.89, "disbursements": 900000.0,
+    "last_cash_on_hand_end_period": 334567.89, "coverage_end_date": "2026-06-30T00:00:00"}}}
 
 
 # Jane (R000001) sponsored two bills, one now law; Sam has no legislation file
@@ -114,8 +120,11 @@ def slice_dirs(tmp_path):
     (raw / "congress.gov" / "legislation").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
     (raw / "voteview" / "HS119_members.csv").write_text(VOTEVIEW)
+    (raw / "fec" / "totals").mkdir(parents=True)
     for bio, rec in LEGISLATION.items():
         (raw / "congress.gov" / "legislation" / f"{bio}.json").write_text(json.dumps(rec))
+    for cand, rec in FEC_TOTALS.items():
+        (raw / "fec" / "totals" / f"{cand}.json").write_text(json.dumps(rec))
     (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
@@ -226,3 +235,28 @@ def test_legislative_counts_from_spine(slice_dirs):
     # Sam has no legislation snapshot -> zeros, not fabricated activity
     assert _dossier_named(slice_dirs, "Sam Sen")["legislative"]["counts"] == \
         {"sponsored": 0, "cosponsored": 0, "became_law": 0}
+
+
+# --- E3 campaign finance ----------------------------------------------------
+def test_fec_dollars_to_cents():
+    from beholden_etl.sources import fec
+    assert fec.to_cents(1234567.89) == 123456789
+    assert fec.to_cents(None) is None
+    row = fec.cycle_row("p1", "H8TN06001", 2026,
+                        {"receipts": 100.0, "coverage_end_date": "2026-06-30T00:00:00"}, None)
+    assert row["total_raised_cents"] == 10000 and row["as_of"] == "2026-06-30"
+    # no coverage date and no fallback -> unpublishable row (as_of is NOT NULL)
+    assert fec.cycle_row("p1", "C1", 2026, {"receipts": 1.0}, None) is None
+
+
+def test_campaign_finance_only_when_real(slice_dirs):
+    """money publishes for members with FEC data; absent for those without, so
+    the UI shows an honest 'pending' rather than a fabricated $0."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    cf = jane["money"]["campaign_finance"]
+    assert cf["cycles"][0] == {"cycle": 2026, "total_raised_cents": 123456789,
+                               "total_spent_cents": 90000000,
+                               "cash_on_hand_cents": 33456789, "as_of": "2026-06-30"}
+    assert cf["provenance"]["source"] == "fec"
+    # Sam has no FEC id/totals -> no money section at all
+    assert "money" not in _dossier_named(slice_dirs, "Sam Sen")

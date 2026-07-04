@@ -14,8 +14,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, RAW_DIST
-from ..sources import congress_gov, legislators, voteview
+from ..config import CONGRESS, FEC_CYCLE, RAW_DIST
+from ..sources import congress_gov, fec, legislators, voteview
 
 LEGISLATORS_URL = legislators.URL
 VOTEVIEW_URL = voteview.members_url(CONGRESS)
@@ -70,6 +70,27 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     manifest["sources"]["voteview"] = {
         "retrieved_at": _now(), "source_url": VOTEVIEW_URL,
         "count": max(csv_text.count("\n") - 1, 0)}
+
+    # --- campaign finance (FEC, E3): candidate cycle totals ---
+    # Keyed via the crosswalk's fec candidate ids; one lookup per candidate.
+    fec_client = fec.FECClient()
+    fec_dir = raw / "fec" / "totals"
+    seen_cand: set[str] = set()
+    for leg in legs:
+        fec_ids = (leg.get("id") or {}).get("fec") or []
+        cand = fec_ids[0] if fec_ids else None
+        if not cand or cand in seen_cand:
+            continue
+        seen_cand.add(cand)
+        totals = fec_client.candidate_totals(cand, FEC_CYCLE)
+        if totals:
+            _write_json(fec_dir / f"{cand}.json",
+                        {"candidate_id": cand, "cycle": FEC_CYCLE, "totals": totals})
+    fec_count = len(list(fec_dir.glob("*.json"))) if fec_dir.exists() else 0
+    manifest["sources"]["fec"] = {
+        "retrieved_at": _now(),
+        "source_url": f"https://www.fec.gov/data/candidates/?cycle={FEC_CYCLE}",
+        "count": fec_count}
 
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():

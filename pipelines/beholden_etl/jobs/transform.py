@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ..config import CONGRESS, RAW_DIST, SPINE_RESOLUTION_MIN
 from ..sources import congress_gov
+from ..sources import fec
 from ..sources import legislators as L
 from ..sources import voteview
 from .. import divisions as D
@@ -183,9 +184,35 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "bills", list(bills.values()))
         store.insert(con, "sponsorships", sponsorships)
 
+    # --- campaign finance: FEC totals -> campaign_finance_cycles (E3) ---
+    fec_to_person = {r["id_value"]: r["person_id"]
+                     for r in uniq_idents if r["id_scheme"] == "fec"}
+    fec_dir = raw / "fec" / "totals"
+    if fec_dir.exists():
+        # Fall back to the fetch date when FEC omits coverage_end_date (as_of NOT NULL).
+        manifest_path = raw / "manifest.json"
+        fec_as_of = None
+        if manifest_path.exists():
+            meta = json.loads(manifest_path.read_text()).get("sources", {}).get("fec", {})
+            fec_as_of = (meta.get("retrieved_at") or "")[:10] or None
+        cf_rows, seen_cf = [], set()
+        for f in sorted(fec_dir.glob("*.json")):
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            cand = rec.get("candidate_id")
+            pid = fec_to_person.get(cand)
+            if not pid:
+                continue
+            row = fec.cycle_row(pid, cand, rec["cycle"], rec["totals"], fec_as_of)
+            pk = (pid, rec["cycle"], cand)
+            if row and pk not in seen_cf:
+                seen_cf.add(pk)
+                cf_rows.append(row)
+        store.insert(con, "campaign_finance_cycles", cf_rows)
+
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
               for t in ("persons", "divisions", "offices", "terms",
-                        "ideology_scores", "bills", "sponsorships")}
+                        "ideology_scores", "bills", "sponsorships",
+                        "campaign_finance_cycles")}
     print("transform:", " ".join(f"{k}={v}" for k, v in counts.items()),
           f"(resolution {rate:.4f})")
     con.close()

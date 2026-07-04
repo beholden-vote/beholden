@@ -35,6 +35,7 @@ RAW_DIST = "dist/raw"        # immutable landed snapshots, per source
 # Current scope of the federal legislative slice.
 CONGRESS = 119
 TILE_VINTAGE = "2024"
+FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congress
 
 
 def pipeline_version() -> str:
