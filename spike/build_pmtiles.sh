@@ -6,7 +6,7 @@
 set -euo pipefail
 V="${1:?vintage}"
 cd "tiger/$V"
-STAMP="python3 ../../stamp_ocd_ids.py"
+STAMP="python3 ../../spike/stamp_ocd_ids.py"
 TIPPE=(--minimum-zoom=3 --maximum-zoom=10 --coalesce-densest-as-needed \
        --detect-shared-borders --force --quiet)
 
