@@ -8,6 +8,11 @@ on:
       backfill_since: {description: "ISO date to backfill from", required: false}
 
 # Public repo = unlimited Actions minutes. This IS the orchestrator (free-tier arch §1.2).
+# One run at a time: the intra-day cron must never race the nightly's publish.
+concurrency:
+  group: etl-nightly
+  cancel-in-progress: false
+
 jobs:
   etl:
     runs-on: ubuntu-latest
@@ -25,16 +30,20 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
       - run: pip install -e "./pipelines[dev]"
+      - name: Set pipeline version (stamped into every provenance envelope)
+        # Computed BEFORE build so dossiers carry the real release id, and the
+        # end-of-run tag records exactly what was published (contracts §7).
+        run: echo "PIPELINE_VERSION=etl-$(date -u +%Y.%W.%H%M)" >> "$GITHUB_ENV"
       - name: Unit tests (fail before spending API calls)
         run: pytest pipelines/tests -q
       - name: Fetch + land raw (immutable)
-        run: make fetch   # snapshots -> R2 /raw/{source}/{date}/
+        run: make fetch   # snapshots -> dist/raw (publish lands them in R2 /raw/{date}/)
       - name: Transform (DuckDB) + quality gates
         run: make transform   # FAILS closed if spine resolution < 0.995
       - name: Build serving artifacts
-        run: make build   # dossiers/ stylefeeds/ pins/ graph/ search-index/ coverage.json
+        run: make build   # dossiers/ stylefeeds/ pins/ coverage.json
       - name: Publish
-        run: make publish # small files -> Pages deploy dir; bulk -> R2
+        run: make publish # serving JSON -> R2 bucket root; raw lake -> R2 /raw/{date}/
       - name: Tag pipeline version
         run: |
-          git tag "etl-$(date -u +%Y.%W.%H%M)" && git push --tags
+          git tag "$PIPELINE_VERSION" && git push origin "$PIPELINE_VERSION"
