@@ -4,9 +4,13 @@ import csv, io
 import httpx
 from ..config import SOURCES, IDEOLOGY_MIN_VOTES
 
+def members_url(congress: int) -> str:
+    # Voteview groups outputs by kind; member tables live under /members/.
+    return f"{SOURCES['voteview'].base_url}/members/HS{congress}_members.csv"
+
+
 def member_scores_csv(congress: int) -> str:
-    url = f"{SOURCES['voteview'].base_url}/HS{congress}_members.csv"
-    r = httpx.get(url, timeout=120, follow_redirects=True)
+    r = httpx.get(members_url(congress), timeout=120, follow_redirects=True)
     r.raise_for_status()
     return r.text
 

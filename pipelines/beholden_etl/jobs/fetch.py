@@ -14,11 +14,11 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, RAW_DIST, SOURCES
+from ..config import CONGRESS, RAW_DIST
 from ..sources import congress_gov, legislators, voteview
 
 LEGISLATORS_URL = legislators.URL
-VOTEVIEW_URL = f"{SOURCES['voteview'].base_url}/HS{CONGRESS}_members.csv"
+VOTEVIEW_URL = voteview.members_url(CONGRESS)
 
 
 def _now() -> str:
