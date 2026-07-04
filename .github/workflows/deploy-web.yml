@@ -25,4 +25,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web/dist --project-name=beholden
+          # Run from web/ so wrangler compiles web/functions/ (the /api/geocode
+          # Census proxy) alongside the static dist. Same origin, no extra token
+          # scope — Pages:Edit already covers Functions.
+          workingDirectory: web
+          command: pages deploy dist --project-name=beholden

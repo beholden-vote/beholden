@@ -4,6 +4,13 @@ import react from "@vitejs/plugin-react";
 // Static SPA build; output is published to Cloudflare Pages (see docs/ARCHITECTURE.md §3).
 export default defineConfig({
   plugins: [react()],
+  // Local dev has no Pages Functions runtime, so proxy /api/geocode to the
+  // deployed function. Keeps address lookup working under `npm run dev`.
+  server: {
+    proxy: {
+      "/api": { target: "https://beholden.vote", changeOrigin: true, secure: true },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
