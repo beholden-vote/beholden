@@ -7,9 +7,9 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Install tippecanoe
+      - name: Install tippecanoe + GDAL
         run: |
-          sudo apt-get update && sudo apt-get install -y build-essential libsqlite3-dev zlib1g-dev
+          sudo apt-get update && sudo apt-get install -y build-essential libsqlite3-dev zlib1g-dev gdal-bin
           git clone --depth 1 https://github.com/felt/tippecanoe && make -C tippecanoe -j"$(nproc)" && sudo make -C tippecanoe install
       - name: Download TIGER cartographic boundaries (states, CDs, SLDU, SLDL)
         run: make tiles-fetch
