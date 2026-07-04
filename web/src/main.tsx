@@ -4,6 +4,13 @@
  * They meet here: map clicks flow into the React app through a handle ref.
  */
 import { createRoot } from "react-dom/client";
+// Self-hosted civic type (DESIGN.md §3): Space Grotesk display, IBM Plex Mono
+// for every fact. Bundled locally — no third-party font CDN (privacy ethos).
+import "@fontsource/space-grotesk/400.css";
+import "@fontsource/space-grotesk/500.css";
+import "@fontsource/space-grotesk/700.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
 import { initMap, type BeholdenMap, type RawStackHit } from "./map";
 import { App, type AppHandle } from "./ui/App";
 import "./styles.css";

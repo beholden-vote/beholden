@@ -30,15 +30,19 @@ export function Section({ title, provenance, children }: {
 }) {
   return (
     <section className="panel-section">
-      <h3>{title}</h3>
+      <div className="section-head">
+        <h3>{title}</h3>
+        {provenance && (
+          <a className="source-tag" href={provenance.source_url} target="_blank" rel="noopener noreferrer"
+             title={`Source: ${provenance.source}`}>
+            {provenance.source} ↗
+          </a>
+        )}
+      </div>
       {children}
       {provenance && (
-        <p className="provenance">
-          {STRINGS.sourceLabel}:{" "}
-          <a href={provenance.source_url} target="_blank" rel="noopener noreferrer">
-            {provenance.source}
-          </a>{" "}
-          · {STRINGS.retrievedLabel} {formatDate(provenance.retrieved_at) ?? provenance.retrieved_at}
+        <p className="retrieved">
+          {STRINGS.retrievedLabel} {formatDate(provenance.retrieved_at) ?? provenance.retrieved_at}
         </p>
       )}
     </section>

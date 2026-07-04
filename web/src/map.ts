@@ -21,8 +21,8 @@ type StyleRow = { party: string; ideology_dim1: number | null; vacant: boolean }
 type StyleFeed = Record<string, StyleRow>;
 
 export const PARTY_COLORS: Record<string, string> = {
-  // O5 note: party via pin form + muted fills; cyan->magenta ramp reserved for ideology.
-  D: "#3d6f9e", R: "#a04a4a", I: "#7a7a52", L: "#8a7d55", G: "#4f7a52", NP: "#555f66",
+  // Matched-luminance, symmetric by construction (DESIGN.md §2): neither party louder.
+  D: "#4b83bd", R: "#c25b5b", I: "#8f8f5e", L: "#9a8a5a", G: "#5b9a63", NP: "#64717c",
 };
 const VACANT_FILL = "#2b2f33";
 const DEFAULT_FILL = "#0a2233";
