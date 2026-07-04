@@ -61,8 +61,9 @@ violations. CI runs the same validation on PRs that touch builders.
 
 ```
 beholden/
-├── ARCHITECTURE.md            ← you are here
-├── Makefile                   ← make etl / make tiles / make web / make spike
+├── docs/ARCHITECTURE.md       ← you are here
+├── AGENTS.md                  ← entry point for AI agents / LLMs
+├── Makefile                   ← make fetch/transform/build / make tiles / make spike
 ├── .github/workflows/
 │   ├── etl-nightly.yml        ← cron pipeline (fetch→transform→build→publish)
 │   ├── tiles-build.yml        ← geometry → PMTiles (manual/redistricting trigger)

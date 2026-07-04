@@ -16,6 +16,7 @@ the CDN is the database. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 ## Documentation
 | Doc | What it covers |
 |---|---|
+| [`AGENTS.md`](AGENTS.md) | Entry point for AI agents/LLMs — rules, repo map, commands |
 | [`docs/PRD.md`](docs/PRD.md) | Product spec: principles, goals, dossier UX, phasing |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Free-tier hosting design, component map, scale-up path |
 | [`docs/DATA-CONTRACTS.md`](docs/DATA-CONTRACTS.md) | Spine DDL, dossier JSON, entity graph, tile contracts |

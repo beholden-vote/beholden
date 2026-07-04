@@ -35,6 +35,15 @@ spike/*.fgb
 !.env.example
 *.pem
 
+# graphify — commit graph.json / GRAPH_REPORT.md / graph.html as repo context;
+# ignore machine-specific interpreter path, scan root, and transient build state.
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/.graphify_*.json
+graphify-out/.needs_update
+graphify-out/cost.json
+graphify-out/cache/
+
 # OS / editor
 .DS_Store
 Thumbs.db
