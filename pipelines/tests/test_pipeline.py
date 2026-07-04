@@ -112,6 +112,16 @@ def test_stylefeed_keys_match_cd_ocd(slice_dirs):
     assert feed["ocd-division/country:us/state:ak/cd:1"]["party"] == "D"  # at-large joins cd:1
 
 
+def test_pins_carry_display_fields(slice_dirs):
+    """Pins label polygons on hover/stack views without dossier fan-out."""
+    cd = json.loads((slice_dirs / "data" / "pins" / "cd.json").read_text())
+    jane = next(p for p in cd if p["full_name"] == "Jane Rep")
+    assert jane["office"] == "U.S. House · TN-6"
+    assert jane["party"] == "R" and jane["vacant"] is False
+    states = json.loads((slice_dirs / "data" / "pins" / "states.json").read_text())
+    assert {p["chamber"] for p in states} == {"senate"}
+
+
 def test_every_dossier_is_contract_valid(slice_dirs):
     files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
     assert len(files) == 3

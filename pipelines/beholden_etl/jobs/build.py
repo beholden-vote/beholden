@@ -193,7 +193,14 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     stylefeeds.publish({"cd": cd_feed, "states": {}, "sldu": {}, "sldl": {}}, out / "stylefeeds")
 
     def pins(rows):
+        # Carries the display fields the map UI needs for hover/stack views so
+        # the client never has to fan out dossier fetches just to label a
+        # polygon (contract §3: pins = dossier discovery on tap).
         return [{"person_id": h["person_id"], "ocd_id": h["ocd_id"],
+                 "full_name": h["full_name"],
+                 "office": _office_display(h["chamber"], h["ocd_id"]),
+                 "chamber": h["chamber"],
+                 "vacant": bool(h["is_vacant_marker"]),
                  "lat": None, "lng": None, "photo_url": photo.get(h.get("bioguide")),
                  "party": h["party"]} for h in rows]
     (out / "pins").mkdir(parents=True, exist_ok=True)
