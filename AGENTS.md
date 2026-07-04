@@ -36,9 +36,13 @@ pipelines/beholden_etl/
   build/             dossiers.py (builder + provenance validator), stylefeeds.py
   tests/             pytest suite (test_pipeline.py)
 spike/               O6 tile-density spike + real TIGER→PMTiles scripts (PASS)
-web/                 Vite + React + MapLibre GL + deck.gl + pmtiles static SPA
-  src/main.tsx       map init, pmtiles protocol, layers
-  src/lib/lookup.ts  Census geocoder → queryRenderedFeatures stack lookup
+web/                 Vite + React + MapLibre GL + pmtiles static SPA
+  src/main.tsx       entry: wires map engine ↔ React UI
+  src/map.ts         MapLibre init, PMTiles, hover/click → representation stack
+  src/ui/            App (search + stack panel), DossierView, Ideology scale
+  src/lib/data.ts    pins/dossier fetch + caches; lib/lookup.ts Census geocoder
+  src/strings.ts     THE approved string table (money/legal copy lives here only)
+  src/types.ts       TS mirror of the dossier/pins contracts
 docs/                product + engineering documentation (see below)
 graphify-out/        knowledge graph of this repo (see "Knowledge graph" below)
 ```

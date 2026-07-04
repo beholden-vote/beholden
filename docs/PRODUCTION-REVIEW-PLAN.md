@@ -85,11 +85,20 @@ community was then read in full. Status legend: ☑ fixed in this pass · ☐ fo
    vintage, then `etl-nightly` via workflow_dispatch; verify SETUP §6 checklist.
 
 ## E. Follow-ups (out of scope for this pass)
+- ☑ *(2026-07-04, later same day)* **E7 dossier UI shipped**: hover/click →
+  representation stack → full cited dossier panel (identity, tenure, lean
+  scale w/ medians, legislative, provenance footers). Money + vote sections
+  render automatically when their pipelines publish; stub data shows honest
+  "syncing" states, never fabricated zeros. Pins feed enriched with
+  full_name/office/chamber/vacant so the map labels without dossier fan-out.
 - ☐ E2 legislative sync: bills/votes/committees still stubbed to zero counts
-  (ships with valid provenance by design).
+  (ships with valid provenance by design). **Now the top data gap the UI
+  exposes** — key votes + sponsorship power the deepest dossier sections.
 - ☐ `states` style feed is not built (senate = 2 seats/state — coloring is a
   product decision; PRD §5 discussion needed).
-- ☐ Money pipeline (STOCK Act E3): schema + validator exist, no ingestion yet.
+- ☐ Money pipeline (STOCK Act E3 + FEC totals): schema + validator + UI
+  sections all exist and are dormant — ingestion is the remaining piece for
+  net worth / trades / campaign finance on every profile.
 - ☐ Graphify knowledge gaps: 83 weakly-connected nodes — mostly spike scripts
   and TS config; re-check after E2/E3 land real code.
 - ☐ Local dev venv is Python 3.10 vs `requires-python >=3.11` — rebuild venv.
