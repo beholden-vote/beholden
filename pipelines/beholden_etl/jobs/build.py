@@ -179,7 +179,10 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         [{"ocd_id": h["ocd_id"], "party": h["party"],
           "score": None if h["ideology_score"] is None else float(h["ideology_score"]),
           "is_vacant_marker": bool(h["is_vacant_marker"])} for h in house])
-    stylefeeds.publish({"cd": cd_feed}, out / "stylefeeds")
+    # Every layer the client requests gets a feed; layers without data yet
+    # (states colouring, state chambers) ship empty so the map loads 404-free
+    # and lights up automatically once those verticals land.
+    stylefeeds.publish({"cd": cd_feed, "states": {}, "sldu": {}, "sldl": {}}, out / "stylefeeds")
 
     def pins(rows):
         return [{"person_id": h["person_id"], "ocd_id": h["ocd_id"],
@@ -189,6 +192,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     (out / "pins" / "cd.json").write_text(json.dumps(pins(house), separators=(",", ":")))
     senate = [h for h in holders if h["chamber"] == "senate"]
     (out / "pins" / "states.json").write_text(json.dumps(pins(senate), separators=(",", ":")))
+    for empty in ("sldu", "sldl"):
+        (out / "pins" / f"{empty}.json").write_text("[]")
 
     # --- coverage dashboard ---
     coverage = {

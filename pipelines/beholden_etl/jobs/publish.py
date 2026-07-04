@@ -87,7 +87,7 @@ def run(data_dir: str | Path = PAGES_DIST, dry_run: bool | None = None) -> int:
         client.put_object(
             Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
             ContentType=_content_type(p), CacheControl=CACHE_CONTROL)
-    print(f"publish: cors set + {len(files)} files -> r2://{R2_BUCKET}/")
+    print(f"publish: {len(files)} files -> r2://{R2_BUCKET}/")
     return len(files)
 
 
