@@ -49,6 +49,22 @@ def _content_type(path: Path) -> str:
     return mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
 
+def _ensure_cors(client) -> None:
+    """Set the bucket CORS policy so the SPA can read cross-origin. Non-fatal:
+    the Object-R/W R2 token used here cannot manage bucket config (PutBucketCors
+    needs admin scope), so on AccessDenied we warn and continue — the policy is
+    then a one-time dashboard step (Settings → CORS Policy)."""
+    from botocore.exceptions import ClientError
+    try:
+        client.put_bucket_cors(Bucket=R2_BUCKET, CORSConfiguration=CORS_CONFIG)
+        print("publish: bucket CORS ensured")
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code", "?")
+        print(f"publish: WARNING could not set bucket CORS ({code}); set it once in "
+              "the R2 dashboard (Settings → CORS Policy). Object-R/W tokens can't "
+              "manage bucket config.")
+
+
 def run(data_dir: str | Path = PAGES_DIST, dry_run: bool | None = None) -> int:
     data_dir = Path(data_dir)
     files = sorted(p for p in data_dir.rglob("*") if p.is_file())
@@ -65,7 +81,7 @@ def run(data_dir: str | Path = PAGES_DIST, dry_run: bool | None = None) -> int:
         return len(files)
 
     client = _client()
-    client.put_bucket_cors(Bucket=R2_BUCKET, CORSConfiguration=CORS_CONFIG)  # idempotent
+    _ensure_cors(client)
     for p in files:
         key = p.relative_to(data_dir).as_posix()          # bucket-root keys
         client.put_object(
