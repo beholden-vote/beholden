@@ -8,6 +8,32 @@ URL = f"{SOURCES['unitedstates_legislators'].base_url}/legislators-current.yaml"
 
 SCHEMES = {"bioguide": "bioguide", "fec": "fec", "icpsr": "icpsr", "wikidata": "wikidata"}
 
+# congress-legislators spells parties in full; the spine stores coded values.
+PARTY_CODE = {"Republican": "R", "Democrat": "D", "Democratic": "D",
+              "Independent": "I", "Libertarian": "L", "Green": "G"}
+
+
+def person_uuid(bioguide: str) -> str:
+    """Deterministic person_id from bioguide — the anchor identifier. Stable
+    across runs so nightly upserts don't churn ids, and lets any source that
+    knows a bioguide resolve to the same person without a DB round-trip."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"bioguide:{bioguide}"))
+
+
+def party_code(name: str | None) -> str:
+    return PARTY_CODE.get((name or "").strip(), "NP")
+
+
+def current_term(leg: dict) -> dict | None:
+    """The legislator's active term = the last entry in terms[] (chronological)."""
+    terms = leg.get("terms") or []
+    return terms[-1] if terms else None
+
+
+def first_took_office(leg: dict) -> str | None:
+    terms = leg.get("terms") or []
+    return min((t.get("start") for t in terms if t.get("start")), default=None)
+
 
 def fetch_current() -> list[dict]:
     r = httpx.get(URL, timeout=60, follow_redirects=True)
@@ -24,7 +50,7 @@ def to_spine_rows(legislators: list[dict]):
         if not ids.get("bioguide"):
             yield None, [], {"raw_payload": leg, "source": "unitedstates_legislators"}
             continue
-        person_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"bioguide:{ids['bioguide']}"))
+        person_id = person_uuid(ids["bioguide"])
         person = {
             "person_id": person_id,
             "full_name": name.get("official_full") or f"{name.get('first','')} {name.get('last','')}".strip(),

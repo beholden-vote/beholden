@@ -1,0 +1,211 @@
+"""Stage 3 — DuckDB spine -> serving artifacts in dist/data (contracts §3/§5).
+
+Emits, for the current federal legislature:
+  stylefeeds/cd.json      ocd_id -> {party, ideology_dim1, vacant}   (colors the CD layer)
+  pins/{cd,states}.json   ocd_id -> office-holder (dossier discovery on tap)
+  dossiers/{person_id}.json   identity + ideology + legislative, each provenanced
+  coverage.json           per-source freshness vs SLA + artifact counts
+
+Enforces the serving rule via dossiers.validate(): no provenance, no publish.
+Legislative counts are stubbed to zero pending the bills/votes sync (E2) — the
+section still ships with a valid provenance envelope so the contract holds.
+"""
+from __future__ import annotations
+
+import json
+import statistics
+from datetime import datetime, timezone
+from pathlib import Path
+
+from ..config import CONGRESS, PAGES_DIST, SOURCES, pipeline_version
+from ..build import dossiers, stylefeeds
+from .transform import DEFAULT_DB
+from .. import store
+
+PARTY_DISPLAY = {"D": "Democratic", "R": "Republican", "I": "Independent",
+                 "L": "Libertarian", "G": "Green", "NP": "Nonpartisan"}
+IDEOLOGY_SCOPE = f"{CONGRESS}th Congress"
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _load_manifest(raw_dir: Path) -> dict:
+    f = raw_dir / "manifest.json"
+    return json.loads(f.read_text()) if f.exists() else {"sources": {}}
+
+
+def _photo_map(raw_dir: Path) -> dict[str, str]:
+    """bioguide -> headshot URL from the congress.gov snapshot (optional)."""
+    f = raw_dir / "congress.gov" / f"members-{CONGRESS}.json"
+    if not f.exists():
+        return {}
+    out = {}
+    for m in json.loads(f.read_text()):
+        bio = m.get("bioguideId") or m.get("bioguide")
+        url = (m.get("depiction") or {}).get("imageUrl")
+        if bio and url:
+            out[bio] = url
+    return out
+
+
+def _provenance(source: str, source_url: str, manifest: dict) -> dict:
+    meta = manifest.get("sources", {}).get(source, {})
+    return {"source": source, "source_url": source_url,
+            "retrieved_at": meta.get("retrieved_at") or _now(),
+            "pipeline_version": pipeline_version(), "methodology_id": None}
+
+
+def _office_display(chamber: str, ocd_id: str) -> str:
+    tail = ocd_id.split("/")[-1]
+    state = ocd_id.split("state:")[1].split("/")[0].upper() if "state:" in ocd_id else "?"
+    if chamber == "house":
+        seat = tail.split(":")[1] if tail.startswith("cd:") else tail
+        return f"U.S. House · {state}-{seat}"
+    return f"U.S. Senate · {state}"
+
+
+def _current_holders(con) -> list[dict]:
+    cur = con.execute(
+        """
+        SELECT p.person_id, p.full_name,
+               o.role, o.chamber, d.ocd_id,
+               t.party, t.is_vacant_marker,
+               t.meta->>'term_ends'        AS term_ends,
+               t.meta->>'first_took_office' AS first_took_office,
+               i.score  AS ideology_score,
+               i.status AS ideology_status,
+               (SELECT id_value FROM person_identifiers pi
+                 WHERE pi.person_id = p.person_id AND pi.id_scheme='bioguide') AS bioguide
+        FROM terms t
+        JOIN persons p USING(person_id)
+        JOIN offices o USING(office_id)
+        JOIN divisions d ON d.ocd_id = o.ocd_id
+        LEFT JOIN ideology_scores i
+               ON i.person_id = p.person_id AND i.scheme='dw_nominate_dim1' AND i.scope = ?
+        WHERE t.end_date IS NULL
+        """, [str(CONGRESS)])
+    cols = [c[0] for c in cur.description]
+    out = []
+    for row in cur.fetchall():
+        r = dict(zip(cols, row))
+        r["person_id"] = str(r["person_id"])          # DuckDB UUID -> str for JSON
+        if r["ideology_score"] is not None:
+            r["ideology_score"] = float(r["ideology_score"])   # Decimal -> float
+        out.append(r)
+    return out
+
+
+def _medians(holders: list[dict]) -> dict:
+    """Party and chamber DW-NOMINATE medians for dossier context."""
+    def med(vals):
+        vals = [float(v) for v in vals if v is not None]
+        return round(statistics.median(vals), 4) if vals else None
+    by_party, by_chamber = {}, {}
+    for h in holders:
+        if h["ideology_score"] is None:
+            continue
+        by_party.setdefault(h["party"], []).append(h["ideology_score"])
+        by_chamber.setdefault(h["chamber"], []).append(h["ideology_score"])
+    return {"party": {k: med(v) for k, v in by_party.items()},
+            "chamber": {k: med(v) for k, v in by_chamber.items()}}
+
+
+def _dossier(h: dict, photo: dict, manifest: dict, medians: dict) -> dict:
+    bio = h.get("bioguide")
+    vacant = bool(h["is_vacant_marker"])
+    score = None if h["ideology_score"] is None else float(h["ideology_score"])
+    identity = {
+        "full_name": h["full_name"],
+        "photo_url": photo.get(bio),
+        "office": {"role": h["role"], "ocd_id": h["ocd_id"],
+                   "display": _office_display(h["chamber"], h["ocd_id"]),
+                   "chamber": h["chamber"]},
+        "party": {"code": h["party"], "display": PARTY_DISPLAY.get(h["party"], h["party"])},
+        "tenure": {"first_took_office": h["first_took_office"],
+                   "current_term_ends": h["term_ends"]},
+        "next_election": None,
+        "status": "vacant" if vacant else "incumbent",
+        "official_links": ([{"type": "bioguide",
+                             "url": f"https://bioguide.congress.gov/search/bio/{bio}"}] if bio else []),
+        "provenance": _provenance(
+            "unitedstates_legislators",
+            f"https://bioguide.congress.gov/search/bio/{bio}" if bio else SOURCES["unitedstates_legislators"].base_url,
+            manifest),
+    }
+    ideology = {
+        "scheme": "dw_nominate_dim1", "score": score,
+        "status": h["ideology_status"] or "pending_insufficient_votes",
+        "context": {"party_median": medians["party"].get(h["party"]),
+                    "chamber_median": medians["chamber"].get(h["chamber"])},
+        "scope": IDEOLOGY_SCOPE, "explainer_url": "/methodology#dw-nominate",
+        "provenance": _provenance("voteview",
+                                  f"https://voteview.com/congress/{h['chamber']}", manifest),
+    }
+    legislative = {   # E2 stub: structure + provenance ship now, counts follow
+        "counts": {"sponsored": 0, "cosponsored": 0, "became_law": 0},
+        "recent_bills": [], "key_votes": [], "committees": [],
+        "provenance": _provenance("congress.gov",
+                                  f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
+                                  manifest),
+    }
+    return dossiers.build_one(
+        {"person_id": h["person_id"]},
+        {"identity": identity, "ideology": ideology, "legislative": legislative,
+         "graph_ref": f"/graph/neighborhood/{h['person_id']}"},
+        pipeline_version())
+
+
+def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
+        raw_dir: str | Path = "dist/raw") -> dict:
+    raw_dir = Path(raw_dir)
+    out = Path(out_dir)
+    manifest = _load_manifest(raw_dir)
+    photo = _photo_map(raw_dir)
+
+    con = store.connect(db_path)
+    holders = _current_holders(con)
+    con.close()
+    medians = _medians(holders)
+
+    # --- dossiers (all members) ---
+    docs = [_dossier(h, photo, manifest, medians) for h in holders]
+    dossiers.publish(docs, out / "dossiers")
+
+    # --- style feed + pins for the CD layer (House) ---
+    house = [h for h in holders if h["chamber"] == "house"]
+    cd_feed = stylefeeds.build_layer_feed(
+        [{"ocd_id": h["ocd_id"], "party": h["party"],
+          "score": None if h["ideology_score"] is None else float(h["ideology_score"]),
+          "is_vacant_marker": bool(h["is_vacant_marker"])} for h in house])
+    stylefeeds.publish({"cd": cd_feed}, out / "stylefeeds")
+
+    def pins(rows):
+        return [{"person_id": h["person_id"], "ocd_id": h["ocd_id"],
+                 "lat": None, "lng": None, "photo_url": photo.get(h.get("bioguide")),
+                 "party": h["party"]} for h in rows]
+    (out / "pins").mkdir(parents=True, exist_ok=True)
+    (out / "pins" / "cd.json").write_text(json.dumps(pins(house), separators=(",", ":")))
+    senate = [h for h in holders if h["chamber"] == "senate"]
+    (out / "pins" / "states.json").write_text(json.dumps(pins(senate), separators=(",", ":")))
+
+    # --- coverage dashboard ---
+    coverage = {
+        "generated_at": _now(), "pipeline_version": pipeline_version(),
+        "counts": {"dossiers": len(docs), "cd_stylefeed": len(cd_feed),
+                   "house": len(house), "senate": len(senate)},
+        "sources": {
+            k: {"retrieved_at": manifest.get("sources", {}).get(k, {}).get("retrieved_at"),
+                "sla_hours": SOURCES[k].freshness_sla_hours if k in SOURCES else None}
+            for k in manifest.get("sources", {})},
+    }
+    (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
+
+    print(f"build: {len(docs)} dossiers, {len(cd_feed)} cd stylefeed, "
+          f"{len(house)} house pins, {len(senate)} senate pins -> {out}")
+    return coverage
+
+
+if __name__ == "__main__":
+    run()

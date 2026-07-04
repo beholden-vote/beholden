@@ -12,6 +12,8 @@ jobs:
   etl:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: write        # the pipeline-version tag push at the end of the run
     env:
       CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
       FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
@@ -22,7 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: "3.12", cache: pip}
-      - run: pip install -e ./pipelines
+      - run: pip install -e "./pipelines[dev]"
+      - name: Unit tests (fail before spending API calls)
+        run: pytest pipelines/tests -q
       - name: Fetch + land raw (immutable)
         run: make fetch   # snapshots -> R2 /raw/{source}/{date}/
       - name: Transform (DuckDB) + quality gates

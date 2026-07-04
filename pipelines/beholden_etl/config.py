@@ -29,4 +29,18 @@ IDEOLOGY_MIN_VOTES = 20
 
 # Publish targets (free-tier architecture §1)
 R2_BUCKET = "beholden"
-PAGES_DIST = "dist/data"
+PAGES_DIST = "dist/data"     # serving artifacts (dossiers/stylefeeds/pins/…)
+RAW_DIST = "dist/raw"        # immutable landed snapshots, per source
+
+# Current scope of the federal legislative slice.
+CONGRESS = 119
+TILE_VINTAGE = "2024"
+
+
+def pipeline_version() -> str:
+    """git tag of the ETL release, stamped into every provenance envelope.
+    CI sets PIPELINE_VERSION from the etl-<year.week.hhmm> tag; falls back to
+    the package version for local runs."""
+    import os
+    from . import __version__
+    return os.environ.get("PIPELINE_VERSION") or f"dev-{__version__}"

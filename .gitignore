@@ -13,9 +13,10 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-build/
-dist/
+/build/
 pipelines/build/
+# NOTE: keep this anchored — a bare `build/` would also ignore the
+# beholden_etl/build source package.
 
 # ETL + tile pipeline artifacts (data is rebuilt, never committed)
 /dist/
