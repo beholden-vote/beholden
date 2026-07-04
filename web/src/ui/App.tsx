@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dossier, Pin, StackEntry } from "../types";
 import type { BeholdenMap, RawStackHit } from "../map";
 import { loadDossier, loadPins, ocdShortLabel, type PinIndex } from "../lib/data";
-import { geocode } from "../lib/lookup";
+import { geocode, geolocate, suggest, type Place } from "../lib/lookup";
 import { Avatar, EmptyNote, PartyChip } from "./bits";
 import { DossierView } from "./DossierView";
 
@@ -34,7 +34,10 @@ export function App({ mapRef, handleRef }: {
   const [panel, setPanel] = useState<PanelState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
+  const [places, setPlaces] = useState<Place[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<number | undefined>(undefined);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { loadPins().then(setPins); }, []);
 
@@ -70,15 +73,48 @@ export function App({ mapRef, handleRef }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [mapRef]);
 
+  const flyTo = useCallback((lng: number, lat: number) => {
+    setPlaces([]); setSearchMsg(null);
+    mapRef.current?.goTo(lng, lat, 9);
+  }, [mapRef]);
+
+  // Debounced typeahead; each keystroke cancels the last in-flight lookup.
+  const onSearchInput = (ev: React.ChangeEvent<HTMLInputElement>) => {
+    const q = ev.target.value;
+    window.clearTimeout(debounceRef.current);
+    if (q.trim().length < 4) { setPlaces([]); return; }
+    debounceRef.current = window.setTimeout(async () => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setPlaces(await suggest(q, ac.signal));
+    }, 320);
+  };
+
   const submitSearch = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const q = searchRef.current?.value.trim();
     if (!q) return;
-    setBusy(true); setSearchMsg(null);
+    setBusy(true); setSearchMsg(null); setPlaces([]);
     const loc = await geocode(q);
     setBusy(false);
-    if (!loc) { setSearchMsg("Address not found — try adding city and state."); return; }
-    mapRef.current?.goTo(loc.lng, loc.lat, 8);
+    if (!loc) { setSearchMsg("No match — try a full street address with city and state."); return; }
+    flyTo(loc.lng, loc.lat);
+  };
+
+  const useMyLocation = async () => {
+    setBusy(true); setSearchMsg(null); setPlaces([]);
+    try {
+      const { lng, lat } = await geolocate();
+      flyTo(lng, lat);
+    } catch (err) {
+      const denied = (err as GeolocationPositionError)?.code === 1;
+      setSearchMsg(denied
+        ? "Location permission denied — type your address instead."
+        : "Couldn't get your location — type your address instead.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const close = () => { setPanel({ kind: "closed" }); mapRef.current?.clearSelection(); };
@@ -90,10 +126,28 @@ export function App({ mapRef, handleRef }: {
           <span className="brand-name">Beholden</span>
           <span className="brand-tag">see who they answer to</span>
         </div>
-        <form className="search" onSubmit={submitSearch}>
-          <input ref={searchRef} type="text" placeholder="Your address — find your representatives"
-                 aria-label="Address search" />
+        <form className="search" onSubmit={submitSearch} role="search">
+          <div className="search-field">
+            <input ref={searchRef} type="search" name="address" autoComplete="street-address"
+                   enterKeyHint="search" placeholder="Your address — find your reps"
+                   aria-label="Address search" onChange={onSearchInput}
+                   onBlur={() => window.setTimeout(() => setPlaces([]), 150)} />
+            {places.length > 0 && (
+              <ul className="suggest">
+                {places.map((p) => (
+                  <li key={`${p.lng},${p.lat}`}>
+                    <button type="button"
+                            onMouseDown={(e) => { e.preventDefault(); flyTo(p.lng, p.lat); }}>
+                      {p.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <button type="submit" disabled={busy}>{busy ? "…" : "Find"}</button>
+          <button type="button" className="loc-btn" onClick={useMyLocation} disabled={busy}
+                  aria-label="Use my location" title="Use my location">⌖</button>
         </form>
         {searchMsg && <p className="search-msg">{searchMsg}</p>}
       </div>
