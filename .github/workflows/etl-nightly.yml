@@ -1,0 +1,36 @@
+name: etl-nightly
+on:
+  schedule:
+    - cron: "0 6 * * *"        # nightly full build
+    - cron: "0 */4 * * *"      # intra-day: PTR + roll-call freshness (G2 SLA)
+  workflow_dispatch:
+    inputs:
+      backfill_since: {description: "ISO date to backfill from", required: false}
+
+# Public repo = unlimited Actions minutes. This IS the orchestrator (free-tier arch §1.2).
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
+      FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -e ./pipelines
+      - name: Fetch + land raw (immutable)
+        run: make fetch   # snapshots -> R2 /raw/{source}/{date}/
+      - name: Transform (DuckDB) + quality gates
+        run: make transform   # FAILS closed if spine resolution < 0.995
+      - name: Build serving artifacts
+        run: make build   # dossiers/ stylefeeds/ pins/ graph/ search-index/ coverage.json
+      - name: Publish
+        run: make publish # small files -> Pages deploy dir; bulk -> R2
+      - name: Tag pipeline version
+        run: |
+          git tag "etl-$(date -u +%Y.%W.%H%M)" && git push --tags

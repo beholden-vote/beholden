@@ -1,0 +1,15 @@
+[project]
+name = "beholden-etl"
+version = "0.1.0"
+description = "Beholden nightly ETL: fetch -> land -> transform (DuckDB) -> build -> publish"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.0",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "jsonschema>=4.21",
+  "tenacity>=8.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.4"]
