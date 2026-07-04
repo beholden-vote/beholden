@@ -51,9 +51,17 @@ def _photo_map(raw_dir: Path) -> dict[str, str]:
 
 
 def _provenance(source: str, source_url: str, manifest: dict) -> dict:
+    """Provenance envelope for a section. FAILS CLOSED (rule #1): if the fetch
+    manifest can't vouch for when `source` was retrieved, we refuse to invent a
+    timestamp — a fabricated retrieved_at is worse than no publish."""
     meta = manifest.get("sources", {}).get(source, {})
+    retrieved_at = meta.get("retrieved_at")
+    if not retrieved_at:
+        raise dossiers.ProvenanceError(
+            f"manifest has no retrieved_at for source '{source}' — refusing to "
+            "fabricate freshness (no provenance, no publish)")
     return {"source": source, "source_url": source_url,
-            "retrieved_at": meta.get("retrieved_at") or _now(),
+            "retrieved_at": retrieved_at,
             "pipeline_version": pipeline_version(), "methodology_id": None}
 
 
@@ -195,15 +203,23 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     for empty in ("sldu", "sldl"):
         (out / "pins" / f"{empty}.json").write_text("[]")
 
-    # --- coverage dashboard ---
+    # --- coverage dashboard: freshness vs SLA, computed not just echoed (G2) ---
+    def _source_row(k: str) -> dict:
+        retrieved_at = manifest.get("sources", {}).get(k, {}).get("retrieved_at")
+        sla = SOURCES[k].freshness_sla_hours if k in SOURCES else None
+        age_hours = None
+        if retrieved_at:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(retrieved_at)
+            age_hours = round(age.total_seconds() / 3600, 2)
+        return {"retrieved_at": retrieved_at, "sla_hours": sla, "age_hours": age_hours,
+                "within_sla": (age_hours is not None and sla is not None
+                               and age_hours <= sla)}
+
     coverage = {
         "generated_at": _now(), "pipeline_version": pipeline_version(),
         "counts": {"dossiers": len(docs), "cd_stylefeed": len(cd_feed),
                    "house": len(house), "senate": len(senate)},
-        "sources": {
-            k: {"retrieved_at": manifest.get("sources", {}).get(k, {}).get("retrieved_at"),
-                "sla_hours": SOURCES[k].freshness_sla_hours if k in SOURCES else None}
-            for k in manifest.get("sources", {})},
+        "sources": {k: _source_row(k) for k in manifest.get("sources", {})},
     }
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
 

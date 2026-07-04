@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -74,10 +75,21 @@ LEGS = [
     {"id": {"bioguide": "S000003", "icpsr": "33"}, "name": {"official_full": "Sam Sen"},
      "terms": [{"type": "sen", "start": "2021-01-03", "end": "2027-01-03", "state": "TN", "party": "Republican", "class": 1}]},
 ]
-VOTEVIEW = ("congress,chamber,icpsr,nominate_dim1,nominate_number_of_votes,congress_end_date\n"
-            "119,House,11,0.512,300,2027-01-03\n"
-            "119,House,22,-0.301,250,2027-01-03\n"
-            "119,Senate,33,0.488,5,2027-01-03\n")   # Sam: <20 votes -> pending
+# Mirrors real Voteview columns: no congress_end_date exists in HSxxx_members.csv,
+# so computed_as_of must come from the fetch manifest (or the congress boundary).
+VOTEVIEW = ("congress,chamber,icpsr,nominate_dim1,nominate_number_of_votes\n"
+            "119,House,11,0.512,300\n"
+            "119,House,22,-0.301,250\n"
+            "119,Senate,33,0.488,5\n"               # Sam: <20 votes -> pending
+            "119,President,,0.9,10\n")              # blank icpsr: skipped, never crashes
+
+# Dynamic (1h ago) so within_sla assertions never rot as wall-clock advances.
+RETRIEVED_AT = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
+    "unitedstates_legislators": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 3},
+    "congress.gov": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 3},
+    "voteview": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 4},
+}}
 
 
 @pytest.fixture
@@ -87,6 +99,7 @@ def slice_dirs(tmp_path):
     (raw / "voteview").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
     (raw / "voteview" / "HS119_members.csv").write_text(VOTEVIEW)
+    (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
     build.run(db_path=db, out_dir=tmp_path / "data", raw_dir=raw)
@@ -121,3 +134,36 @@ def test_spine_gate_fails_closed():
     bad = [{"id": {}, "name": {"first": "No", "last": "Id"}} for _ in range(10)]
     with pytest.raises(RuntimeError, match="spine resolution"):
         list(legislators.to_spine_rows(bad))
+
+
+def test_ideology_computed_as_of_is_retrieval_date(slice_dirs):
+    """DW-NOMINATE is re-estimated as votes accrue: the manifest's retrieved_at
+    (not the congress start) is the honest as-of for a published score."""
+    jane = next(json.loads(f.read_text()) for f in (slice_dirs / "data" / "dossiers").glob("*.json")
+                if json.loads(f.read_text())["identity"]["full_name"] == "Jane Rep")
+    assert jane["ideology"]["provenance"]["retrieved_at"] == RETRIEVED_AT
+    assert jane["ideology"]["score"] == 0.512
+
+
+def test_build_provenance_fails_closed_without_manifest(tmp_path):
+    """No manifest = no vouched retrieval time: build must refuse to fabricate
+    freshness (rule #1: no provenance, no publish)."""
+    raw = tmp_path / "raw"
+    (raw / "unitedstates_legislators").mkdir(parents=True)
+    (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
+    db = str(tmp_path / "wh.duckdb")
+    transform.run(raw_dir=raw, db_path=db)
+    with pytest.raises(dossiers.ProvenanceError, match="retrieved_at"):
+        build.run(db_path=db, out_dir=tmp_path / "data", raw_dir=raw)
+
+
+def test_coverage_reports_freshness_vs_sla(slice_dirs):
+    """coverage.json computes age_hours/within_sla, not just echoed timestamps
+    (SETUP §6: 'all sources within SLA' must be checkable from the dashboard)."""
+    cov = json.loads((slice_dirs / "data" / "coverage.json").read_text())
+    for k, row in cov["sources"].items():
+        assert row["retrieved_at"] == RETRIEVED_AT
+        assert isinstance(row["age_hours"], (int, float))
+        assert isinstance(row["within_sla"], bool)
+    # snapshot is 1h old — within every registered SLA (tightest is 24h)
+    assert all(row["within_sla"] for row in cov["sources"].values())

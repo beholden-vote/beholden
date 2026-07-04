@@ -21,8 +21,9 @@ from .. import divisions as D
 from .. import store
 
 DEFAULT_DB = "dist/warehouse.duckdb"
-# 119th Congress convened 2025-01-03; used when a term omits a start date.
-_CONGRESS_START = "2025-01-03"
+# Convening date of the configured congress (the 119th convened 2025-01-03);
+# used when a term omits a start date. Derived so a CONGRESS bump can't drift.
+_CONGRESS_START = f"{2025 + (CONGRESS - 119) * 2}-01-03"
 
 
 def _office_id(ocd_id: str, seat: str) -> str:
@@ -135,8 +136,17 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     icpsr_to_person = {r["id_value"]: r["person_id"] for r in uniq_idents if r["id_scheme"] == "icpsr"}
     csv_path = raw / "voteview" / f"HS{CONGRESS}_members.csv"
     if csv_path.exists():
+        # The fetch manifest's retrieved_at is the honest computed_as_of for a
+        # continuously re-estimated score (see voteview.to_score_rows docstring).
+        manifest_path = raw / "manifest.json"
+        as_of = None
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text())
+            as_of = manifest.get("sources", {}).get("voteview", {}).get("retrieved_at")
         scores, seen_pk = [], set()
-        for row in voteview.to_score_rows(csv_path.read_text(), CONGRESS, icpsr_to_person):
+        csv_text = csv_path.read_text(encoding="utf-8")   # matches fetch's write
+        for row in voteview.to_score_rows(csv_text, CONGRESS, icpsr_to_person,
+                                          as_of=as_of):
             pk = (row["person_id"], row["scheme"], row["scope"])
             if pk not in seen_pk:
                 seen_pk.add(pk)

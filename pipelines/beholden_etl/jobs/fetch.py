@@ -52,7 +52,8 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     # --- ideology (Voteview DW-NOMINATE) ---
     csv_text = voteview.member_scores_csv(CONGRESS)
     (raw / "voteview").mkdir(parents=True, exist_ok=True)
-    (raw / "voteview" / f"HS{CONGRESS}_members.csv").write_text(csv_text)
+    # Explicit UTF-8: bionames carry accents; platform-default cp1252 would corrupt.
+    (raw / "voteview" / f"HS{CONGRESS}_members.csv").write_text(csv_text, encoding="utf-8")
     manifest["sources"]["voteview"] = {
         "retrieved_at": _now(), "source_url": VOTEVIEW_URL,
         "count": max(csv_text.count("\n") - 1, 0)}

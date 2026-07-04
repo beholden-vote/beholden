@@ -1,7 +1,12 @@
 """Crosswalk seed from unitedstates/congress-legislators (ticket E1-4).
 Bioguide <-> FEC <-> ICPSR <-> Wikidata into person_identifiers; misses -> quarantine."""
 from __future__ import annotations
-import httpx, yaml, uuid
+import uuid
+
+import httpx
+import yaml
+from tenacity import retry, stop_after_attempt, wait_exponential
+
 from ..config import SOURCES, SPINE_RESOLUTION_MIN
 
 URL = f"{SOURCES['unitedstates_legislators'].base_url}/legislators-current.yaml"
@@ -35,7 +40,10 @@ def first_took_office(leg: dict) -> str | None:
     return min((t.get("start") for t in terms if t.get("start")), default=None)
 
 
+@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, max=60))
 def fetch_current() -> list[dict]:
+    """Retrying: the nightly runs unattended — a transient GitHub blip must not
+    kill the run (freshness SLA, PRD G2)."""
     r = httpx.get(URL, timeout=60, follow_redirects=True)
     r.raise_for_status()
     return yaml.safe_load(r.text)

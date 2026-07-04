@@ -17,7 +17,8 @@ class ProvenanceError(ValueError):
 def validate(dossier: dict) -> None:
     for section in SECTIONS_REQUIRING_PROVENANCE:
         prov = dossier.get(section, {}).get("provenance")
-        if not prov or not REQUIRED_PROVENANCE.issubset(prov):
+        # Keys must be present AND truthy — a null retrieved_at is no provenance.
+        if not prov or not all(prov.get(k) for k in REQUIRED_PROVENANCE):
             raise ProvenanceError(f"{dossier.get('person_id')}: section '{section}' missing provenance")
     money = dossier.get("money", {})
     for trade in (money.get("trades", {}) or {}).get("items", []):
