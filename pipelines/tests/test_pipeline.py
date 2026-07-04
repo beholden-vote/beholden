@@ -40,6 +40,17 @@ def test_stamp_ocd_ids_conventions():
     assert s.feature_props("states", {"STATEFP": "99"}) is None                  # foreign FIPS dropped
 
 
+def test_stamp_cli_entrypoint():
+    """Exercise the actual CLI (stdin->stdout) as build_pmtiles.sh invokes it."""
+    import subprocess
+    import sys
+    feat = '{"type":"Feature","properties":{"STATEFP":"47","NAME":"Tennessee","GEOID":"47"},"geometry":null}\n'
+    r = subprocess.run([sys.executable, str(REPO / "spike" / "stamp_ocd_ids.py"), "states"],
+                       input=feat, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert '"ocd-division/country:us/state:tn"' in r.stdout
+
+
 # --- DuckDB warehouse -------------------------------------------------------
 def test_schema_loads_with_generated_column():
     con = store.connect()

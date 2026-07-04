@@ -127,11 +127,11 @@ def stamp_stream(level: str, lines, out) -> int:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    if len(argv) != 1:
         sys.stderr.write(__doc__ or "")
         return 2
-    n = stamp_stream(argv[1], sys.stdin, sys.stdout)
-    sys.stderr.write(f"stamp_ocd_ids: wrote {n} {argv[1]} features\n")
+    n = stamp_stream(argv[0], sys.stdin, sys.stdout)
+    sys.stderr.write(f"stamp_ocd_ids: wrote {n} {argv[0]} features\n")
     return 0
 
 
