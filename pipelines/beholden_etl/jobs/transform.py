@@ -243,6 +243,25 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
                 cf_rows.append(row)
         store.insert(con, "campaign_finance_cycles", cf_rows)
 
+    # --- top contributors: FEC by_employer rollups -> top_contributors (WO-3) ---
+    # One row per employer rollup, ranked 1..25 by the order FEC returns (-total).
+    # Same fec source envelope as the totals above. A candidate without a
+    # committee has no contributors file -> no rows (absent != zero).
+    contrib_dir = raw / "fec" / "contributors"
+    if contrib_dir.exists():
+        tc_rows, seen_tc = [], set()
+        for f in sorted(contrib_dir.glob("*.json")):
+            rec = json.loads(f.read_text(encoding="utf-8"))
+            pid = fec_to_person.get(rec.get("candidate_id"))
+            if not pid:
+                continue
+            for row in fec.contributor_rows(pid, rec["cycle"], rec.get("by_employer") or []):
+                pk = (pid, row["cycle"], row["rank"])   # dedupe on the (person,cycle,rank) PK
+                if pk not in seen_tc:
+                    seen_tc.add(pk)
+                    tc_rows.append(row)
+        store.insert(con, "top_contributors", tc_rows)
+
     # --- state legislators (OpenStates, E4) -> spine (sldu/sldl) ---
     os_dir = raw / "openstates" / "people"
     if os_dir.exists():
@@ -291,7 +310,7 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
               for t in ("persons", "divisions", "offices", "terms",
                         "ideology_scores", "bills", "sponsorships",
                         "roll_calls", "vote_positions",
-                        "campaign_finance_cycles")}
+                        "campaign_finance_cycles", "top_contributors")}
     print("transform:", " ".join(f"{k}={v}" for k, v in counts.items()),
           f"(resolution {rate:.4f})")
     con.close()

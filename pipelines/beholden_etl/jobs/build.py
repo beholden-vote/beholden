@@ -213,6 +213,19 @@ def _campaign_finance(con) -> dict[str, dict]:
     return out
 
 
+def _top_contributors(con) -> dict[str, list[dict]]:
+    """person_id -> [{name, total_cents}] employer rollups of itemized
+    individual contributions, from top_contributors (WO-3), most-recent cycle
+    first and ordered by rank. Same FEC envelope as the cycle totals; the
+    dossier caps the list at 10."""
+    out: dict[str, list[dict]] = {}
+    for pid, name, total in con.execute(
+        """SELECT person_id, contributor_name, total_cents
+           FROM top_contributors ORDER BY person_id, cycle DESC, rank""").fetchall():
+        out.setdefault(str(pid), []).append({"name": name, "total_cents": total})
+    return out
+
+
 def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
     """person_id -> [{filed_on, filing_url}] of House PTR filings, matched by
     (family name, first given name). House-source, so House members only."""
@@ -242,8 +255,9 @@ def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
 
 
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
-             leg_spine: dict, cospon: dict, campaign: dict, disclosures: dict,
-             vote_records: dict, rc_meta: dict, party_majority: dict) -> dict:
+             leg_spine: dict, cospon: dict, campaign: dict, contributors: dict,
+             disclosures: dict, vote_records: dict, rc_meta: dict,
+             party_majority: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -319,10 +333,18 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
     money: dict = {}
     cf = campaign.get(h["person_id"])
     if cf and cf["cycles"]:
-        money["campaign_finance"] = {
+        block = {
             "cycles": cf["cycles"],
             "provenance": _provenance(
                 "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest)}
+        # Top contributors are FEC employer rollups of itemized individual
+        # contributions (WO-3), capped at 10 for the dossier. Same FEC envelope;
+        # absent (no committee/no itemized receipts) simply omits the block, so
+        # the UI never renders a fabricated donor list.
+        contribs = contributors.get(h["person_id"])
+        if contribs:
+            block["top_contributors"] = contribs[:10]
+        money["campaign_finance"] = block
     filings = disclosures.get(h["person_id"])
     if filings:
         # STOCK Act: links to the official PTR filings (itemized trades live in
@@ -348,6 +370,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     holders = _current_holders(con)
     leg_spine = _legislative_stats(con)
     campaign = _campaign_finance(con)
+    contributors = _top_contributors(con)
     vote_records = _vote_records(con)
     con.close()
     medians = _medians(holders)
@@ -363,7 +386,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
 
     # --- dossiers (all members) ---
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
-                     disclosures, vote_records, rc_meta, party_majority)
+                     contributors, disclosures, vote_records, rc_meta, party_majority)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

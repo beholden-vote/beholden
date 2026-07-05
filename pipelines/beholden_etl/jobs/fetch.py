@@ -81,10 +81,15 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     manifest["sources"]["voteview"]["rollcalls"] = max(rollcalls_text.count("\n") - 1, 0)
     manifest["sources"]["voteview"]["votes"] = max(votes_text.count("\n") - 1, 0)
 
-    # --- campaign finance (FEC, E3): candidate cycle totals ---
-    # Keyed via the crosswalk's fec candidate ids; one lookup per candidate.
+    # --- campaign finance (FEC, E3 + WO-3): candidate cycle totals + itemized
+    # contributor rollups. Keyed via the crosswalk's fec candidate ids; per
+    # candidate, one totals lookup (E3) then a principal-committee resolve +
+    # by_employer rollup (WO-3). Contributors land per candidate so transform
+    # reads only from raw (contracts §7); a member without a committee simply
+    # gets no contributors file (absent != zero). ---
     fec_client = fec.FECClient()
     fec_dir = raw / "fec" / "totals"
+    contrib_dir = raw / "fec" / "contributors"
     seen_cand: set[str] = set()
     for leg in legs:
         fec_ids = (leg.get("id") or {}).get("fec") or []
@@ -96,11 +101,18 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         if totals:
             _write_json(fec_dir / f"{cand}.json",
                         {"candidate_id": cand, "cycle": FEC_CYCLE, "totals": totals})
+        committee_id = fec_client.principal_committee(cand, FEC_CYCLE)
+        if committee_id:
+            by_employer = fec_client.top_contributors_by_employer(committee_id, FEC_CYCLE)
+            _write_json(contrib_dir / f"{cand}.json",
+                        {"candidate_id": cand, "cycle": FEC_CYCLE,
+                         "committee_id": committee_id, "by_employer": by_employer})
     fec_count = len(list(fec_dir.glob("*.json"))) if fec_dir.exists() else 0
+    contrib_count = len(list(contrib_dir.glob("*.json"))) if contrib_dir.exists() else 0
     manifest["sources"]["fec"] = {
         "retrieved_at": _now(),
         "source_url": f"https://www.fec.gov/data/candidates/?cycle={FEC_CYCLE}",
-        "count": fec_count}
+        "count": fec_count, "contributors": contrib_count}
 
     # --- state legislators (OpenStates, E4): current people, bulk CSV per state ---
     os_dir = raw / "openstates" / "people"

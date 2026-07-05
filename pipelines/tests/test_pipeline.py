@@ -111,6 +111,27 @@ FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals"
     "receipts": 1234567.89, "disbursements": 900000.0,
     "last_cash_on_hand_end_period": 334567.89, "coverage_end_date": "2026-06-30T00:00:00"}}}
 
+# Jane's FEC by_employer rollups (WO-3), as the API returns them: employers
+# uppercased, totals in dollars, already -total-sorted. 12 rows to prove the
+# dossier caps at 10; blank / "NOT EMPLOYED" / "RETIRED" are legitimate FEC
+# categories kept verbatim (never editorialized or filtered).
+FEC_CONTRIBUTORS = {"H8TN06001": {
+    "candidate_id": "H8TN06001", "cycle": 2026, "committee_id": "C00CANDJANE",
+    "by_employer": [
+        {"employer": "N/A", "total": 50000.0, "count": 900},
+        {"employer": "SELF-EMPLOYED", "total": 40000.0, "count": 300},
+        {"employer": "RETIRED", "total": 30000.0, "count": 250},
+        {"employer": "NOT EMPLOYED", "total": 20000.0, "count": 120},
+        {"employer": "ACME CORP", "total": 15000.0, "count": 10},
+        {"employer": "BETA LLC", "total": 12000.0, "count": 8},
+        {"employer": "GAMMA INC", "total": 9000.0, "count": 6},
+        {"employer": "DELTA CO", "total": 8000.0, "count": 5},
+        {"employer": "EPSILON GROUP", "total": 7000.0, "count": 4},
+        {"employer": "ZETA PARTNERS", "total": 6000.0, "count": 3},
+        {"employer": "ETA HOLDINGS", "total": 5000.0, "count": 2},   # rank 11 -> capped
+        {"employer": "THETA VENTURES", "total": 4000.0, "count": 1}, # rank 12 -> capped
+    ]}}
+
 
 # --- roll-call votes (WO-1) -------------------------------------------------
 # 3 House roll calls for the 119th. RC1 links to Jane's law HR100 (bill_number
@@ -167,10 +188,13 @@ def slice_dirs(tmp_path):
     (raw / "voteview" / "HS119_rollcalls.csv").write_text(VOTEVIEW_ROLLCALLS)
     (raw / "voteview" / "HS119_votes.csv").write_text(VOTEVIEW_VOTES)
     (raw / "fec" / "totals").mkdir(parents=True)
+    (raw / "fec" / "contributors").mkdir(parents=True)
     for bio, rec in LEGISLATION.items():
         (raw / "congress.gov" / "legislation" / f"{bio}.json").write_text(json.dumps(rec))
     for cand, rec in FEC_TOTALS.items():
         (raw / "fec" / "totals" / f"{cand}.json").write_text(json.dumps(rec))
+    for cand, rec in FEC_CONTRIBUTORS.items():
+        (raw / "fec" / "contributors" / f"{cand}.json").write_text(json.dumps(rec))
     (raw / "openstates" / "people").mkdir(parents=True)
     (raw / "openstates" / "people" / "tn.csv").write_text(OPENSTATES_TN_CSV)
     (raw / "house_clerk").mkdir(parents=True)
@@ -310,6 +334,89 @@ def test_campaign_finance_only_when_real(slice_dirs):
     assert cf["provenance"]["source"] == "fec"
     # Sam has no FEC id/totals -> no money section at all
     assert "money" not in _dossier_named(slice_dirs, "Sam Sen")
+
+
+# --- WO-3 itemized donors (FEC top contributors) ----------------------------
+def test_fec_contributor_rows_map_to_cents_and_rank():
+    """by_employer rollups -> top_contributors rows: employer verbatim, dollars
+    to integer cents, ranked 1..N in FEC's (-total) order. Blank/NOT EMPLOYED/
+    RETIRED are legitimate categories, kept as-is; a row missing a total drops."""
+    from beholden_etl.sources import fec
+    rows = fec.contributor_rows("p1", 2026, [
+        {"employer": "ACME CORP", "total": 15000.0, "count": 10},
+        {"employer": "RETIRED", "total": 30000.5, "count": 250},
+        {"employer": "", "total": 100.0, "count": 1},          # blank kept verbatim
+        {"employer": "NO TOTAL", "count": 3},                   # missing total -> dropped
+    ])
+    assert [r["rank"] for r in rows] == [1, 2, 3]              # dropped row doesn't skew ranks
+    assert rows[0] == {"person_id": "p1", "cycle": 2026,
+                       "contributor_name": "ACME CORP", "total_cents": 1500000, "rank": 1}
+    assert rows[1]["total_cents"] == 3000050                    # cents rounding
+    assert rows[2]["contributor_name"] == ""                    # blank employer preserved
+    # empty input -> no rows (absent != zero)
+    assert fec.contributor_rows("p1", 2026, []) == []
+
+
+def test_committee_resolution_prefers_principal_then_authorized():
+    """principal_committee returns the designation-P committee; when none is
+    filed it falls back to any authorized committee; None when there is none."""
+    from beholden_etl.sources import fec
+
+    class FakeClient(fec.FECClient):
+        def __init__(self, script):
+            self._script = script          # list of results lists, popped in call order
+        def get(self, path, **params):
+            return {"results": self._script.pop(0)}
+
+    # P present -> used directly (single call).
+    c = FakeClient([[{"committee_id": "C_P"}]])
+    assert c.principal_committee("H0", 2026) == "C_P"
+    # No P -> second call returns an authorized committee.
+    c = FakeClient([[], [{"committee_id": "C_AUTH"}]])
+    assert c.principal_committee("H0", 2026) == "C_AUTH"
+    # Neither -> None (member gets no top_contributors; absent != zero).
+    c = FakeClient([[], []])
+    assert c.principal_committee("H0", 2026) is None
+
+
+def test_top_contributors_land_in_spine_ranked(slice_dirs):
+    """The transform fills top_contributors from the by_employer rollups, ranked
+    1..N in FEC order, keyed to the crosswalk person; a candidate with no
+    contributors file gets no rows."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    n = con.execute("SELECT count(*) FROM top_contributors").fetchone()[0]
+    assert n == 12                                             # all 12 fixture rows land
+    top = con.execute(
+        """SELECT contributor_name, total_cents FROM top_contributors
+           ORDER BY rank LIMIT 1""").fetchone()
+    assert top == ("N/A", 5000000)                            # rank 1, $50,000 -> cents
+    con.close()
+
+
+def test_dossier_top_contributors_capped_and_provenanced(slice_dirs):
+    """Jane's money.campaign_finance carries top_contributors[0..9] (capped at 10)
+    with name + total_cents, under the same FEC envelope. FEC categories like
+    N/A / RETIRED / NOT EMPLOYED are surfaced verbatim, not filtered."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    cf = jane["money"]["campaign_finance"]
+    tc = cf["top_contributors"]
+    assert len(tc) == 10                                       # 12 rollups capped to 10
+    assert tc[0] == {"name": "N/A", "total_cents": 5000000}
+    assert [c["name"] for c in tc[:4]] == ["N/A", "SELF-EMPLOYED", "RETIRED", "NOT EMPLOYED"]
+    assert set(tc[0]) == {"name", "total_cents"}              # exactly the contract shape
+    # monotonically non-increasing (FEC -total order preserved through the cap)
+    assert all(tc[i]["total_cents"] >= tc[i + 1]["total_cents"] for i in range(len(tc) - 1))
+    assert cf["provenance"]["source"] == "fec"                # same envelope as totals
+
+
+def test_top_contributors_absent_when_no_committee(slice_dirs):
+    """A member with campaign_finance but no contributors file has no
+    top_contributors key — absent is not an empty list, never fabricated.
+    (Sam has no FEC data at all, so no money section; assert Jane is the only
+    one carrying contributors here.)"""
+    # Al Large: House member with no FEC id -> no money section, hence no key.
+    al = _dossier_named(slice_dirs, "Al Large")
+    assert "top_contributors" not in al.get("money", {}).get("campaign_finance", {})
 
 
 # --- E4 state legislators ---------------------------------------------------

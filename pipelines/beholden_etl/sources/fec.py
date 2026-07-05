@@ -1,6 +1,9 @@
-"""FEC campaign-finance client (ticket E3). Keyed, throttled under the default
-1,000 req/hr key limit, retrying. Amounts arrive from FEC in dollars; the spine
-stores integer USD cents (DATA-CONTRACTS §2), so every value crosses to_cents().
+"""FEC campaign-finance client (tickets E3 + WO-3). Keyed, throttled under the
+default 1,000 req/hr key limit, retrying. E3 pulls candidate cycle totals; WO-3
+resolves each candidate's principal committee and rolls up its itemized
+individual contributions by employer (FEC's own aggregation) into top
+contributors. Amounts arrive from FEC in dollars; the spine stores integer USD
+cents (DATA-CONTRACTS §2), so every value crosses to_cents().
 """
 from __future__ import annotations
 
@@ -13,8 +16,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from ..config import SOURCES
 
 BASE = SOURCES["fec"].base_url
-# ~537 candidate calls per run, well under 1,000/hr; a small gap keeps us polite
-# and leaves headroom for retries without ever approaching the cap.
+# ~537 totals + ~537×2 contributor calls (committee resolve + by_employer) per
+# run, still well under 1,000/hr; a 0.5s gap keeps us polite and leaves headroom
+# for retries without ever approaching the cap.
 MIN_INTERVAL_S = 0.5
 _RETRYABLE = (httpx.HTTPStatusError, httpx.TransportError)
 
@@ -57,6 +61,34 @@ class FECClient:
         results = data.get("results") or []
         return results[0] if results else None
 
+    def principal_committee(self, candidate_id: str, cycle: int) -> str | None:
+        """Resolve the committee whose itemized contributions we roll up (WO-3):
+        the candidate's principal campaign committee (designation P) for the
+        cycle, falling back to any authorized committee if none is designated P.
+        Returns None when the candidate has no committee that cycle — absent is
+        not zero, so such a member simply gets no top_contributors."""
+        data = self.get(f"candidate/{candidate_id}/committees",
+                        designation="P", cycle=cycle, per_page=1)
+        results = data.get("results") or []
+        if results:
+            return results[0].get("committee_id")
+        # No principal committee this cycle: fall back to any authorized one.
+        data = self.get(f"candidate/{candidate_id}/committees",
+                        cycle=cycle, per_page=1)
+        results = data.get("results") or []
+        return results[0].get("committee_id") if results else None
+
+    def top_contributors_by_employer(self, committee_id: str, cycle: int,
+                                     per_page: int = 25) -> list[dict]:
+        """FEC's own employer rollups of itemized individual contributions to a
+        committee for a cycle, sorted by total descending (WO-3). Rows are FEC's
+        {employer, total, count}; total is dollars (crosses to_cents at map).
+        Returns [] when the committee has no itemized individual receipts."""
+        data = self.get("schedules/schedule_a/by_employer",
+                        committee_id=committee_id, cycle=cycle,
+                        sort="-total", per_page=per_page)
+        return data.get("results") or []
+
 
 def cycle_row(person_id: str, candidate_id: str, cycle: int,
               totals: dict, as_of_fallback: str | None) -> dict | None:
@@ -75,3 +107,25 @@ def cycle_row(person_id: str, candidate_id: str, cycle: int,
         "cash_on_hand_cents": to_cents(totals.get("last_cash_on_hand_end_period")),
         "as_of": as_of,
     }
+
+
+def contributor_rows(person_id: str, cycle: int, by_employer: list[dict]) -> list[dict]:
+    """FEC by_employer rollups -> top_contributors rows (money in integer cents
+    §2). One row per employer, ranked 1..N by the order FEC returns (sorted by
+    -total). contributor_name is the employer verbatim as FEC reports it —
+    blank / 'NOT EMPLOYED' / 'RETIRED' are legitimate categories, kept as-is and
+    never editorialized or filtered (WO-3 contract care). Rank is the only
+    computed field, applied by one fixed rule identical for every candidate."""
+    rows = []
+    for rank, r in enumerate(by_employer, 1):
+        cents = to_cents(r.get("total"))
+        if cents is None:                       # FEC omitted a total: not publishable
+            continue
+        rows.append({
+            "person_id": person_id,
+            "cycle": cycle,
+            "contributor_name": (r.get("employer") or "").strip(),
+            "total_cents": cents,
+            "rank": rank,
+        })
+    return rows
