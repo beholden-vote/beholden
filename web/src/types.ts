@@ -36,7 +36,8 @@ export interface Dossier {
     official_links: { type: string; url: string }[];
     provenance: Provenance;
   };
-  ideology: {
+  /** Federal-only for now; a state legislator's dossier omits it (E4). */
+  ideology?: {
     scheme: string;
     score: number | null;
     status: string;
@@ -45,7 +46,8 @@ export interface Dossier {
     explainer_url: string;
     provenance: Provenance;
   };
-  legislative: {
+  /** Federal-only for now; render only when present. */
+  legislative?: {
     counts: { sponsored: number; cosponsored: number; became_law: number };
     recent_bills: { bill_id: string; title: string; status: string; url?: string }[];
     key_votes: { roll_call_id: string; question: string; position: string; held_at: string; url?: string }[];

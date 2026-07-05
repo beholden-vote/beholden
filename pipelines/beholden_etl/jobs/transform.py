@@ -18,6 +18,7 @@ from ..config import CONGRESS, RAW_DIST, SPINE_RESOLUTION_MIN
 from ..sources import congress_gov
 from ..sources import fec
 from ..sources import legislators as L
+from ..sources import openstates
 from ..sources import voteview
 from .. import divisions as D
 from .. import store
@@ -208,6 +209,50 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
                 seen_cf.add(pk)
                 cf_rows.append(row)
         store.insert(con, "campaign_finance_cycles", cf_rows)
+
+    # --- state legislators (OpenStates, E4) -> spine (sldu/sldl) ---
+    os_dir = raw / "openstates" / "people"
+    if os_dir.exists():
+        # Most state legislatures convened early 2025; used as the term start
+        # (individual first-took-office isn't in the bulk feed, so dossiers omit it).
+        session_start = f"{2025 + (CONGRESS - 119) * 2}-01-01"
+        os_persons, os_idents, os_divs, os_offices, os_terms = [], [], {}, {}, []
+        seen_person: set[str] = set()
+        for f in sorted(os_dir.glob("*.csv")):
+            state = f.stem  # lowercase usps
+            for r in openstates.to_person_rows(f.read_text(encoding="utf-8")):
+                mapped = D.sld_ocd(state, r["chamber"], r["district"])
+                if not mapped:
+                    continue
+                ocd, level = mapped
+                pid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"openstates:{r['ocd_person']}"))
+                if pid not in seen_person:
+                    seen_person.add(pid)
+                    os_persons.append({
+                        "person_id": pid, "full_name": r["name"],
+                        "given_name": r["given"], "family_name": r["family"],
+                        "birth_year": int(r["birth_date"][:4]) if r.get("birth_date") else None})
+                    os_idents.append({"person_id": pid, "id_scheme": "openstates",
+                                      "id_value": r["ocd_person"]})
+                os_divs.setdefault(ocd, {
+                    "ocd_id": ocd, "parent_ocd": D.state_ocd(state), "level": level,
+                    "name": f"{state.upper()} {level}:{r['district']}", "geoid": None,
+                    "valid_from": session_start})
+                role = "state_senator" if r["chamber"] == "upper" else "state_representative"
+                office_id = _office_id(ocd, role)
+                os_offices.setdefault(office_id, {
+                    "office_id": office_id, "ocd_id": ocd, "branch": "legislative",
+                    "chamber": r["chamber"], "role": role})
+                os_terms.append({
+                    "term_id": _term_id(pid, office_id, session_start),
+                    "person_id": pid, "office_id": office_id, "party": L.party_code(r["party"]),
+                    "start_date": session_start, "end_date": None, "is_vacant_marker": False,
+                    "meta": {"image": r["image"], "source_url": r["source_url"]}})
+        store.insert(con, "persons", os_persons)
+        store.insert(con, "person_identifiers", os_idents)
+        store.insert(con, "divisions", list(os_divs.values()))
+        store.insert(con, "offices", list(os_offices.values()))
+        store.insert(con, "terms", os_terms)
 
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
               for t in ("persons", "divisions", "offices", "terms",

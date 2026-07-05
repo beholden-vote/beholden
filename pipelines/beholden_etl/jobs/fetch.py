@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST
-from ..sources import congress_gov, fec, legislators, voteview
+from ..sources import congress_gov, fec, legislators, openstates, voteview
 
 LEGISLATORS_URL = legislators.URL
 VOTEVIEW_URL = voteview.members_url(CONGRESS)
@@ -91,6 +91,21 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         "retrieved_at": _now(),
         "source_url": f"https://www.fec.gov/data/candidates/?cycle={FEC_CYCLE}",
         "count": fec_count}
+
+    # --- state legislators (OpenStates, E4): current people, bulk CSV per state ---
+    os_dir = raw / "openstates" / "people"
+    os_count = 0
+    for state in openstates.STATE_SLUGS:
+        try:
+            csv_text = openstates.fetch_people_csv(state)
+        except Exception as e:  # a single state hiccup shouldn't sink the run
+            print(f"fetch: openstates {state} skipped ({type(e).__name__})")
+            continue
+        (os_dir).mkdir(parents=True, exist_ok=True)
+        (os_dir / f"{state}.csv").write_text(csv_text, encoding="utf-8")
+        os_count += max(csv_text.count("\n") - 1, 0)
+    manifest["sources"]["openstates"] = {
+        "retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
 
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():

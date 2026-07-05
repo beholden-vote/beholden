@@ -8,7 +8,7 @@ import { STRINGS } from "../strings";
 const pct = (score: number) => `${((score + 1) / 2) * 100}%`;
 
 export function IdeologyScale({ ideology, partyCode }: {
-  ideology: Dossier["ideology"]; partyCode: string;
+  ideology: NonNullable<Dossier["ideology"]>; partyCode: string;
 }) {
   const { score, context, scope, status } = ideology;
   if (score == null) {

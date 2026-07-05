@@ -21,3 +21,22 @@ def house_ocd(usps: str, district: object) -> tuple[str, bool]:
     d = int(district) if str(district).isdigit() else 0
     at_large = d == 0
     return f"{state_ocd(usps)}/cd:{1 if at_large else d}", at_large
+
+
+_SLD_LEVEL = {"upper": "sldu", "lower": "sldl"}
+
+
+def sld_ocd(usps: str, chamber: str, district: object) -> tuple[str, str] | None:
+    """(ocd_id, level) for a state-legislative seat, or None if not mappable.
+    chamber 'upper'->sldu, 'lower'->sldl. District is normalized identically to
+    spike/stamp_ocd_ids.py (numeric -> int-string, else lowercased) so the key
+    matches the polygon; states with named/lettered districts may not line up
+    and simply stay uncolored until handled explicitly."""
+    level = _SLD_LEVEL.get(chamber)
+    if not level:
+        return None
+    d = str(district).strip()
+    key = str(int(d)) if d.isdigit() else d.lower()
+    if not key:
+        return None
+    return f"{state_ocd(usps)}/{level}:{key}", level

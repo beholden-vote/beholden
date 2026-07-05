@@ -90,7 +90,15 @@ MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
     "congress.gov": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 3},
     "voteview": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 4},
     "fec": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
+    "openstates": {"retrieved_at": RETRIEVED_AT, "source_url": "https://openstates.org/", "count": 2},
 }}
+
+# Two TN state legislators — one per chamber — to light up sldu/sldl (E4).
+OPENSTATES_TN_CSV = (
+    "id,name,current_party,current_district,current_chamber,given_name,family_name,image,birth_date,sources\n"
+    "ocd-person/aaaa1111-1111-1111-1111-111111111111,Pat Upper,Republican,5,upper,Pat,Upper,https://img/pat.jpg,1975-03-02,https://capitol.tn.gov/pat\n"
+    "ocd-person/bbbb2222-2222-2222-2222-222222222222,Dana Lower,Democratic,10,lower,Dana,Lower,,1982-07-11,https://capitol.tn.gov/dana\n"
+)
 
 # Jane's FEC candidate totals (dollars, as the API returns them -> stored cents).
 FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals": {
@@ -125,6 +133,8 @@ def slice_dirs(tmp_path):
         (raw / "congress.gov" / "legislation" / f"{bio}.json").write_text(json.dumps(rec))
     for cand, rec in FEC_TOTALS.items():
         (raw / "fec" / "totals" / f"{cand}.json").write_text(json.dumps(rec))
+    (raw / "openstates" / "people").mkdir(parents=True)
+    (raw / "openstates" / "people" / "tn.csv").write_text(OPENSTATES_TN_CSV)
     (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
@@ -155,7 +165,7 @@ def test_pins_carry_display_fields(slice_dirs):
 
 def test_every_dossier_is_contract_valid(slice_dirs):
     files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
-    assert len(files) == 3
+    assert len(files) == 5                          # 3 federal + 2 state legislators
     for f in files:
         d = json.loads(f.read_text())
         dossiers.validate(d)                       # no provenance, no publish
@@ -260,3 +270,25 @@ def test_campaign_finance_only_when_real(slice_dirs):
     assert cf["provenance"]["source"] == "fec"
     # Sam has no FEC id/totals -> no money section at all
     assert "money" not in _dossier_named(slice_dirs, "Sam Sen")
+
+
+# --- E4 state legislators ---------------------------------------------------
+def test_state_legislators_light_up_state_layers(slice_dirs):
+    """OpenStates people populate the sldu/sldl feeds + identity-only dossiers,
+    keyed on the OCD ids the tile stamper produces. Ideology/legislative are
+    omitted (not faked), and the dossier still validates."""
+    sldu = json.loads((slice_dirs / "data" / "stylefeeds" / "sldu.json").read_text())
+    sldl = json.loads((slice_dirs / "data" / "stylefeeds" / "sldl.json").read_text())
+    assert sldu["ocd-division/country:us/state:tn/sldu:5"]["party"] == "R"
+    assert sldl["ocd-division/country:us/state:tn/sldl:10"]["party"] == "D"
+
+    pins = json.loads((slice_dirs / "data" / "pins" / "sldu.json").read_text())
+    pat = next(p for p in pins if p["full_name"] == "Pat Upper")
+    assert pat["office"] == "TN State Senate · District 5"
+    assert pat["photo_url"] == "https://img/pat.jpg"
+
+    doss = _dossier_named(slice_dirs, "Pat Upper")
+    dossiers.validate(doss)                     # identity-only is contract-valid
+    assert "ideology" not in doss and "legislative" not in doss
+    assert doss["identity"]["provenance"]["source"] == "openstates"
+    assert doss["identity"]["office"]["chamber"] == "upper"

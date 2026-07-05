@@ -7,19 +7,30 @@ from pathlib import Path
 
 SCHEMA_VERSION = "1.0"
 REQUIRED_PROVENANCE = {"source", "source_url", "retrieved_at", "pipeline_version"}
-SECTIONS_REQUIRING_PROVENANCE = ("identity", "ideology", "legislative")
+# identity is universal; the rest are published only where the data exists (a
+# state legislator has no DW-NOMINATE or federal bill record). The rule is "no
+# provenance, no publish" per SECTION — not "every dossier has every section".
+REQUIRED_SECTIONS = ("identity",)
+OPTIONAL_PROVENANCED_SECTIONS = ("ideology", "legislative")
 
 
 class ProvenanceError(ValueError):
     pass
 
 
+def _check_provenance(dossier: dict, section: str) -> None:
+    prov = dossier.get(section, {}).get("provenance")
+    # Keys must be present AND truthy — a null retrieved_at is no provenance.
+    if not prov or not all(prov.get(k) for k in REQUIRED_PROVENANCE):
+        raise ProvenanceError(f"{dossier.get('person_id')}: section '{section}' missing provenance")
+
+
 def validate(dossier: dict) -> None:
-    for section in SECTIONS_REQUIRING_PROVENANCE:
-        prov = dossier.get(section, {}).get("provenance")
-        # Keys must be present AND truthy — a null retrieved_at is no provenance.
-        if not prov or not all(prov.get(k) for k in REQUIRED_PROVENANCE):
-            raise ProvenanceError(f"{dossier.get('person_id')}: section '{section}' missing provenance")
+    for section in REQUIRED_SECTIONS:
+        _check_provenance(dossier, section)
+    for section in OPTIONAL_PROVENANCED_SECTIONS:
+        if dossier.get(section) is not None:      # published => must be sourced
+            _check_provenance(dossier, section)
     money = dossier.get("money", {})
     for trade in (money.get("trades", {}) or {}).get("items", []):
         if not trade.get("filing_url"):

@@ -19,6 +19,8 @@ export const STRINGS = {
   // Legislative surfaces
   legislativePending:
     "Vote-by-vote records and sponsorship history are being synced from congress.gov. They appear here for every member as the sync lands.",
+  stateLegPending:
+    "Ideology scores, voting records, and campaign finance for state legislators are being added. Identity, party, and district are sourced from OpenStates.",
   ideologyPendingInsufficientVotes:
     "Not enough recorded votes yet this Congress to estimate a score.",
 

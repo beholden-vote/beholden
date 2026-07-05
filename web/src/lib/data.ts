@@ -49,6 +49,7 @@ export async function loadDossier(personId: string): Promise<Dossier | null> {
  *  no items) — rendered as "syncing", never as a factual zero. */
 export function legislativeIsStub(d: Dossier): boolean {
   const l = d.legislative;
+  if (!l) return false;
   return (
     l.counts.sponsored === 0 &&
     l.counts.cosponsored === 0 &&

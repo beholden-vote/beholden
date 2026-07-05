@@ -48,10 +48,19 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
         )}
       </Section>
 
-      <Section title="Ideological lean" provenance={ideology.provenance}>
-        <IdeologyScale ideology={ideology} partyCode={identity.party.code} />
-      </Section>
+      {ideology && (
+        <Section title="Ideological lean" provenance={ideology.provenance}>
+          <IdeologyScale ideology={ideology} partyCode={identity.party.code} />
+        </Section>
+      )}
 
+      {!ideology && !legislative && (
+        <Section title="Record">
+          <EmptyNote>{STRINGS.stateLegPending}</EmptyNote>
+        </Section>
+      )}
+
+      {legislative && (
       <Section title="Legislative record" provenance={legislative.provenance}>
         {legislativeIsStub(dossier) ? (
           <EmptyNote>{STRINGS.legislativePending}</EmptyNote>
@@ -96,6 +105,7 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
           </>
         )}
       </Section>
+      )}
 
       {money?.net_worth && (
         <Section title={STRINGS.netWorthTitle} provenance={money.net_worth.provenance}>

@@ -69,10 +69,21 @@ def _provenance(source: str, source_url: str, manifest: dict) -> dict:
 def _office_display(chamber: str, ocd_id: str) -> str:
     tail = ocd_id.split("/")[-1]
     state = ocd_id.split("state:")[1].split("/")[0].upper() if "state:" in ocd_id else "?"
+    seat = tail.split(":")[1] if ":" in tail else tail
     if chamber == "house":
-        seat = tail.split(":")[1] if tail.startswith("cd:") else tail
         return f"U.S. House · {state}-{seat}"
-    return f"U.S. Senate · {state}"
+    if chamber == "senate":
+        return f"U.S. Senate · {state}"
+    if chamber == "upper":
+        return f"{state} State Senate · District {seat}"
+    if chamber == "lower":
+        return f"{state} State House · District {seat}"
+    return f"{state} · {seat}"
+
+
+# Federal chambers carry ideology + a legislative record; state chambers (E4)
+# ship identity only for now, sourced from OpenStates.
+FEDERAL_CHAMBERS = {"house", "senate"}
 
 
 def _current_holders(con) -> list[dict]:
@@ -83,6 +94,8 @@ def _current_holders(con) -> list[dict]:
                t.party, t.is_vacant_marker,
                t.meta->>'term_ends'        AS term_ends,
                t.meta->>'first_took_office' AS first_took_office,
+               t.meta->>'image'            AS image_url,
+               t.meta->>'source_url'       AS source_url,
                i.score  AS ideology_score,
                i.status AS ideology_status,
                (SELECT id_value FROM person_identifiers pi
@@ -172,11 +185,24 @@ def _campaign_finance(con) -> dict[str, dict]:
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              leg_spine: dict, cospon: dict, campaign: dict) -> dict:
     bio = h.get("bioguide")
+    federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
-    score = None if h["ideology_score"] is None else float(h["ideology_score"])
+    photo_url = h.get("image_url") or photo.get(bio)   # OpenStates image or congress.gov headshot
+
+    if federal:
+        identity_prov = _provenance(
+            "unitedstates_legislators",
+            f"https://bioguide.congress.gov/search/bio/{bio}" if bio else SOURCES["unitedstates_legislators"].base_url,
+            manifest)
+        links = [{"type": "bioguide", "url": f"https://bioguide.congress.gov/search/bio/{bio}"}] if bio else []
+    else:
+        src = h.get("source_url")
+        identity_prov = _provenance("openstates", src or "https://openstates.org/", manifest)
+        links = [{"type": "official", "url": src}] if src else []
+
     identity = {
         "full_name": h["full_name"],
-        "photo_url": photo.get(bio),
+        "photo_url": photo_url,
         "office": {"role": h["role"], "ocd_id": h["ocd_id"],
                    "display": _office_display(h["chamber"], h["ocd_id"]),
                    "chamber": h["chamber"]},
@@ -185,36 +211,35 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                    "current_term_ends": h["term_ends"]},
         "next_election": None,
         "status": "vacant" if vacant else "incumbent",
-        "official_links": ([{"type": "bioguide",
-                             "url": f"https://bioguide.congress.gov/search/bio/{bio}"}] if bio else []),
-        "provenance": _provenance(
-            "unitedstates_legislators",
-            f"https://bioguide.congress.gov/search/bio/{bio}" if bio else SOURCES["unitedstates_legislators"].base_url,
-            manifest),
+        "official_links": links,
+        "provenance": identity_prov,
     }
-    ideology = {
-        "scheme": "dw_nominate_dim1", "score": score,
-        "status": h["ideology_status"] or "pending_insufficient_votes",
-        "context": {"party_median": medians["party"].get(h["party"]),
-                    "chamber_median": medians["chamber"].get(h["chamber"])},
-        "scope": IDEOLOGY_SCOPE, "explainer_url": "/methodology#dw-nominate",
-        "provenance": _provenance("voteview",
-                                  f"https://voteview.com/congress/{h['chamber']}", manifest),
-    }
-    stats = leg_spine.get(h["person_id"], {})
-    legislative = {   # E2: sponsored/became-law + recent bills from the spine;
-                      # cosponsored total from the landed snapshot; votes/committees follow.
-        "counts": {"sponsored": stats.get("sponsored", 0),
-                   "cosponsored": cospon.get(bio, 0),
-                   "became_law": stats.get("became_law", 0)},
-        "recent_bills": stats.get("recent_bills", []),
-        "key_votes": [], "committees": [],
-        "provenance": _provenance("congress.gov",
-                                  f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
-                                  manifest),
-    }
-    sections = {"identity": identity, "ideology": ideology, "legislative": legislative,
-                "graph_ref": f"/graph/neighborhood/{h['person_id']}"}
+    sections = {"identity": identity, "graph_ref": f"/graph/neighborhood/{h['person_id']}"}
+
+    # Ideology + legislative record are federal-only for now; state dossiers
+    # (E4) publish identity only, each fact still sourced (no provenance, no publish).
+    if federal:
+        score = None if h["ideology_score"] is None else float(h["ideology_score"])
+        sections["ideology"] = {
+            "scheme": "dw_nominate_dim1", "score": score,
+            "status": h["ideology_status"] or "pending_insufficient_votes",
+            "context": {"party_median": medians["party"].get(h["party"]),
+                        "chamber_median": medians["chamber"].get(h["chamber"])},
+            "scope": IDEOLOGY_SCOPE, "explainer_url": "/methodology#dw-nominate",
+            "provenance": _provenance("voteview",
+                                      f"https://voteview.com/congress/{h['chamber']}", manifest),
+        }
+        stats = leg_spine.get(h["person_id"], {})
+        sections["legislative"] = {
+            "counts": {"sponsored": stats.get("sponsored", 0),
+                       "cosponsored": cospon.get(bio, 0),
+                       "became_law": stats.get("became_law", 0)},
+            "recent_bills": stats.get("recent_bills", []),
+            "key_votes": [], "committees": [],
+            "provenance": _provenance("congress.gov",
+                                      f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
+                                      manifest),
+        }
 
     cf = campaign.get(h["person_id"])
     if cf and cf["cycles"]:
@@ -248,34 +273,41 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign) for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
-    # --- style feed + pins for the CD layer (House) ---
-    house = [h for h in holders if h["chamber"] == "house"]
-    cd_feed = stylefeeds.build_layer_feed(
-        [{"ocd_id": h["ocd_id"], "party": h["party"],
-          "score": None if h["ideology_score"] is None else float(h["ideology_score"]),
-          "is_vacant_marker": bool(h["is_vacant_marker"])} for h in house])
-    # Every layer the client requests gets a feed; layers without data yet
-    # (states colouring, state chambers) ship empty so the map loads 404-free
-    # and lights up automatically once those verticals land.
-    stylefeeds.publish({"cd": cd_feed, "states": {}, "sldu": {}, "sldl": {}}, out / "stylefeeds")
+    # --- style feeds + pins, grouped by chamber -> map layer ---
+    chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl"}
+    by_layer: dict[str, list[dict]] = {"cd": [], "states": [], "sldu": [], "sldl": []}
+    for h in holders:
+        layer = chamber_layer.get(h["chamber"])
+        if layer:
+            by_layer[layer].append(h)
+
+    def feed(rows):
+        return stylefeeds.build_layer_feed(
+            [{"ocd_id": h["ocd_id"], "party": h["party"],
+              "score": None if h["ideology_score"] is None else float(h["ideology_score"]),
+              "is_vacant_marker": bool(h["is_vacant_marker"])} for h in rows])
+
+    # Colored polygon layers: House + both state chambers. (A U.S. senator isn't
+    # a single polygon, so the states layer stays a discovery-only pin layer.)
+    house, senate = by_layer["cd"], by_layer["states"]
+    cd_feed = feed(house)
+    stylefeeds.publish({"cd": cd_feed, "states": {},
+                        "sldu": feed(by_layer["sldu"]), "sldl": feed(by_layer["sldl"])},
+                       out / "stylefeeds")
 
     def pins(rows):
-        # Carries the display fields the map UI needs for hover/stack views so
-        # the client never has to fan out dossier fetches just to label a
-        # polygon (contract §3: pins = dossier discovery on tap).
+        # Display fields the map UI needs for hover/stack views, so the client
+        # never fans out dossier fetches just to label a polygon (contract §3).
         return [{"person_id": h["person_id"], "ocd_id": h["ocd_id"],
                  "full_name": h["full_name"],
                  "office": _office_display(h["chamber"], h["ocd_id"]),
-                 "chamber": h["chamber"],
-                 "vacant": bool(h["is_vacant_marker"]),
-                 "lat": None, "lng": None, "photo_url": photo.get(h.get("bioguide")),
+                 "chamber": h["chamber"], "vacant": bool(h["is_vacant_marker"]),
+                 "lat": None, "lng": None,
+                 "photo_url": h.get("image_url") or photo.get(h.get("bioguide")),
                  "party": h["party"]} for h in rows]
     (out / "pins").mkdir(parents=True, exist_ok=True)
-    (out / "pins" / "cd.json").write_text(json.dumps(pins(house), separators=(",", ":")))
-    senate = [h for h in holders if h["chamber"] == "senate"]
-    (out / "pins" / "states.json").write_text(json.dumps(pins(senate), separators=(",", ":")))
-    for empty in ("sldu", "sldl"):
-        (out / "pins" / f"{empty}.json").write_text("[]")
+    for layer in ("cd", "states", "sldu", "sldl"):
+        (out / "pins" / f"{layer}.json").write_text(json.dumps(pins(by_layer[layer]), separators=(",", ":")))
 
     # --- coverage dashboard: freshness vs SLA, computed not just echoed (G2) ---
     def _source_row(k: str) -> dict:
@@ -292,13 +324,14 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     coverage = {
         "generated_at": _now(), "pipeline_version": pipeline_version(),
         "counts": {"dossiers": len(docs), "cd_stylefeed": len(cd_feed),
-                   "house": len(house), "senate": len(senate)},
+                   "house": len(house), "senate": len(senate),
+                   "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"])},
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},
     }
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
 
-    print(f"build: {len(docs)} dossiers, {len(cd_feed)} cd stylefeed, "
-          f"{len(house)} house pins, {len(senate)} senate pins -> {out}")
+    print(f"build: {len(docs)} dossiers · house={len(house)} senate={len(senate)} "
+          f"sldu={len(by_layer['sldu'])} sldl={len(by_layer['sldl'])} -> {out}")
     return coverage
 
 
