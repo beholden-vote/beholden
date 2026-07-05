@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
+from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 
 LEGISLATORS_URL = legislators.URL
 VOTEVIEW_URL = voteview.members_url(CONGRESS)
@@ -150,6 +151,33 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     _write_json(raw / "house_clerk" / "ptr.json", hc_filings)
     manifest["sources"]["house_clerk"] = {
         "retrieved_at": _now(), "source_url": house_clerk.DISCLOSURE_URL, "count": len(hc_filings)}
+
+    # --- WO-9: WA PDC bulk disclosure (trusted extraction, Public Domain) ---
+    # Land the itemized snapshot + its companion control-total summary, plus a
+    # per-source manifest recording the exact-bytes SHA-256, the observed header
+    # (schema-drift fingerprint), and the retrieval time. Immutable: transform
+    # reads only from here, so a silent re-release with different content forces a
+    # re-review via the hash (docs/TRUSTED-EXTRACTION.md §4.1). A network hiccup
+    # skips the source for this run rather than sinking the federal slice.
+    try:
+        wa_items = wa_pdc.fetch_itemized()
+        wa_summary = wa_pdc.fetch_summary()
+        wa_bytes = wa_pdc.snapshot_bytes(wa_items)
+        wa_sha = wa_pdc.sha256(wa_bytes)
+        wa_retrieved = _now()
+        _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
+        _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
+        _write_json(raw / "wa_pdc" / "manifest.json", {
+            "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
+            "header": list(wa_pdc.CONTRACT.header),
+            "contract_version": wa_pdc.CONTRACT.contract_version,
+            "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
+        manifest["sources"]["wa_pdc"] = {
+            "retrieved_at": wa_retrieved,
+            "source_url": wa_pdc.CONTRACT.retrieval["itemized_json"],
+            "count": len(wa_items), "file_sha256": wa_sha}
+    except Exception as e:
+        print(f"fetch: wa_pdc skipped ({type(e).__name__})")
 
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():

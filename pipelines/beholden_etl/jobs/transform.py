@@ -20,6 +20,8 @@ from ..sources import fec
 from ..sources import legislators as L
 from ..sources import openstates
 from ..sources import voteview
+from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
+from ..bulk import reconcile as bulk_reconcile                  # WO-9 (fail-closed gates)
 from .. import divisions as D
 from .. import store
 
@@ -64,6 +66,51 @@ def _office_and_division(term: dict):
                   "branch": "legislative", "chamber": "senate", "role": "senator"}
         return division, None, office, seat
     return None
+
+
+# ==== WO-9: WA PDC trusted-extraction ingest (self-contained) ================
+# Parse -> value-domain quarantine -> fail-closed reconciliation -> insert. The
+# whole path is copy-only (no model). All three run-ending gates live here:
+# schema-drift (observed header vs pinned contract), control-total (Σ itemized ==
+# summary contributions_amount per filer/year), and the no-silent-drop invariant
+# (input == inserted + quarantined). A value-domain miss quarantines one row with a
+# reason; it does not end the run, but is still accounted for by the invariant.
+def ingest_wa_pdc(con, itemized_records, summary_records, observed_header,
+                  file_sha256, retrieved_at) -> dict:
+    """Ingest one WA PDC snapshot into disclosure_contributions/_quarantine under
+    the fail-closed gates. Returns {input, inserted, quarantined}. Raises a
+    bulk_reconcile.GateError (schema-drift / control-total / no-silent-drop) rather
+    than publish anything unreconciled."""
+    # Gate 1 — schema-drift: header must match the pinned contract exactly.
+    bulk_reconcile.schema_drift_gate(wa_pdc.CONTRACT, observed_header)
+
+    # Copy-only parse: every input row -> a contribution OR a quarantine (with reason).
+    contributions, quarantined = [], []
+    for rec in itemized_records:
+        row, q = wa_pdc.map_row(rec, file_sha256=file_sha256, retrieved_at=retrieved_at)
+        if row is not None:
+            contributions.append(row)
+        else:
+            quarantined.append(q)
+
+    # Gate 2 — control-total: Σ(inserted amount_cents) per (filer_id, election_year)
+    # must equal the summary feed's contributions_amount for that group (epsilon 0).
+    sums: dict = {}
+    for row in contributions:
+        key = wa_pdc.itemized_group_key(row)
+        sums[key] = sums.get(key, 0) + row["amount_cents"]
+    controls = wa_pdc.control_totals_cents(summary_records)
+    bulk_reconcile.control_total_gate(
+        sums, controls, wa_pdc.CONTRACT.control_total.epsilon_cents, wa_pdc.CONTRACT.source_id)
+
+    # Gate 3 — no-silent-drop: input == inserted + quarantined, before we persist.
+    bulk_reconcile.no_silent_drop_gate(
+        len(itemized_records), len(contributions), len(quarantined), wa_pdc.CONTRACT.source_id)
+
+    store.insert(con, "disclosure_contributions", contributions)
+    store.insert(con, "disclosure_quarantine", quarantined)
+    return {"input": len(itemized_records),
+            "inserted": len(contributions), "quarantined": len(quarantined)}
 
 
 def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
@@ -331,6 +378,18 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "divisions", list(os_divs.values()))
         store.insert(con, "offices", list(os_offices.values()))
         store.insert(con, "terms", os_terms)
+
+    # --- WO-9: WA PDC bulk disclosure (trusted extraction, fail-closed gates) ---
+    # Reads the landed snapshot only (never the network); ingest_wa_pdc runs the
+    # schema-drift, control-total, and no-silent-drop gates and raises rather than
+    # publish anything unreconciled. Not surfaced in dossiers (explicit follow-on).
+    wa_dir = raw / "wa_pdc"
+    if (wa_dir / "itemized.json").exists() and (wa_dir / "manifest.json").exists():
+        wa_meta = json.loads((wa_dir / "manifest.json").read_text(encoding="utf-8"))
+        itemized = json.loads((wa_dir / "itemized.json").read_text(encoding="utf-8"))
+        summary = json.loads((wa_dir / "summary.json").read_text(encoding="utf-8"))
+        ingest_wa_pdc(con, itemized, summary, wa_meta["header"],
+                      wa_meta["file_sha256"], wa_meta["retrieved_at"])
 
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
               for t in ("persons", "divisions", "offices", "terms",

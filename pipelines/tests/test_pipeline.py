@@ -939,3 +939,201 @@ def test_graph_dossier_graph_ref_resolves_to_neighborhood(slice_dirs):
         ref = d["graph_ref"]                                 # "/graph/neighborhood/{id}"
         assert ref == f"/graph/neighborhood/{d['person_id']}"
         assert (gdir / f"{d['person_id']}.json").exists()
+
+
+# --- WO-9 WA PDC trusted extraction (Tier A) --------------------------------
+# Fixtures mirror the real feed, verified live 2026-07-05: filer 24THLD 362 in
+# election_year 2025 has six itemized cash contributions summing to $2,183.00,
+# exactly the summary feed's contributions_amount for that (filer, year). No model
+# is in this path; the whole framework is deterministic parse + fail-closed gates.
+from beholden_etl.sources import wa_pdc as _wa            # noqa: E402
+from beholden_etl.bulk import contract as _bulk_contract  # noqa: E402
+from beholden_etl.bulk import reconcile as _bulk_reconcile  # noqa: E402
+from beholden_etl.jobs import transform as _transform      # noqa: E402
+
+# A snapshot's exact-bytes SHA-256 and retrieval time are provenance inputs; fixed
+# here so the envelope + idempotence assertions are stable.
+_WA_SHA = "0" * 64
+_WA_RETRIEVED = "2026-07-05T00:00:00+00:00"
+
+
+def _wa_record(**over):
+    """One itemized record shaped like the real Socrata JSON (url as {'url': ...})."""
+    rec = {
+        "id": "20318665", "report_number": "110314712", "filer_id": "24THLD 362",
+        "filer_name": "24th LD Dem", "office": "", "party": "DEMOCRATIC",
+        "legislative_district": "24", "election_year": "2025", "amount": "500.00",
+        "cash_or_in_kind": "Cash", "receipt_date": "2025-09-15T00:00:00.000",
+        "contributor_name": "Makah Tribal Council", "contributor_city": "Neah Bay",
+        "contributor_state": "WA", "contributor_occupation": "",
+        "contributor_employer_name": "",
+        "url": {"url": "https://my.pdc.wa.gov/public/registrations/campaign-finance-report/110314712"},
+    }
+    rec.update(over)
+    return rec
+
+
+# Six real-shaped itemized rows for (24THLD 362, 2025): 500+250+250+400+383+400 = 2183.00.
+_WA_ITEMIZED = [
+    _wa_record(id="20318665", amount="500.00", contributor_name="Makah Tribal Council"),
+    _wa_record(id="20318664", amount="250.00", contributor_name="Washburn's General Store"),
+    _wa_record(id="20318666", amount="250.00", contributor_name="Neah Bay Grocery"),
+    _wa_record(id="20318667", amount="400.00", contributor_name="Local 21 PAC", cash_or_in_kind="In-kind"),
+    _wa_record(id="20318668", amount="383.00", contributor_name="A. Donor"),
+    _wa_record(id="20318669", amount="400.00", contributor_name="B. Donor"),
+]
+# The companion control-total feed: one summary row per (filer, year).
+_WA_SUMMARY = [{"filer_id": "24THLD 362", "election_year": "2025",
+                "contributions_amount": "2183.00"}]
+
+
+def _wa_warehouse():
+    con = store.connect()
+    store.init_schema(con)
+    return con
+
+
+def test_wa_pdc_contract_is_public_domain_and_reconcilable():
+    """The pinned contract records the verified license, keys, and the control-total
+    field actually used (summary contributions_amount grouped by filer/year)."""
+    c = _wa.CONTRACT
+    assert c.source_id == "wa_pdc" and c.license_is_public_domain
+    assert c.license == "Public Domain"
+    assert c.record_locator == "id" and c.source_record_url == "url"
+    assert c.control_total.total_field == "contributions_amount"
+    assert c.control_total.group_by == ("filer_id", "election_year")
+    assert c.control_total.epsilon_cents == 0
+    assert c.jurisdiction == "ocd-division/country:us/state:wa"
+    # the enum domain is exactly what the live feed contains
+    assert c.domain("cash_or_in_kind") == ("Cash", "In-kind")
+
+
+def test_wa_pdc_copy_only_mappers_and_provenance():
+    """Mappers copy verbatim cells (only dollars->cents and date parse), attaching
+    the §6 envelope with the native id, per-record url, and retained raw values."""
+    row, q = _wa.map_row(_wa_record(), file_sha256=_WA_SHA, retrieved_at=_WA_RETRIEVED)
+    assert q is None
+    assert row["id"] == "20318665" and row["filer_id"] == "24THLD 362"
+    assert row["amount_cents"] == 50000 and row["raw_amount"] == "500.00"  # verbatim retained
+    assert row["receipt_date"] == "2025-09-15"
+    assert row["contributor_name"] == "Makah Tribal Council"
+    assert row["raw_contributor_name"] == "Makah Tribal Council"
+    assert row["source_record_url"].endswith("/campaign-finance-report/110314712")
+    assert row["file_sha256"] == _WA_SHA and row["retrieved_at"] == _WA_RETRIEVED
+    assert row["contract_version"] == _wa.CONTRACT.contract_version
+    # negative amounts (refunds/corrections) are legitimate and preserved, not clamped
+    neg, qn = _wa.map_row(_wa_record(id="R1", amount="-100.00"),
+                          file_sha256=_WA_SHA, retrieved_at=_WA_RETRIEVED)
+    assert qn is None and neg["amount_cents"] == -10000
+
+
+def test_wa_pdc_clean_parse_matching_control_total_lands(tmp_path):
+    """(a) Clean parse + a matching control total -> every row lands, none quarantined."""
+    con = _wa_warehouse()
+    stats = _transform.ingest_wa_pdc(con, _WA_ITEMIZED, _WA_SUMMARY,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert stats == {"input": 6, "inserted": 6, "quarantined": 0}
+    n = con.execute("SELECT count(*) FROM disclosure_contributions").fetchone()[0]
+    assert n == 6
+    total = con.execute("SELECT sum(amount_cents) FROM disclosure_contributions").fetchone()[0]
+    assert total == 218300                                  # reconciles to the summary cent
+    assert con.execute("SELECT count(*) FROM disclosure_quarantine").fetchone()[0] == 0
+    con.close()
+
+
+def test_wa_pdc_control_total_mismatch_halts(tmp_path):
+    """(b) A control-total mismatch fails closed — the gate raises, nothing lands."""
+    con = _wa_warehouse()
+    bad_summary = [{"filer_id": "24THLD 362", "election_year": "2025",
+                    "contributions_amount": "9999.00"}]   # != itemized $2,183.00
+    with pytest.raises(_bulk_reconcile.ControlTotalError, match="control-total gate"):
+        _transform.ingest_wa_pdc(con, _WA_ITEMIZED, bad_summary,
+                                 list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    con.close()
+
+
+def test_wa_pdc_missing_control_total_halts():
+    """A filer/year present in the itemized data with NO control total is itself a
+    failure — we never ship itemized data without a reconciliation basis (WO-9)."""
+    with pytest.raises(_bulk_reconcile.ControlTotalError, match="NO control total"):
+        _bulk_reconcile.control_total_gate({("F", 2025): 100}, {}, 0, "wa_pdc")
+
+
+def test_wa_pdc_drifted_header_halts():
+    """(c) A drifted header fails the schema-drift gate before any row is parsed —
+    a changed layout is never best-effort parsed."""
+    drifted = list(_wa.CONTRACT.header)
+    drifted[18] = "amount_usd"                              # 'amount' renamed upstream
+    con = _wa_warehouse()
+    with pytest.raises(_bulk_reconcile.SchemaDriftError, match="schema-drift gate"):
+        _transform.ingest_wa_pdc(con, _WA_ITEMIZED, _WA_SUMMARY,
+                                 drifted, _WA_SHA, _WA_RETRIEVED)
+    con.close()
+    # a reordered header (same fields) is also drift — never silently accepted
+    reordered = [_wa.CONTRACT.header[1], _wa.CONTRACT.header[0], *_wa.CONTRACT.header[2:]]
+    drift = _bulk_contract.check_schema_drift(_wa.CONTRACT, reordered)
+    assert drift is not None and drift.reordered
+    assert _bulk_contract.check_schema_drift(_wa.CONTRACT, _wa.CONTRACT.header) is None
+
+
+def test_wa_pdc_out_of_domain_value_quarantined_with_reason():
+    """(d) An out-of-domain value is quarantined WITH a reason, never coerced; the
+    no-silent-drop invariant input == inserted + quarantined still holds.
+
+    A control total that matches only the good rows proves quarantined rows are
+    excluded from the reconciled sum, not silently dropped."""
+    con = _wa_warehouse()
+    rows = [
+        _wa_record(id="G1", amount="500.00"),                          # good
+        _wa_record(id="B1", cash_or_in_kind="Loan"),                   # bad enum
+        _wa_record(id="B2", amount="not-a-number"),                    # non-numeric amount
+        _wa_record(id="B3", receipt_date="15th of Never"),             # unparseable date
+        _wa_record(id="B4", election_year="soon"),                     # non-integer year
+        {"filer_id": "24THLD 362", "amount": "1.00", "cash_or_in_kind": "Cash",
+         "election_year": "2025", "url": {"url": "http://x"}},         # missing native id
+    ]
+    # only the one good row ($500) reconciles against the summary total for the group
+    summary = [{"filer_id": "24THLD 362", "election_year": "2025",
+                "contributions_amount": "500.00"}]
+    stats = _transform.ingest_wa_pdc(con, rows, summary,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert stats["input"] == 6 and stats["inserted"] == 1 and stats["quarantined"] == 5
+    assert stats["input"] == stats["inserted"] + stats["quarantined"]   # no-silent-drop
+    reasons = [r[0] for r in con.execute(
+        "SELECT reason FROM disclosure_quarantine ORDER BY reason").fetchall()]
+    assert any("cash_or_in_kind out of domain" in r for r in reasons)
+    assert any("amount not numeric" in r for r in reasons)
+    assert any("receipt_date unparseable" in r for r in reasons)
+    assert any("election_year not an integer" in r for r in reasons)
+    assert any("missing native id" in r for r in reasons)
+    # the bad enum was quarantined verbatim, never coerced into the domain
+    assert con.execute(
+        "SELECT count(*) FROM disclosure_contributions WHERE cash_or_in_kind='Loan'"
+    ).fetchone()[0] == 0
+    con.close()
+
+
+def test_wa_pdc_no_silent_drop_gate_catches_unaccounted():
+    """The invariant is a hard gate: an input row neither inserted nor quarantined
+    raises, so nothing can silently vanish."""
+    with pytest.raises(_bulk_reconcile.SilentDropError, match="no-silent-drop gate"):
+        _bulk_reconcile.no_silent_drop_gate(10, 7, 2, "wa_pdc")   # 7+2 != 10
+    _bulk_reconcile.no_silent_drop_gate(10, 7, 3, "wa_pdc")       # 7+3 == 10, no raise
+
+
+def test_wa_pdc_idempotent_reparse_is_identical():
+    """(e) Re-parsing the identical snapshot yields byte-identical rows, and a second
+    ingest into the same warehouse is a no-op (id PK + ON CONFLICT DO NOTHING)."""
+    first = [_wa.map_row(r, file_sha256=_WA_SHA, retrieved_at=_WA_RETRIEVED)[0]
+             for r in _WA_ITEMIZED]
+    second = [_wa.map_row(r, file_sha256=_WA_SHA, retrieved_at=_WA_RETRIEVED)[0]
+              for r in _WA_ITEMIZED]
+    assert first == second                                  # deterministic, no drift
+
+    con = _wa_warehouse()
+    _transform.ingest_wa_pdc(con, _WA_ITEMIZED, _WA_SUMMARY,
+                             list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    _transform.ingest_wa_pdc(con, _WA_ITEMIZED, _WA_SUMMARY,
+                             list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert con.execute("SELECT count(*) FROM disclosure_contributions").fetchone()[0] == 6
+    con.close()
