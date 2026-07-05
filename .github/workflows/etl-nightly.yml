@@ -1,14 +1,18 @@
 name: etl-nightly
 on:
   schedule:
-    - cron: "0 6 * * *"        # nightly full build
-    - cron: "0 */4 * * *"      # intra-day: PTR + roll-call freshness (G2 SLA)
+    - cron: "0 6 * * *"        # nightly full rebuild
   workflow_dispatch:
     inputs:
       backfill_since: {description: "ISO date to backfill from", required: false}
 
-# Public repo = unlimited Actions minutes. This IS the orchestrator (free-tier arch §1.2).
-# One run at a time: the intra-day cron must never race the nightly's publish.
+# One full rebuild a night. The pipeline reconstructs everything from scratch each
+# run (raw is not persisted between runs), so there's no cheap "light" intra-day
+# pass — an every-4h full rebuild just re-ran the ~40-min legislation fetch six
+# times and, with the one-at-a-time guard below, churned cancelled runs. Sub-daily
+# freshness (PTR/votes, PRD G2) is a future optimization: persist raw to R2 and
+# re-fetch only the fast-moving sources incrementally.
+# One run at a time: a manual dispatch must never race the nightly's publish.
 concurrency:
   group: etl-nightly
   cancel-in-progress: false
