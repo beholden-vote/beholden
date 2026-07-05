@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-label="Beholden — power, on the public record">
+  <defs>
+    <clipPath id="frame"><rect x="0" y="0" width="1200" height="340"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)" font-family="'Helvetica Neue',Arial,sans-serif">
+    <rect width="1200" height="340" fill="#06131d"/>
+
+    <!-- district motif, right side (muted, matched-luminance party fills; one selected in amber) -->
+    <g opacity="0.9" stroke="#0e3a52" stroke-width="1.5">
+      <polygon points="760,40 900,26 918,118 800,150" fill="#4b83bd" fill-opacity="0.55"/>
+      <polygon points="918,118 900,26 1060,44 1030,150" fill="#c25b5b" fill-opacity="0.55"/>
+      <polygon points="1030,150 1060,44 1200,70 1200,190 1080,214" fill="#4b83bd" fill-opacity="0.55"/>
+      <polygon points="800,150 918,118 940,236 828,268" fill="#c25b5b" fill-opacity="0.55"/>
+      <polygon points="940,236 1030,150 1080,214 1044,320 940,320" fill="#4b83bd" fill-opacity="0.9" stroke="#f2b134" stroke-width="3"/>
+      <polygon points="828,268 940,236 940,320 792,320" fill="#c25b5b" fill-opacity="0.55"/>
+    </g>
+    <rect width="1200" height="340" fill="url(#fade)"/>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0.42" stop-color="#06131d" stop-opacity="1"/>
+      <stop offset="0.72" stop-color="#06131d" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- wordmark -->
+    <text x="80" y="150" fill="#eaf2f8" font-size="86" font-weight="700" letter-spacing="1">BEHOLDEN</text>
+    <rect x="82" y="172" width="150" height="6" fill="#f2b134"/>
+    <text x="84" y="214" fill="#f2b134" font-size="24" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace" letter-spacing="1">power, on the public record</text>
+    <text x="84" y="256" fill="#8ba3b4" font-size="20" font-family="ui-monospace,'SF Mono',Menlo,monospace">Every U.S. elected official — one cited, non-partisan map.</text>
+
+    <!-- brutalist frame accents -->
+    <rect x="0" y="0" width="1200" height="6" fill="#f2b134"/>
+    <rect x="0" y="334" width="1200" height="6" fill="#17384f"/>
+  </g>
+</svg>
