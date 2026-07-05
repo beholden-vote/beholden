@@ -17,8 +17,8 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, PAGES_DIST, SOURCES, pipeline_version
-from ..build import dossiers, key_votes, stylefeeds
+from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, pipeline_version
+from ..build import dossiers, graph, key_votes, stylefeeds
 from ..sources import congress_gov, house_clerk, voteview
 from .transform import DEFAULT_DB
 from .. import store
@@ -265,6 +265,34 @@ def _top_contributors(con) -> dict[str, list[dict]]:
     return out
 
 
+def _all_sponsorships(con) -> dict[str, list[dict]]:
+    """person_id -> [{bill_id, url}] of EVERY bill the member sponsored (the graph
+    cosponsorship edge needs the full set, not the dossier's top-10). Keyed on the
+    deterministic bills-spine bill_id, so a shared-bill edge is an exact id match,
+    never a name guess."""
+    out: dict[str, list[dict]] = {}
+    for pid, bill_id_ in con.execute(
+        """SELECT person_id, bill_id FROM sponsorships
+           WHERE role='sponsor' ORDER BY person_id, bill_id""").fetchall():
+        out.setdefault(str(pid), []).append(
+            {"bill_id": bill_id_, "url": congress_gov.bill_public_url(bill_id_)})
+    return out
+
+
+def _committee_ids(con) -> dict[str, list[dict]]:
+    """person_id -> [{committee_id, name}] of the committees a member sits on, for
+    the graph committee edge. Keyed on the deterministic committee_id (thomas/
+    openstates code) — a shared-committee edge is an exact id match."""
+    out: dict[str, list[dict]] = {}
+    for pid, cid, name in con.execute(
+        """SELECT cm.person_id, c.committee_id, c.name
+           FROM committee_memberships cm JOIN committees c USING(committee_id)
+           WHERE cm.congress = ? ORDER BY cm.person_id, c.committee_id""",
+        [CONGRESS]).fetchall():
+        out.setdefault(str(pid), []).append({"committee_id": cid, "name": name})
+    return out
+
+
 def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
     """person_id -> [{filed_on, filing_url}] of House PTR filings, matched by
     (family name, first given name). House-source, so House members only."""
@@ -409,6 +437,59 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
     return dossiers.build_one({"person_id": h["person_id"]}, sections, pipeline_version())
 
 
+def _build_graph(out: Path, holders: list[dict], all_sponsorships: dict,
+                 vote_records: dict, rc_meta: dict, contributors: dict,
+                 committee_ids: dict) -> int:
+    """Compute the §4 entity graph and write graph/neighborhood/{person_id}.json.
+
+    Nodes are the current holders (keyed on the deterministic person_id). Edges
+    are computed pairwise WITHIN each chamber bucket from deterministic keys only
+    (bill_id / roll_call_id / verbatim contributor_name / committee_id) — no fuzzy
+    matching enters here (TRUSTED-EXTRACTION §9). Returns the number of
+    neighborhood documents written. An empty warehouse yields zero edges and still
+    emits a valid (edge-free) neighborhood per node."""
+    as_of = datetime.now(timezone.utc).date().isoformat()
+    node_by_id = {}
+    for h in holders:
+        node_by_id[h["person_id"]] = {
+            "person_id": h["person_id"], "name": h["full_name"],
+            "party": h["party"],
+            "office_display": _office_display(h["chamber"], h["ocd_id"]),
+            "ideology_dim1": h["ideology_score"]}
+    members = list(node_by_id.values())
+
+    # Bucket members by chamber so edges never cross chambers (a House rep and a
+    # senator share no roll calls/bills here). Same rule for every party.
+    by_chamber: dict[str, list[str]] = {}
+    window_by_chamber: dict[str, str] = {}
+    for h in holders:
+        by_chamber.setdefault(h["chamber"], []).append(h["person_id"])
+        window_by_chamber[h["chamber"]] = f"{CONGRESS}th Congress"
+
+    # Decided (yea/nay) positions per member for the co-voting edge, and the
+    # roll-call ref (official record URL) for its evidence — both from data the
+    # dossier build already loads.
+    positions: dict[str, dict[str, str]] = {}
+    for pid, rows in vote_records.items():
+        decided = {r["roll_call_id"]: r["position"] for r in rows
+                   if r["position"] in ("yea", "nay")}
+        if decided:
+            positions[pid] = decided
+    rc_refs = {rc: {"kind": "roll_call", "id": rc, "url": m["url"]}
+               for rc, m in rc_meta.items()}
+
+    edges: list[dict] = []
+    for chamber, ids in by_chamber.items():
+        window = window_by_chamber[chamber]
+        edges += graph.cosponsorship_edges(ids, all_sponsorships, window)
+        edges += graph.co_voting_edges(ids, positions, rc_refs, window)
+        edges += graph.shared_donor_edges(ids, contributors, FEC_CYCLE, window)
+        edges += graph.committee_edges(ids, committee_ids, window)
+
+    docs = graph.neighborhoods(members, edges, as_of)
+    return graph.publish(docs, out / "graph" / "neighborhood")
+
+
 def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         raw_dir: str | Path = "dist/raw") -> dict:
     raw_dir = Path(raw_dir)
@@ -423,6 +504,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     contributors = _top_contributors(con)
     vote_records = _vote_records(con)
     committees = _committees(con)
+    all_sponsorships = _all_sponsorships(con)     # graph: full sponsor set (WO-4)
+    committee_ids = _committee_ids(con)           # graph: committee_id refs (WO-4)
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
@@ -441,6 +524,10 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                      committees)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
+
+    # --- entity graph (WO-4): neighborhood docs per member, every edge cited ---
+    graph_docs = _build_graph(out, holders, all_sponsorships, vote_records,
+                              rc_meta, contributors, committee_ids)
 
     # --- style feeds + pins, grouped by chamber -> map layer ---
     chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl"}
@@ -504,7 +591,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
 
     coverage = {
         "generated_at": _now(), "pipeline_version": pipeline_version(),
-        "counts": {"dossiers": len(docs), "cd_stylefeed": len(cd_feed),
+        "counts": {"dossiers": len(docs), "graph_neighborhoods": graph_docs,
+                   "cd_stylefeed": len(cd_feed),
                    "house": len(house), "senate": len(senate),
                    "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"])},
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},

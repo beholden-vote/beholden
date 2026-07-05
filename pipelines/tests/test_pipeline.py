@@ -762,3 +762,180 @@ def test_dossier_committees_empty_when_none(slice_dirs):
     assert leg["committees"] == []
     assert leg["committees_provenance"] is None
     dossiers.validate(_dossier_named(slice_dirs, "Sam Sen"))
+
+
+# --- WO-4 entity graph ------------------------------------------------------
+# All edge math is unit-tested against build.graph directly (it takes plain
+# dicts, so no warehouse round-trip is needed to prove the arithmetic), then the
+# whole pipeline is exercised on the slice fixture to prove the emitter wiring.
+def test_graph_cosponsorship_edge_counts_shared_bills():
+    """A cosponsorship edge exists only for a SHARED bill_id (exact deterministic
+    id, never a name guess). weight = shared count; evidence lists the shared bill
+    refs, capped at 25 with evidence_total carrying the true count."""
+    from beholden_etl.build import graph
+    spons = {
+        "p-a": [{"bill_id": f"us/119/hr/{i}", "url": f"http://b/{i}"} for i in range(30)],
+        "p-b": [{"bill_id": f"us/119/hr/{i}", "url": f"http://b/{i}"} for i in range(27)],
+        "p-c": [{"bill_id": "us/119/hr/999", "url": "http://b/999"}],   # shares nothing
+    }
+    edges = graph.cosponsorship_edges(["p-a", "p-b", "p-c"], spons, "119th Congress")
+    assert len(edges) == 1                                    # only a~b share bills
+    e = edges[0]
+    assert (e["a"], e["b"]) == ("p-a", "p-b")               # canonical (sorted) pair
+    assert e["type"] == "cosponsorship"
+    assert e["weight"] == 27 and e["evidence_total"] == 27   # bills 0..26 in common
+    assert len(e["evidence"]) == 25                          # inline cap
+    assert all(ev["kind"] == "bill" and ev["url"] for ev in e["evidence"])
+
+
+def test_graph_co_voting_agreement_and_min_shared():
+    """co_voting weight = agreement % over shared decided votes; published only at
+    or above MIN_SHARED_VOTES so a tiny overlap can't fake precision. Only yea/nay
+    positions on the SAME roll_call_id count."""
+    from beholden_etl.build import graph
+    # a & b share 100 decided votes, agree on 94 -> 94.0%.
+    pa = {f"rc{i}": ("yea" if i % 2 == 0 else "nay") for i in range(100)}
+    pb = dict(pa)
+    for i in range(6):                                       # flip 6 -> 94 agree
+        pb[f"rc{i}"] = "yea" if pa[f"rc{i}"] == "nay" else "nay"
+    # c shares only 10 votes with a -> below the gate, no edge.
+    pc = {f"rc{i}": "yea" for i in range(10)}
+    refs = {f"rc{i}": {"kind": "roll_call", "id": f"rc{i}", "url": f"http://v/{i}"}
+            for i in range(100)}
+    edges = graph.co_voting_edges(["p-a", "p-b", "p-c"],
+                                  {"p-a": pa, "p-b": pb, "p-c": pc}, refs, "119th Congress")
+    assert len(edges) == 1                                   # only a~b clear 50 shared
+    e = edges[0]
+    assert (e["a"], e["b"]) == ("p-a", "p-b")
+    assert e["weight"] == 94.0 and e["evidence_total"] == 100
+    assert len(e["evidence"]) == 25                          # sample cap
+    assert e["method"] == graph.CO_VOTING_METHOD             # formula stated inline
+
+
+def test_graph_shared_donor_edge_matches_verbatim_and_carries_caveat():
+    """shared_donor edge is an EXACT contributor_name match (verbatim FEC employer
+    string) — 'ACME CORP' != 'Acme Corp', no fuzzy collapse. Evidence carries both
+    members' aggregate rows; the verbatim caveat is mandatory."""
+    from beholden_etl.build import graph
+    contribs = {
+        "p-a": [{"name": "ACME CORP", "total_cents": 1500000},
+                {"name": "BETA LLC", "total_cents": 1200000}],
+        "p-b": [{"name": "ACME CORP", "total_cents": 900000},
+                {"name": "Acme Corp", "total_cents": 100}],   # different case -> NOT shared
+    }
+    edges = graph.shared_donor_edges(["p-a", "p-b"], contribs, 2026, "cycle 2026")
+    assert len(edges) == 1
+    e = edges[0]
+    assert e["weight"] == 1 and e["evidence_total"] == 1     # only "ACME CORP" matches
+    ev = e["evidence"][0]
+    assert ev == {"kind": "fec_employer", "name": "ACME CORP",
+                  "a_total_cents": 1500000, "b_total_cents": 900000}
+    assert e["caveat"] == (
+        "shared top contributors are reported-employer aggregates; no coordination is implied")
+    assert e["cycle"] == 2026
+
+
+def test_graph_no_edge_lacks_provenance_evidence():
+    """PROOF that no published edge can lack receipts: graph.validate rejects an
+    edge with empty evidence, and a shared_donor edge missing its verbatim caveat.
+    (This is the graph analogue of 'no provenance, no publish'.)"""
+    from beholden_etl.build import graph
+    node = {"person_id": "p-a", "name": "A", "party": "R",
+            "office_display": "U.S. House · TN-6", "ideology_dim1": None}
+    node_b = {**node, "person_id": "p-b"}
+    good = {"center": "p-a", "as_of": "2026-07-05", "nodes": [node, node_b],
+            "edges": [{"type": "cosponsorship", "a": "p-a", "b": "p-b", "weight": 1,
+                       "window": "119th Congress",
+                       "evidence": [{"kind": "bill", "id": "x", "url": "u"}],
+                       "evidence_total": 1}]}
+    graph.validate(good)                                     # passes
+    no_ev = {**good, "edges": [{**good["edges"][0], "evidence": [], "evidence_total": 0}]}
+    with pytest.raises(ValueError, match="no evidence"):
+        graph.validate(no_ev)
+    # a correlation edge without its caveat is refused
+    bad_donor = {**good, "edges": [{
+        "type": "shared_donor", "a": "p-a", "b": "p-b", "weight": 1, "window": "cycle 2026",
+        "evidence": [{"kind": "fec_employer", "name": "X", "a_total_cents": 1, "b_total_cents": 2}],
+        "evidence_total": 1}]}                               # caveat missing
+    with pytest.raises(ValueError, match="caveat"):
+        graph.validate(bad_donor)
+
+
+def test_graph_symmetric_truncation_keeps_strongest_edges():
+    """Each neighborhood keeps its top-N strongest edges by a single formula
+    applied to everyone (symmetric by construction): heavier weight first, then a
+    deterministic tiebreak. The truncation rule is party-agnostic."""
+    from beholden_etl.build import graph
+    members = [{"person_id": f"p{i}", "name": f"N{i}", "party": "R" if i % 2 else "D",
+                "office_display": "U.S. House · X", "ideology_dim1": None} for i in range(5)]
+    # p0 links to p1..p4 with increasing weights; cap at 2 must keep the two heaviest.
+    edges = [{"type": "cosponsorship", "a": "p0", "b": f"p{j}", "weight": j,
+              "window": "119th Congress",
+              "evidence": [{"kind": "bill", "id": f"b{j}", "url": "u"}], "evidence_total": j}
+             for j in range(1, 5)]
+    docs = graph.neighborhoods(members, edges, "2026-07-05", edges_per_person=2)
+    kept = docs["p0"]["edges"]
+    assert [e["weight"] for e in kept] == [4, 3]             # strongest-first, top-2
+    # nodes are exactly the surviving endpoints plus the center (p0, p3, p4)
+    assert {n["person_id"] for n in docs["p0"]["nodes"]} == {"p0", "p3", "p4"}
+    # every edge still carries receipts after truncation
+    graph.validate(docs["p0"])
+
+
+def test_graph_empty_input_yields_no_edges_but_valid_docs():
+    """The empty/no-edges path: members with no shared facts get an edge-free
+    neighborhood that still validates (absent connections != a broken document)."""
+    from beholden_etl.build import graph
+    members = [{"person_id": "p-a", "name": "A", "party": "R",
+                "office_display": "U.S. House · X", "ideology_dim1": None}]
+    docs = graph.neighborhoods(members, [], "2026-07-05")
+    assert docs["p-a"]["edges"] == []
+    assert [n["person_id"] for n in docs["p-a"]["nodes"]] == ["p-a"]
+    graph.validate(docs["p-a"])                              # edge-free doc is valid
+
+
+def test_graph_neighborhood_emitted_with_committee_edge(slice_dirs):
+    """End-to-end: the build emits graph/neighborhood/{person_id}.json for every
+    member. Jane and Al both sit on HSAG (a SHARED committee_id — deterministic),
+    so their neighborhoods carry a committee edge citing that committee; Sam and
+    the state legislators (no shared facts) get valid edge-free docs."""
+    from beholden_etl.build import graph
+    gdir = slice_dirs / "data" / "graph" / "neighborhood"
+    files = list(gdir.glob("*.json"))
+    assert len(files) == 5                                   # one per current holder
+    docs = {json.loads(f.read_text())["center"]: json.loads(f.read_text()) for f in files}
+    for d in docs.values():
+        graph.validate(d)                                    # no receipts, no publish
+
+    def by_name(doc, pid):
+        return next(n["name"] for n in doc["nodes"] if n["person_id"] == pid)
+
+    jane_id = next(d["center"] for d in docs.values()
+                   if any(n["name"] == "Jane Rep" and n["person_id"] == d["center"]
+                          for n in d["nodes"]))
+    jane = docs[jane_id]
+    com = [e for e in jane["edges"] if e["type"] == "committee"]
+    assert len(com) == 1
+    e = com[0]
+    assert e["weight"] == 1 and e["evidence_total"] == 1
+    assert e["evidence"][0]["kind"] == "committee" and e["evidence"][0]["id"] == "HSAG"
+    assert {by_name(jane, e["a"]), by_name(jane, e["b"])} == {"Jane Rep", "Al Large"}
+    # Nodes carry the contract fields (party as data, office display, ideology).
+    jane_node = next(n for n in jane["nodes"] if n["person_id"] == jane_id)
+    assert set(jane_node) == {"person_id", "name", "party", "office_display", "ideology_dim1"}
+    # Sam (Senate, shares nothing with the House pair) -> edge-free but valid.
+    sam_id = next(d["center"] for d in docs.values()
+                  if any(n["name"] == "Sam Sen" and n["person_id"] == d["center"]
+                         for n in d["nodes"]))
+    assert docs[sam_id]["edges"] == []
+
+
+def test_graph_dossier_graph_ref_resolves_to_neighborhood(slice_dirs):
+    """Every dossier's graph_ref points at a file the build actually wrote, so the
+    UI's Connections view always resolves (contract §3/§4 wiring)."""
+    gdir = slice_dirs / "data" / "graph" / "neighborhood"
+    for f in (slice_dirs / "data" / "dossiers").glob("*.json"):
+        d = json.loads(f.read_text())
+        ref = d["graph_ref"]                                 # "/graph/neighborhood/{id}"
+        assert ref == f"/graph/neighborhood/{d['person_id']}"
+        assert (gdir / f"{d['person_id']}.json").exists()
