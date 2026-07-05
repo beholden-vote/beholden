@@ -1,6 +1,7 @@
 # Beholden Workplan — parallel execution guide
 
-Work orders (WO-1 … WO-8) implementing [`docs/EXPANSION-PLAN.md`](../EXPANSION-PLAN.md).
+Work orders (WO-1 … WO-9) implementing [`docs/EXPANSION-PLAN.md`](../EXPANSION-PLAN.md)
+and [`docs/TRUSTED-EXTRACTION.md`](../TRUSTED-EXTRACTION.md) (WO-9).
 Each WO is **self-contained**: an agent with no prior context can execute it after reading
 [`AGENTS.md`](../../AGENTS.md) (mandatory — the three rules outrank everything) + its WO file.
 
@@ -12,7 +13,12 @@ LANE F (frontend, serialize within lane):   WO-2 → WO-5
 LANE T (tiles, independent):                WO-6b
 INTEGRATION (after prerequisites):          WO-4 (needs WO-1, WO-3) → WO-8 (needs WO-4)
 RESEARCH (independent):                     WO-7
+LANE P (independent, no prereq):            WO-9 (SOS bulk-disclosure pilot, WA PDC)
 ```
+
+WO-9 is pipeline-lane but touches only new `bulk/`, a new source adapter, a new migration,
+and marked insertions in `jobs/` — coordinate its `jobs/*.py` insertions with any other
+in-flight pipeline WO to avoid a shared-file collision.
 
 Lanes P, F, T, and WO-7 can run **in parallel** (different agents). *Within* a lane, run
 sequentially — the WOs touch the same files.
@@ -55,11 +61,12 @@ sequentially — the WOs touch the same files.
 
 | WO | Title | Lane | Status |
 |---|---|---|---|
-| 1 | Roll-call votes vertical | P | open |
-| 2 | Zoom-adaptive layers + panel level sections | F | open |
-| 3 | Itemized donors (FEC top contributors) | P (after 1) | open |
+| 1 | Roll-call votes vertical | P | merged |
+| 2 | Zoom-adaptive layers + panel level sections | F | merged |
+| 3 | Itemized donors (FEC top contributors) | P (after 1) | merged |
 | 4 | Entity graph + neighborhood view | INT (after 1,3) | open |
 | 5 | Permalinks, people search, "my ballot" | F (after 2) | open |
-| 6 | Committees sync (6a) + county tile layer (6b) | P / T | open |
-| 7 | State votes pilot + state-money source evaluation | R | open |
+| 6 | Committees sync (6a) + county tile layer (6b) | P / T | 6b running · 6a open |
+| 7 | State votes pilot + state-money source evaluation | R | merged (state-money = NO-GO, use WO-9) |
 | 8 | Donor↔vote juxtaposition | INT (after 4) | open |
+| 9 | SOS bulk-disclosure pilot (WA PDC, Tier A) | P (independent) | open |
