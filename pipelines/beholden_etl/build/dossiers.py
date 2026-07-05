@@ -35,6 +35,12 @@ def validate(dossier: dict) -> None:
     for trade in (money.get("trades", {}) or {}).get("items", []):
         if not trade.get("filing_url"):
             raise ProvenanceError("trade row without filing_url — contract violation")
+    disc = money.get("disclosures")
+    if disc:
+        _check_provenance(dossier["money"], "disclosures")
+        for f in disc.get("filings", []):
+            if not f.get("filing_url"):
+                raise ProvenanceError("disclosure filing without filing_url — contract violation")
     nw = money.get("net_worth")
     if nw and ("band" not in nw or nw["band"]["max_cents"] < nw["band"]["min_cents"]):
         raise ProvenanceError("net worth must be a valid band, never a point")

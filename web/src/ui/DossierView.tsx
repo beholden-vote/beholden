@@ -161,6 +161,24 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
         </Section>
       )}
 
+      {money?.disclosures && money.disclosures.count > 0 && (
+        <Section title={STRINGS.disclosuresTitle} provenance={money.disclosures.provenance}>
+          <p className="muted">
+            {money.disclosures.count} periodic transaction report{money.disclosures.count === 1 ? "" : "s"} filed
+          </p>
+          <ul className="plain-list">
+            {money.disclosures.filings.map((f, i) => (
+              <li key={`${f.filing_url}-${i}`}>
+                <a href={f.filing_url} target="_blank" rel="noopener noreferrer">
+                  {formatDate(f.filed_on) ?? "Filing"} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p className="muted">{STRINGS.disclosuresNote}</p>
+        </Section>
+      )}
+
       {!money && (
         <section className="panel-section">
           <h3>Money</h3>

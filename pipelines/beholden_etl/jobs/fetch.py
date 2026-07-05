@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST
-from ..sources import congress_gov, fec, legislators, openstates, voteview
+from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
 
 LEGISLATORS_URL = legislators.URL
 VOTEVIEW_URL = voteview.members_url(CONGRESS)
@@ -106,6 +106,17 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         os_count += max(csv_text.count("\n") - 1, 0)
     manifest["sources"]["openstates"] = {
         "retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
+
+    # --- STOCK Act disclosures (House Clerk Periodic Transaction Reports) ---
+    hc_filings: list[dict] = []
+    for yr in (2024, 2025, 2026):   # the current term, plus late-prior-year trades
+        try:
+            hc_filings.extend(house_clerk.ptr_filings(yr))
+        except Exception as e:
+            print(f"fetch: house_clerk {yr} skipped ({type(e).__name__})")
+    _write_json(raw / "house_clerk" / "ptr.json", hc_filings)
+    manifest["sources"]["house_clerk"] = {
+        "retrieved_at": _now(), "source_url": house_clerk.DISCLOSURE_URL, "count": len(hc_filings)}
 
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():

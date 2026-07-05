@@ -67,7 +67,8 @@ def test_schema_loads_with_generated_column():
 
 # --- transform + build vertical slice ---------------------------------------
 LEGS = [
-    {"id": {"bioguide": "R000001", "icpsr": "11", "fec": ["H8TN06001"]}, "name": {"official_full": "Jane Rep"},
+    {"id": {"bioguide": "R000001", "icpsr": "11", "fec": ["H8TN06001"]},
+     "name": {"first": "Jane", "last": "Rep", "official_full": "Jane Rep"},
      "bio": {"birthday": "1970-05-01"},
      "terms": [{"type": "rep", "start": "2025-01-03", "end": "2027-01-03", "state": "TN", "district": 6, "party": "Republican"}]},
     {"id": {"bioguide": "A000002", "icpsr": "22"}, "name": {"official_full": "Al Large"},
@@ -91,7 +92,12 @@ MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
     "voteview": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 4},
     "fec": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
     "openstates": {"retrieved_at": RETRIEVED_AT, "source_url": "https://openstates.org/", "count": 2},
+    "house_clerk": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
 }}
+
+# A House PTR filing that name-matches Jane Rep (family "Rep", first "Jane").
+HOUSE_PTR = [{"last": "Rep", "first": "Jane", "suffix": "", "state_dst": "TN06",
+              "filed_on": "2025-05-01", "doc_id": "20099999", "year": 2025}]
 
 # Two TN state legislators — one per chamber — to light up sldu/sldl (E4).
 OPENSTATES_TN_CSV = (
@@ -135,6 +141,8 @@ def slice_dirs(tmp_path):
         (raw / "fec" / "totals" / f"{cand}.json").write_text(json.dumps(rec))
     (raw / "openstates" / "people").mkdir(parents=True)
     (raw / "openstates" / "people" / "tn.csv").write_text(OPENSTATES_TN_CSV)
+    (raw / "house_clerk").mkdir(parents=True)
+    (raw / "house_clerk" / "ptr.json").write_text(json.dumps(HOUSE_PTR))
     (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
@@ -292,3 +300,17 @@ def test_state_legislators_light_up_state_layers(slice_dirs):
     assert "ideology" not in doss and "legislative" not in doss
     assert doss["identity"]["provenance"]["source"] == "openstates"
     assert doss["identity"]["office"]["chamber"] == "upper"
+
+
+# --- STOCK Act disclosures --------------------------------------------------
+def test_stock_act_disclosures_link_official_filings(slice_dirs):
+    """House PTR filings are name-matched and published as links to the official
+    PDFs (each carries filing_url — no provenance, no publish)."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    disc = jane["money"]["disclosures"]
+    assert disc["count"] == 1
+    assert disc["filings"][0]["filing_url"].endswith("/ptr-pdfs/2025/20099999.pdf")
+    assert disc["filings"][0]["filed_on"] == "2025-05-01"
+    assert disc["provenance"]["source"] == "house_clerk"
+    # a member with no filing has no disclosures section
+    assert "disclosures" not in _dossier_named(slice_dirs, "Al Large").get("money", {})

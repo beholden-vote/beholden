@@ -19,7 +19,7 @@ from pathlib import Path
 
 from ..config import CONGRESS, PAGES_DIST, SOURCES, pipeline_version
 from ..build import dossiers, stylefeeds
-from ..sources import congress_gov
+from ..sources import congress_gov, house_clerk
 from .transform import DEFAULT_DB
 from .. import store
 
@@ -89,7 +89,7 @@ FEDERAL_CHAMBERS = {"house", "senate"}
 def _current_holders(con) -> list[dict]:
     cur = con.execute(
         """
-        SELECT p.person_id, p.full_name,
+        SELECT p.person_id, p.full_name, p.given_name, p.family_name,
                o.role, o.chamber, d.ocd_id,
                t.party, t.is_vacant_marker,
                t.meta->>'term_ends'        AS term_ends,
@@ -182,8 +182,36 @@ def _campaign_finance(con) -> dict[str, dict]:
     return out
 
 
+def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
+    """person_id -> [{filed_on, filing_url}] of House PTR filings, matched by
+    (family name, first given name). House-source, so House members only."""
+    f = raw_dir / "house_clerk" / "ptr.json"
+    if not f.exists():
+        return {}
+
+    def key(last: str, first: str):
+        return (last.strip().lower(), (first.strip().split() or [""])[0].lower())
+
+    name_map: dict[tuple, str] = {}
+    for h in holders:
+        if h["chamber"] == "house":
+            name_map.setdefault(key(h.get("family_name") or "", h.get("given_name") or ""),
+                                h["person_id"])
+    out: dict[str, list[dict]] = {}
+    for fil in json.loads(f.read_text(encoding="utf-8")):
+        pid = name_map.get(key(fil.get("last", ""), fil.get("first", "")))
+        if not pid or not fil.get("doc_id"):
+            continue
+        out.setdefault(pid, []).append({
+            "filed_on": fil.get("filed_on"),
+            "filing_url": house_clerk.ptr_pdf_url(fil["year"], fil["doc_id"])})
+    for pid in out:
+        out[pid].sort(key=lambda x: x["filed_on"] or "", reverse=True)
+    return out
+
+
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
-             leg_spine: dict, cospon: dict, campaign: dict) -> dict:
+             leg_spine: dict, cospon: dict, campaign: dict, disclosures: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -241,15 +269,25 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                                       manifest),
         }
 
+    # Money publishes only where there's real data; absent renders as an honest
+    # "pending", never a fabricated $0 (contracts §3).
+    money: dict = {}
     cf = campaign.get(h["person_id"])
     if cf and cf["cycles"]:
-        # Money section publishes only when there's real FEC data; absent money
-        # renders as an honest "pending", never a fabricated $0 (contracts §3).
-        sections["money"] = {"campaign_finance": {
+        money["campaign_finance"] = {
             "cycles": cf["cycles"],
             "provenance": _provenance(
-                "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest),
-        }}
+                "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest)}
+    filings = disclosures.get(h["person_id"])
+    if filings:
+        # STOCK Act: links to the official PTR filings (itemized trades live in
+        # the PDF). Every filing carries its filing_url — no provenance, no publish.
+        money["disclosures"] = {
+            "filings": filings[:20], "count": len(filings),
+            "provenance": _provenance("house_clerk",
+                                      "https://disclosures-clerk.house.gov/FinancialDisclosure", manifest)}
+    if money:
+        sections["money"] = money
 
     return dossiers.build_one({"person_id": h["person_id"]}, sections, pipeline_version())
 
@@ -268,9 +306,11 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
+    disclosures = _disclosures(raw_dir, holders)
 
     # --- dossiers (all members) ---
-    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign) for h in holders]
+    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign, disclosures)
+            for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
     # --- style feeds + pins, grouped by chamber -> map layer ---

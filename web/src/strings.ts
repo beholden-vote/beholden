@@ -13,6 +13,9 @@ export const STRINGS = {
     "The STOCK Act requires disclosure within 45 days of a transaction.",
   campaignFinanceTitle: "Campaign finance",
   campaignFinanceNote: "Itemized totals as reported to the FEC.",
+  disclosuresTitle: "Stock-trade disclosures",
+  disclosuresNote:
+    "Periodic Transaction Reports filed with the House Clerk. Each links to the official filing — the itemized trades are inside the document.",
   moneyPending:
     "Financial disclosures (STOCK Act trades, net worth ranges, campaign finance) are added to every profile as the money pipeline comes online. The same sections, sourced the same way, for every official.",
 

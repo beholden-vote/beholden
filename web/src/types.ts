@@ -79,6 +79,12 @@ export interface Dossier {
       top_contributors?: { name: string; total_cents: number }[];
       provenance?: Provenance;
     };
+    /** STOCK Act periodic transaction reports — links to the official filings. */
+    disclosures?: {
+      filings: { filed_on: string | null; filing_url: string }[];
+      count: number;
+      provenance?: Provenance;
+    };
   };
   graph_ref: string;
 }
