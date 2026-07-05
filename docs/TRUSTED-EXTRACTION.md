@@ -177,6 +177,51 @@ no bypass of the dossier provenance validator is ever added.
 
 ---
 
+## 12. Contract notes — the first real SourceContract
+
+### `wa_pdc` — Washington PDC itemized contributions (Tier A, verified 2026-07-05)
+
+The reference implementation (WO-9). Declared in `pipelines/beholden_etl/sources/wa_pdc.py`
+as `CONTRACT`; the framework types live in `pipelines/beholden_etl/bulk/`
+(`contract.py`, `reconcile.py`); rows land in `db/migrations/004_disclosure.sql`
+(`disclosure_contributions` + `disclosure_quarantine`). Not surfaced in the dossier UI
+yet — a deterministic filer↔legislator crosswalk is an explicit follow-on.
+
+| Field | Value |
+|---|---|
+| `source_id` | `wa_pdc` |
+| `contract_version` | `2026-07-05` |
+| `jurisdiction` | `ocd-division/country:us/state:wa` |
+| Itemized dataset | Socrata `kv7h-kjye` — "Contributions to Candidates and Political Committees" |
+| Itemized JSON | `https://data.wa.gov/resource/kv7h-kjye.json` (`$limit`/`$offset`, `$order=id`) |
+| Itemized bulk CSV | `https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD` |
+| `record_locator` | `id` (native Socrata record id) |
+| `source_record_url` | `url` (per-record link to the official filed report PDF) |
+| **License** | **Public Domain** — attribution: Public Disclosure Commission (http://pdc.wa.gov) |
+| Schema-drift fingerprint | the exact 37-field header (`wa_pdc.ITEMIZED_HEADER`); any add/drop/rename/reorder halts |
+
+**Control total (the reconciliation basis actually used).** Companion dataset Socrata
+`3h9x-7bvm` — "Campaign Finance Summary" (also Public Domain). The field is
+**`contributions_amount`**, grouped by **`(filer_id, election_year)`** — one summary row
+per group. Σ(itemized `amount`) for a group must equal that group's `contributions_amount`
+**exactly** (`epsilon_cents = 0`). Verified live: filer `24THLD 362`, election_year 2025 —
+six itemized cash contributions summing to $2,183.00, matching the summary total to the
+cent. An itemized (filer, year) group with **no** matching summary total is a gate failure
+(never ship itemized data without a reconciliation basis); a filer that reports a summary
+total but itemizes nothing is simply out of scope for this dataset.
+
+**Value domains.** `cash_or_in_kind ∈ {Cash, In-kind}` (verified exhaustive). `amount` is a
+signed number — negatives (refunds/corrections) are legitimate and preserved, never clamped.
+A bad enum, non-numeric amount, present-but-unparseable date, non-integer `election_year`,
+or a missing key (`id`/`filer_id`/`url`) is **quarantined with a reason**, never coerced.
+
+**Provenance envelope (per row).** `source_id`, `contract_version`, `file_sha256`,
+`retrieved_at`, `record_locator` (native `id`), `source_record_url` (`url`), plus the
+verbatim `raw_amount` and `raw_contributor_name` cells retained forever (§6).
+
+**Entity resolution.** Rows are keyed by WA `filer_id` only — deliberately **not**
+fuzzy-matched to the person spine. Unlinked is honest; a wrong link is not (§9).
+
 **First implementation:** `docs/workplan/WO-9-sos-disclosure-pilot.md` — a single-state
 Tier A pilot against WA PDC (public domain), proving the contract + gates end to end
 before any second state is added.
