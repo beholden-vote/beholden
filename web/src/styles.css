@@ -79,7 +79,21 @@
   background: none; border: none; color: var(--ink);
   font-family: var(--font-mono); font-size: 12px; cursor: pointer;
 }
-.suggest button:hover { background: var(--surf2); color: var(--sig); }
+.suggest button:hover, .suggest button.is-active { background: var(--surf2); color: var(--sig); }
+/* grouped suggestions (WO-5): a mono micro-label per group (Officials / Addresses) */
+.suggest-group {
+  font-family: var(--font-display); font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.11em; color: var(--sig);
+  padding: 7px 11px 3px; border-bottom: 1px solid var(--line);
+}
+/* a person suggestion: name (display) over office (mono), two lines */
+.suggest-person { display: flex; flex-direction: column; gap: 1px; }
+.suggest-name { font-family: var(--font-display); font-size: 13px; font-weight: 500; }
+.suggest-office {
+  font-family: var(--font-mono); font-size: 10px; color: var(--mut);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.suggest-person.is-active .suggest-office, .suggest-person:hover .suggest-office { color: var(--sig); }
 .search-msg { color: var(--flag); font-family: var(--font-mono); font-size: 12px; margin: 4px 0 0; width: 100%; }
 
 /* ---------- side dock ---------- */
@@ -110,6 +124,15 @@
 
 /* ---------- stack view ---------- */
 .stack h2 { margin: 2px 0 16px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+/* stack header carries the "Your ballot" link (WO-5) opposite the title */
+.stack-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.stack-head h2 { margin: 2px 0 16px; }
+.ballot-link {
+  flex: none; background: none; border: none; cursor: pointer;
+  color: var(--sig); font-family: var(--font-mono); font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 0;
+}
+.ballot-link:hover { color: var(--sig-hover); text-decoration: underline; }
 
 /* collapsible level section (Federal / State) — a document masthead per level:
    2px top rule, a short leading amber block, uppercase micro-label, mono count. */
@@ -150,6 +173,37 @@
 .person-name { flex: 1; font-weight: 500; }
 .person-go { color: var(--sig); font-family: var(--font-mono); }
 .stack-hint { color: var(--dim); font-family: var(--font-mono); font-size: 11px; margin-top: 14px; }
+
+/* ---------- "your ballot" (WO-5): the stack as one shareable ordered card ---- */
+.ballot h2 { margin: 2px 0 8px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.ballot-lede { color: var(--mut); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
+.ballot-level { border-top: 2px solid var(--line); padding-top: 10px; margin-bottom: 12px; }
+.ballot-level h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.11em; font-weight: 700;
+  color: var(--mut); margin: 0 0 8px;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.ballot-div { color: var(--ink); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.ballot-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; margin-bottom: 6px;
+  background: var(--surf2); border: 2px solid var(--line);
+  color: var(--ink); cursor: pointer; text-align: left; font-size: 14px;
+}
+.ballot-row:hover {
+  border-color: var(--sig); background: #16405c;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+}
+.ballot-name { flex: 1; font-weight: 500; }
+.ballot-go { color: var(--sig); font-family: var(--font-mono); }
+.ballot-empty { color: var(--mut); font-size: 13px; margin: 0 0 6px; }
+/* copy-link: amber-outline ghost button with the brutalist offset shadow on hover */
+.ballot-copy {
+  margin-top: 6px; width: 100%; padding: 10px 12px;
+  background: none; border: 2px solid var(--sig); color: var(--sig);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.ballot-copy:hover { background: var(--sig); color: var(--on-sig); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
 
 /* ---------- dossier ---------- */
 .dossier-head { display: flex; gap: 14px; align-items: center; margin: 4px 0 18px; }

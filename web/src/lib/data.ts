@@ -35,6 +35,61 @@ export async function loadPins(): Promise<PinIndex> {
   return index;
 }
 
+/** One row of the flat people search index (WO-5): search/people.json, emitted
+ *  by the build for every current officeholder. Just enough to rank a name match
+ *  and jump to the dossier — no dossier fan-out until a person is picked. */
+export interface PersonSearchRow {
+  person_id: string;
+  full_name: string;
+  office: string;
+  party: string;
+  ocd_id: string;
+}
+
+/** A ready-to-query people index: name ranking + id lookup. */
+export interface PeopleIndex {
+  /** Ranked name matches, best first, capped at `limit`. */
+  search(query: string, limit?: number): PersonSearchRow[];
+  /** person_id -> row, for resolving a #/p/ deep-link to a name/office. */
+  byId(personId: string): PersonSearchRow | undefined;
+}
+
+/** Lazy people-index loader. The index (~500KB) plus minisearch are pulled only
+ *  on the first name query (keeps the main chunk lean, per the WO), then cached.
+ *  minisearch is dynamically imported here so it code-splits out of the initial
+ *  bundle. Returns null if the index is unavailable — search then degrades to
+ *  address-only and never throws. */
+let peopleSearchPromise: Promise<PeopleIndex | null> | null = null;
+
+export function loadPeopleIndex(): Promise<PeopleIndex | null> {
+  peopleSearchPromise ??= buildPeopleIndex();
+  return peopleSearchPromise;
+}
+
+async function buildPeopleIndex(): Promise<PeopleIndex | null> {
+  const [rows, { default: MiniSearch }] = await Promise.all([
+    fetchJSON<PersonSearchRow[]>("/search/people.json"),
+    import("minisearch"),
+  ]);
+  if (!rows || rows.length === 0) return null;
+  const byId = new Map(rows.map((r) => [r.person_id, r]));
+  const mini = new MiniSearch<PersonSearchRow>({
+    idField: "person_id",
+    fields: ["full_name", "office"],   // office lets "senator tennessee" resolve too
+    storeFields: ["person_id"],
+    searchOptions: { prefix: true, fuzzy: 0.2, boost: { full_name: 3 } },
+  });
+  mini.addAll(rows);
+  return {
+    search(query, limit = 6) {
+      return mini.search(query).slice(0, limit)
+        .map((r) => byId.get(String(r.id)))
+        .filter((r): r is PersonSearchRow => !!r);
+    },
+    byId: (personId) => byId.get(personId),
+  };
+}
+
 const dossierCache = new Map<string, Dossier>();
 
 export async function loadDossier(personId: string): Promise<Dossier | null> {
