@@ -64,9 +64,14 @@ sequentially — the WOs touch the same files.
 | 1 | Roll-call votes vertical | P | merged |
 | 2 | Zoom-adaptive layers + panel level sections | F | merged |
 | 3 | Itemized donors (FEC top contributors) | P (after 1) | merged |
-| 4 | Entity graph + neighborhood view | INT (after 1,3) | open |
-| 5 | Permalinks, people search, "my ballot" | F (after 2) | open |
-| 6 | Committees sync (6a) + county tile layer (6b) | P / T | 6b running · 6a open |
+| 4 | Entity graph + neighborhood view | INT (after 1,3) | merged |
+| 5 | Permalinks, people search, "my ballot" | F (after 2) | merged |
+| 6 | Committees sync (6a) + county tile layer (6b) | P / T | merged |
 | 7 | State votes pilot + state-money source evaluation | R | merged (state-money = NO-GO, use WO-9) |
-| 8 | Donor↔vote juxtaposition | INT (after 4) | open |
-| 9 | SOS bulk-disclosure pilot (WA PDC, Tier A) | P (independent) | open |
+| 8 | Donor↔vote juxtaposition + methodology pages | INT (after 4) | merged |
+| 9 | SOS bulk-disclosure pilot (WA PDC, Tier A) | P (independent) | merged |
+
+**All work orders merged (2026-07-05).** Open follow-ons (not WOs yet): surface WA
+disclosure data once a deterministic filer↔legislator crosswalk exists; build the
+state-votes vertical (OpenStates API v3 — GO per `docs/research/state-votes-evaluation.md`);
+committees CI needs Python 3.11.
