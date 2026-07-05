@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # E6-2: shapefiles -> OCD-stamped GeoJSONSeq -> PMTiles per data-contracts v1 §5.
-#   us-states-$V.pmtiles  layer: states           props: ocd_id,name,geoid
-#   us-cd-$V.pmtiles      layer: districts         props: ocd_id,state,district_num,at_large
-#   us-sld-$V.pmtiles     layers: sldu, sldl       props: ocd_id,state,chamber,district_num
+#   us-states-$V.pmtiles    layer: states           props: ocd_id,name,geoid
+#   us-cd-$V.pmtiles        layer: districts         props: ocd_id,state,district_num,at_large
+#   us-sld-$V.pmtiles       layers: sldu, sldl       props: ocd_id,state,chamber,district_num
+#   us-counties-$V.pmtiles  layer: counties          props: ocd_id,state,name,geoid
 set -euo pipefail
 V="${1:?vintage}"
 cd "tiger/$V"
@@ -19,12 +20,17 @@ stamp cb_${V}_us_state_500k  states states.geojsonl
 stamp cb_${V}_us_cd119_500k  cd     cd.geojsonl
 stamp cb_${V}_us_sldu_500k   sldu   sldu.geojsonl
 stamp cb_${V}_us_sldl_500k   sldl   sldl.geojsonl
+stamp cb_${V}_us_county_500k county county.geojsonl
 
 tippecanoe -o "../../us-states-$V.pmtiles" -l states   "${TIPPE[@]}" states.geojsonl
 tippecanoe -o "../../us-cd-$V.pmtiles"     -l districts "${TIPPE[@]}" cd.geojsonl
 # Both state-legislative chambers share one archive, one layer each (§5).
 tippecanoe -o "../../us-sld-$V.pmtiles" \
   -L "sldu:sldu.geojsonl" -L "sldl:sldl.geojsonl" "${TIPPE[@]}"
+# Counties: the local-tier geometric foundation (WO-6b). Geometry + OCD-ID only,
+# no member data yet; the client fades it in at high zoom (map.ts). maxzoom 10
+# like the other district archives.
+tippecanoe -o "../../us-counties-$V.pmtiles" -l counties "${TIPPE[@]}" county.geojsonl
 
 # Orientation context (Natural Earth, public domain): US city points + major
 # roads, one archive, two layers. Points need -r1 so tippecanoe never drops

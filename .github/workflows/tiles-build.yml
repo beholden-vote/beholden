@@ -11,10 +11,10 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y build-essential libsqlite3-dev zlib1g-dev gdal-bin
           git clone --depth 1 https://github.com/felt/tippecanoe && make -C tippecanoe -j"$(nproc)" && sudo make -C tippecanoe install
-      - name: Download TIGER cartographic boundaries (states, CDs, SLDU, SLDL)
+      - name: Download TIGER cartographic boundaries (states, CDs, SLDU, SLDL, counties)
         run: make tiles-fetch
       - name: Build PMTiles archives
-        run: make tiles-build   # -> tiles/us-{states,cd,sld,context}-{vintage}.pmtiles
+        run: make tiles-build   # -> tiles/us-{states,cd,sld,counties,context}-{vintage}.pmtiles
       - name: Upload to R2
         run: make tiles-publish
         env:

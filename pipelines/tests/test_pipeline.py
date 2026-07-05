@@ -41,6 +41,34 @@ def test_stamp_ocd_ids_conventions():
     assert s.feature_props("states", {"STATEFP": "99"}) is None                  # foreign FIPS dropped
 
 
+def test_stamp_county_slug_rule():
+    """County slugs must mirror ocd-division-ids' make_id EXACTLY, and the
+    division type is state-dependent (AK=borough, LA=parish, else county).
+    Slug spot-checks verified against the canonical country-us.csv."""
+    s = _load_stamper()
+    # plain name
+    assert s.feature_props("county", {"STATEFP": "47", "NAME": "Anderson", "GEOID": "47001"}) == {
+        "ocd_id": "ocd-division/country:us/state:tn/county:anderson",
+        "state": "TN", "name": "Anderson", "geoid": "47001"}
+    # 'St. Clair' -> st_clair  (period+space collapses to one underscore)
+    assert s.feature_props("county", {"STATEFP": "01", "NAME": "St. Clair"})["ocd_id"] == \
+        "ocd-division/country:us/state:al/county:st_clair"
+    # apostrophe -> '~' :  "Prince George's" -> prince_george~s
+    assert s.feature_props("county", {"STATEFP": "24", "NAME": "Prince George's"})["ocd_id"] == \
+        "ocd-division/country:us/state:md/county:prince_george~s"
+    # hyphen kept:  'Miami-Dade' -> miami-dade
+    assert s.feature_props("county", {"STATEFP": "12", "NAME": "Miami-Dade"})["ocd_id"] == \
+        "ocd-division/country:us/state:fl/county:miami-dade"
+    # Alaska is a BOROUGH, not a county, in the canonical ids
+    assert s.feature_props("county", {"STATEFP": "02", "NAME": "Anchorage"})["ocd_id"] == \
+        "ocd-division/country:us/state:ak/borough:anchorage"
+    # Louisiana is a PARISH
+    assert s.feature_props("county", {"STATEFP": "22", "NAME": "Acadia"})["ocd_id"] == \
+        "ocd-division/country:us/state:la/parish:acadia"
+    # foreign / unknown FIPS dropped
+    assert s.feature_props("county", {"STATEFP": "99", "NAME": "Nowhere"}) is None
+
+
 def test_stamp_cli_entrypoint():
     """Exercise the actual CLI (stdin->stdout) as build_pmtiles.sh invokes it."""
     import subprocess

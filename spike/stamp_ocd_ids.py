@@ -12,11 +12,12 @@ same `ocd_id` this script produces, so the OCD convention here MUST match the
 convention the ETL uses when it assigns divisions to office-holders
 (see beholden_etl.divisions). That shared key is the whole join.
 
-Usage:  stamp_ocd_ids.py <level>       level ∈ {states,cd,sldu,sldl}
+Usage:  stamp_ocd_ids.py <level>       level ∈ {states,cd,sldu,sldl,county}
 """
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 # Census STATEFP (FIPS) -> USPS postal code, incl. DC + territories with
@@ -70,6 +71,36 @@ def sld_district(code: str | None) -> str:
     return code.lower()
 
 
+# County-equivalents are typed by state in the canonical ocd-division-ids repo:
+# Alaska uses `borough`, Louisiana uses `parish`, everyone else uses `county`.
+# STATEFP (FIPS) is the reliable discriminator (TIGER's LSAD encodes the same
+# distinction but the FIPS-based rule is unambiguous and needs no LSAD table).
+# Verified against
+# https://raw.githubusercontent.com/opencivicdata/ocd-division-ids/master/identifiers/country-us.csv
+# e.g. .../state:ak/borough:anchorage, .../state:la/parish:acadia,
+#      .../state:tn/county:anderson  (the flat `county:` the WO assumed is wrong
+#      for AK/LA — see the module report for the divergence).
+COUNTY_TYPE_BY_FIPS: dict[str, str] = {"02": "borough", "22": "parish"}
+
+
+def county_slug(name: str) -> str:
+    """Slug a county/parish/borough NAME exactly as ocd-division-ids' make_id does
+    (scripts/country-us/census_places.py): lowercase, an optional period + space
+    collapses to '_', then any remaining non-[word/~/_/./-] char becomes '~'.
+
+    Mirrors these real ids (spot-checked against the canonical repo):
+      'St. Clair'       -> st_clair          'Miami-Dade'      -> miami-dade
+      "St. Mary's"      -> st_mary~s         "O'Brien"         -> o~brien
+      "Prince George's" -> prince_george~s   'Del Norte'       -> del_norte
+    The TIGER NAME field is bare ('St. Clair', not 'St. Clair County'), so the
+    ' County'/' Parish'/' Borough' suffix is already absent — no need to strip it.
+    """
+    s = name.lower()
+    s = re.sub(r"\.? ", "_", s)                          # 'st. clair' -> 'st_clair'
+    s = re.sub(r"[^\w0-9~_.-]", "~", s, flags=re.UNICODE)  # "mary's" -> 'mary~s'
+    return s
+
+
 def feature_props(level: str, src: dict) -> dict | None:
     """Map raw Census attributes -> tile-contract properties, or None to drop
     the feature (e.g. undefined SLD districts that carry no representation)."""
@@ -106,7 +137,19 @@ def feature_props(level: str, src: dict) -> dict | None:
             "district_num": district,
         }
 
-    raise SystemExit(f"unknown level: {level!r} (want states|cd|sldu|sldl)")
+    if level == "county":
+        name = _get(src, "NAME", "NAMELSAD")
+        if not name:
+            return None
+        div_type = COUNTY_TYPE_BY_FIPS.get(statefp or "", "county")
+        return {
+            "ocd_id": f"{state_ocd(usps)}/{div_type}:{county_slug(name)}",
+            "state": usps,
+            "name": name,
+            "geoid": _get(src, "GEOID"),   # 5-digit STATEFP+COUNTYFP
+        }
+
+    raise SystemExit(f"unknown level: {level!r} (want states|cd|sldu|sldl|county)")
 
 
 def stamp_stream(level: str, lines, out) -> int:
