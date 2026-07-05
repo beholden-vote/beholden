@@ -198,17 +198,21 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       minzoom: 5,
       paint: { "circle-radius": 1.6, "circle-color": "#7f97a8", "circle-opacity": 0.45 },
     });
-    // Major cities label early; smaller ones only as you zoom in.
+    // Major cities label early; smaller ones only as you zoom in. Light text on
+    // a heavy near-black halo so names stay readable over any district fill,
+    // while the muted color keeps them subordinate to the data.
     map.addLayer({
       id: "ctx-place-labels", source: "context", "source-layer": "places", type: "symbol",
       minzoom: 3.5,
       filter: ["<=", ["get", "rank"], 2],
       layout: {
         "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
-        "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.3],
+        "text-size": 12.5, "text-anchor": "bottom", "text-offset": [0, -0.35],
       },
-      paint: { "text-color": "#6c8598", "text-opacity": 0.75,
-               "text-halo-color": "#04121c", "text-halo-width": 1.1 },
+      paint: {
+        "text-color": "#d7e3ec", "text-opacity": 0.95,
+        "text-halo-color": "#020a12", "text-halo-width": 2, "text-halo-blur": 0.4,
+      },
     });
     map.addLayer({
       id: "ctx-place-labels-minor", source: "context", "source-layer": "places", type: "symbol",
@@ -216,10 +220,12 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       filter: [">", ["get", "rank"], 2],
       layout: {
         "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
-        "text-size": 10.5, "text-anchor": "bottom", "text-offset": [0, -0.3],
+        "text-size": 11.5, "text-anchor": "bottom", "text-offset": [0, -0.35],
       },
-      paint: { "text-color": "#5e788a", "text-opacity": 0.7,
-               "text-halo-color": "#04121c", "text-halo-width": 1.1 },
+      paint: {
+        "text-color": "#b6c7d3", "text-opacity": 0.9,
+        "text-halo-color": "#020a12", "text-halo-width": 1.8, "text-halo-blur": 0.4,
+      },
     });
 
     // Load every feed up front; apply once the matching source has tiles.
