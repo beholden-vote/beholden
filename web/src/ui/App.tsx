@@ -2,11 +2,13 @@
  *  ("who represents this point"), and the drill-down dossier view. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dossier, Pin, StackEntry } from "../types";
-import type { BeholdenMap, RawStackHit } from "../map";
+import { DEFAULT_VISIBLE } from "../map";
+import type { BeholdenMap, RawStackHit, LayerId } from "../map";
 import { loadDossier, loadPins, ocdShortLabel, type PinIndex } from "../lib/data";
 import { geocode, geolocate, suggest, type Place } from "../lib/lookup";
 import { Avatar, EmptyNote, PartyChip } from "./bits";
 import { DossierView } from "./DossierView";
+import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
 
 const LEVEL_TITLES: Record<string, string> = {
   cd: "U.S. House",
@@ -16,6 +18,19 @@ const LEVEL_TITLES: Record<string, string> = {
 };
 // Federal first, then state chambers — the same order for every point on the map.
 const LEVEL_ORDER: Record<string, number> = { cd: 0, states: 1, sldu: 2, sldl: 3 };
+
+const LAYER_PREFS_KEY = "beholden:layers";
+function loadLayerPrefs(): Record<LayerId, boolean> {
+  try {
+    const raw = localStorage.getItem(LAYER_PREFS_KEY);
+    if (raw) return { ...DEFAULT_VISIBLE, ...JSON.parse(raw) };
+  } catch { /* fall through to defaults */ }
+  return { ...DEFAULT_VISIBLE };
+}
+function hashToPage(): InfoPage | null {
+  const h = location.hash.replace("#", "");
+  return h === "about" || h === "privacy" || h === "sources" ? h : null;
+}
 
 type PanelState =
   | { kind: "closed" }
@@ -35,11 +50,27 @@ export function App({ mapRef, handleRef }: {
   const [busy, setBusy] = useState(false);
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [layerVis, setLayerVis] = useState<Record<LayerId, boolean>>(loadLayerPrefs);
+  const [info, setInfo] = useState<InfoPage | null>(hashToPage);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => { loadPins().then(setPins); }, []);
+
+  // Push layer choices to the map and remember them on this device.
+  useEffect(() => {
+    const m = mapRef.current;
+    if (m) (Object.keys(layerVis) as LayerId[]).forEach((id) => m.setLayerVisible(id, layerVis[id]));
+    try { localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(layerVis)); } catch { /* ok */ }
+  }, [layerVis, mapRef]);
+
+  // Info pages are hash-linkable (#about / #privacy / #sources).
+  useEffect(() => {
+    const onHash = () => setInfo(hashToPage());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const openDossier = useCallback(async (pin: Pin, from?: StackEntry[]) => {
     setBusy(true);
@@ -67,7 +98,10 @@ export function App({ mapRef, handleRef }: {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setPanel({ kind: "closed" }); mapRef.current?.clearSelection(); }
+      if (e.key !== "Escape") return;
+      setInfo(null);
+      setPanel({ kind: "closed" });
+      mapRef.current?.clearSelection();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -118,13 +152,19 @@ export function App({ mapRef, handleRef }: {
   };
 
   const close = () => { setPanel({ kind: "closed" }); mapRef.current?.clearSelection(); };
+  const toggleLayer = (id: LayerId, v: boolean) => setLayerVis((prev) => ({ ...prev, [id]: v }));
+  const openInfo = (p: InfoPage) => { location.hash = p; setInfo(p); };
+  const closeInfo = () => {
+    history.replaceState(null, "", location.pathname + location.search);
+    setInfo(null);
+  };
 
   return (
     <>
       <div className="topbar">
         <div className="brand">
           <span className="brand-name">Beholden</span>
-          <span className="brand-tag">see who they answer to</span>
+          <span className="brand-tag">power, on the public record</span>
         </div>
         <form className="search" onSubmit={submitSearch} role="search">
           <div className="search-field">
@@ -198,6 +238,10 @@ export function App({ mapRef, handleRef }: {
           )}
         </aside>
       )}
+
+      <LayerControl visible={layerVis} onToggle={toggleLayer} />
+      <Footer onOpen={openInfo} />
+      {info && <InfoOverlay page={info} onClose={closeInfo} />}
     </>
   );
 }

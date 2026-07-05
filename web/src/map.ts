@@ -50,6 +50,12 @@ export const LAYERS: LayerDef[] = [
 ];
 const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 
+// Default: federal levels on, state-legislative overlays off — stacking every
+// level at once is the "confusing overlap" on zoom-in. Users opt the rest in.
+export const DEFAULT_VISIBLE: Record<LayerId, boolean> = {
+  states: true, cd: true, sldu: false, sldl: false,
+};
+
 async function loadStyleFeed(feed: string): Promise<StyleFeed> {
   try {
     const res = await fetch(`${DATA}/stylefeeds/${feed}.json`);
@@ -81,6 +87,8 @@ export interface BeholdenMap {
   /** Programmatic selection (search results, tests): fly there, then select. */
   goTo(lng: number, lat: number, zoom?: number): void;
   clearSelection(): void;
+  /** Toggle an administrative level on/off (also affects hit-testing). */
+  setLayerVisible(id: LayerId, visible: boolean): void;
 }
 
 export function initMap(container: HTMLElement, onSelect: SelectHandler): BeholdenMap {
@@ -93,6 +101,17 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     attributionControl: { compact: true },
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+
+  // Per-layer visibility. Hidden layers also drop out of hover/click hit-testing
+  // (queryRenderedFeatures ignores visibility:none), so toggling a level off
+  // removes it from the map AND the representation stack.
+  const desiredVis: Record<LayerId, boolean> = { ...DEFAULT_VISIBLE };
+  const applyVis = (id: LayerId) => {
+    const v = desiredVis[id] ? "visible" : "none";
+    for (const suffix of ["fill", "line"] as const) {
+      if (map.getLayer(`${id}-${suffix}`)) map.setLayoutProperty(`${id}-${suffix}`, "visibility", v);
+    }
+  };
 
   map.on("load", async () => {
     // One vector source per archive. promoteId lifts ocd_id to the feature id so
@@ -149,6 +168,8 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
         },
       });
     }
+
+    LAYERS.forEach((L) => applyVis(L.id)); // apply initial (default) visibility
 
     // Load every feed up front; apply once the matching source has tiles.
     const feeds = new Map<string, StyleFeed>();
@@ -218,5 +239,10 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     });
   };
 
-  return { map, goTo, clearSelection };
+  const setLayerVisible = (id: LayerId, visible: boolean) => {
+    desiredVis[id] = visible;
+    applyVis(id);
+  };
+
+  return { map, goTo, clearSelection, setLayerVisible };
 }

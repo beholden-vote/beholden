@@ -228,8 +228,60 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .lean-swatch-chamber { background: #43607a; }
 .lean-scope { margin-left: auto; font-family: var(--font-mono); }
 
+/* ---------- layer control (bottom-left) ---------- */
+.layer-ctl {
+  position: fixed; left: 14px; bottom: 44px; z-index: 15;
+  background: var(--surf); border: 2px solid var(--line);
+  padding: 10px 12px; min-width: 152px;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
+}
+.layer-ctl-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.11em; font-weight: 700; color: var(--mut); margin-bottom: 8px; }
+.layer-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); padding: 3px 0; cursor: pointer; }
+.layer-row input { accent-color: var(--sig); width: 15px; height: 15px; cursor: pointer; }
+.layer-ctl-hint { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--dim); margin-top: 8px; }
+
+/* ---------- footer ---------- */
+.site-foot {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  display: flex; gap: 18px; justify-content: center; align-items: center;
+  padding: 7px 12px;
+  background: linear-gradient(rgba(6, 19, 29, 0), var(--bg) 72%);
+  pointer-events: none;
+}
+.site-foot button {
+  pointer-events: auto; background: none; border: none; color: var(--mut);
+  font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; cursor: pointer;
+}
+.site-foot button:hover { color: var(--sig); }
+
+/* ---------- info overlay (about / privacy / sources) ---------- */
+.info-scrim {
+  position: fixed; inset: 0; z-index: 50; background: rgba(2, 10, 16, 0.74);
+  display: flex; align-items: flex-start; justify-content: center;
+  overflow-y: auto; padding: 6vh 16px 8vh;
+}
+.info-page {
+  position: relative; width: min(680px, 100%);
+  background: var(--surf); border: 2px solid var(--sig);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.5);
+  padding: 34px 34px 40px; color: var(--ink);
+}
+.info-page h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 14px; }
+.info-page h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sig); margin: 26px 0 10px; font-weight: 700; }
+.info-page p { line-height: 1.65; margin: 0 0 12px; color: #cfe0ec; font-size: 15px; }
+.info-page .lede { font-size: 17px; color: var(--ink); line-height: 1.6; }
+.info-page strong { color: var(--ink); font-weight: 700; }
+.info-page em { color: var(--sig); font-style: normal; }
+.info-defs { margin: 0; }
+.info-defs dt { font-weight: 700; color: var(--ink); margin-top: 15px; font-size: 15px; }
+.info-defs dd { margin: 4px 0 0; color: #b9cdda; line-height: 1.6; font-size: 14px; }
+.info-note { font-family: var(--font-mono); font-size: 12px; color: var(--mut); border-top: 2px solid var(--line); margin-top: 22px; padding-top: 14px; }
+
 @media (max-width: 560px) {
   .panel { width: 100vw; border-left: none; border-top: 3px solid var(--sig); }
   .brand-tag { display: none; }
   .stat-row { gap: 16px; }
+  .layer-ctl { left: 10px; bottom: 40px; padding: 8px 10px; min-width: 132px; }
+  .info-page { padding: 26px 20px 32px; }
 }
