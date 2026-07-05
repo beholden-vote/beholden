@@ -51,8 +51,11 @@ export interface Dossier {
     counts: { sponsored: number; cosponsored: number; became_law: number };
     recent_bills: { bill_id: string; title: string; status: string; url?: string }[];
     key_votes: { roll_call_id: string; question: string; position: string; held_at: string; url?: string }[];
-    committees: { name: string; role?: string }[];
+    committees: { name: string; role?: string; subcommittees?: { name: string; role?: string }[] }[];
     provenance: Provenance;
+    /** WO-6a: committee memberships come from the unitedstates YAML, so they
+     *  carry their own envelope; present only when the member sits on one. */
+    committees_provenance?: Provenance | null;
   };
   /** Money sections publish with the E3 pipeline; render only when present. */
   money?: {

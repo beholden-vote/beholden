@@ -7,6 +7,13 @@ import { formatDate, formatMoneyCents, legislativeIsStub } from "../lib/data";
 import { Avatar, EmptyNote, PartyChip, Section } from "./bits";
 import { IdeologyScale } from "./Ideology";
 
+/** WO-6a: committee role enum -> display label. Party-agnostic (rule #3): the
+ *  same mapping regardless of which party holds the chair. */
+const COMMITTEE_ROLE_LABEL: Record<string, string> = {
+  chair: "Chair", ranking: "Ranking Member", vice_chair: "Vice Chair", member: "Member",
+};
+const committeeRole = (role: string) => COMMITTEE_ROLE_LABEL[role] ?? role;
+
 export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: () => void }) {
   const { identity, ideology, legislative, money } = dossier;
   const vacant = identity.status === "vacant";
@@ -72,11 +79,25 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
               <div className="stat"><b>{legislative.counts.became_law}</b><span>became law</span></div>
             </div>
             {legislative.committees.length > 0 && (
-              <ul className="plain-list">
-                {legislative.committees.map((c) => (
-                  <li key={c.name}>{c.name}{c.role ? ` — ${c.role}` : ""}</li>
-                ))}
-              </ul>
+              <>
+                <h4>Committees</h4>
+                <ul className="plain-list">
+                  {legislative.committees.map((c) => (
+                    <li key={c.name}>
+                      {c.name}{c.role && c.role !== "member" ? ` — ${committeeRole(c.role)}` : ""}
+                      {c.subcommittees && c.subcommittees.length > 0 && (
+                        <ul className="plain-list">
+                          {c.subcommittees.map((s) => (
+                            <li key={s.name}>
+                              {s.name}{s.role && s.role !== "member" ? ` — ${committeeRole(s.role)}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
             {legislative.key_votes.length > 0 && (
               <>
