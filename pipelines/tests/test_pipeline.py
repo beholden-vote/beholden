@@ -1137,3 +1137,79 @@ def test_wa_pdc_idempotent_reparse_is_identical():
                              list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
     assert con.execute("SELECT count(*) FROM disclosure_contributions").fetchone()[0] == 6
     con.close()
+
+
+# --- WO-8 donor↔vote juxtaposition + methodology wiring ---------------------
+def test_key_votes_carry_congress_policy_areas(slice_dirs):
+    """A key vote whose decided bill has a congress.gov policy area carries it
+    verbatim as policy_areas[] (the money-&-votes chip source); procedural votes
+    with no bill carry policy_areas=None. This is congress.gov's OWN taxonomy —
+    Beholden adds no classification (build._bill_policy_areas reads it straight
+    from the bills spine, sourced from item['policyArea']['name'])."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    by_rc = {v["roll_call_id"]: v for v in leg["key_votes"]}
+    # RC1 decided HR100, which the fixture classifies policyArea "Health".
+    assert by_rc["us/119/house/1"]["bill_id"] == "us/119/hr/100"
+    assert by_rc["us/119/house/1"]["policy_areas"] == ["Health"]
+    # Procedural RC2 has no bill -> no chip, and never an invented one.
+    assert by_rc["us/119/house/2"]["bill_id"] is None
+    assert by_rc["us/119/house/2"]["policy_areas"] is None
+
+
+def test_bill_policy_areas_helper_skips_empty(slice_dirs):
+    """_bill_policy_areas returns bill_id -> non-empty policy-area list only; a
+    bill with no policy area (HR200 in the fixture) is absent, never []."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    try:
+        from beholden_etl.jobs.build import _bill_policy_areas
+        pa = _bill_policy_areas(con)
+    finally:
+        con.close()
+    assert pa["us/119/hr/100"] == ["Health"]
+    assert "us/119/hr/200" not in pa                 # HR200 has no policyArea -> absent
+
+
+def test_methodology_ids_wire_computed_metrics(slice_dirs):
+    """WO-8: every provenance envelope over a Beholden-computed metric carries the
+    matching /methodology anchor in methodology_id; verbatim source facts carry
+    None. Anchors MUST match the methodology page's section ids."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    # Ideology score -> dw-nominate.
+    assert jane["ideology"]["provenance"]["methodology_id"] == "dw-nominate"
+    # Vote-derived facts: Jane has only 3 decided votes (< MIN_AGREEMENT_VOTES),
+    # so agreement is omitted and the votes envelope points at key-vote selection.
+    assert jane["legislative"]["party_agreement_pct"] is None
+    assert jane["legislative"]["votes_provenance"]["methodology_id"] == "key-votes"
+    # Top-contributor rollups -> donor-rollups; the raw legislative counts envelope
+    # (congress.gov) stays None (verbatim facts, no Beholden metric).
+    assert jane["money"]["campaign_finance"]["provenance"]["methodology_id"] == "donor-rollups"
+    assert jane["legislative"]["provenance"]["methodology_id"] is None
+    # Identity is a verbatim source fact -> no methodology id.
+    assert jane["identity"]["provenance"]["methodology_id"] is None
+
+
+def test_agreement_envelope_points_at_co_voting_when_published():
+    """When party_agreement_pct IS published (>= MIN_AGREEMENT_VOTES), the votes
+    envelope points at the co-voting anchor instead of key-votes. Unit-level over
+    the same branch build._dossier takes, so it doesn't need 20+ fixture votes."""
+    from beholden_etl.build import key_votes as kv
+    # Build a member with 20 decided votes all matching a 20-strong party majority.
+    maj = {f"m{i}\tR": "yea" for i in range(20)}
+    member = [{"roll_call_id": f"m{i}", "position": "yea"} for i in range(20)]
+    agreement = kv.agreement_pct(member, "R", maj)
+    assert agreement == 100.0                         # >= gate -> published
+    anchor = "co-voting" if agreement is not None else "key-votes"
+    assert anchor == "co-voting"
+
+
+def test_money_and_votes_both_present_for_juxtaposition(slice_dirs):
+    """The juxtaposition module renders only when BOTH sides exist. Jane carries
+    top_contributors AND key_votes, so both facts are published side-by-side as
+    independent, each-cited records — the UI gate (hasMoneyVotes) is satisfiable
+    without any donor→vote linkage in the data."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    assert len(jane["money"]["campaign_finance"]["top_contributors"]) == 10
+    assert len(jane["legislative"]["key_votes"]) == 3
+    # The two sides share no linking field — they are independent cited facts.
+    kv0 = jane["legislative"]["key_votes"][0]
+    assert "contributor" not in kv0 and "donor" not in kv0

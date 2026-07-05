@@ -51,10 +51,18 @@ def _photo_map(raw_dir: Path) -> dict[str, str]:
     return out
 
 
-def _provenance(source: str, source_url: str, manifest: dict) -> dict:
+def _provenance(source: str, source_url: str, manifest: dict,
+                methodology_id: str | None = None) -> dict:
     """Provenance envelope for a section. FAILS CLOSED (rule #1): if the fetch
     manifest can't vouch for when `source` was retrieved, we refuse to invent a
-    timestamp — a fabricated retrieved_at is worse than no publish."""
+    timestamp — a fabricated retrieved_at is worse than no publish.
+
+    `methodology_id` (WO-8) is the anchor on the public /methodology page that
+    explains how this section's numbers are computed (e.g. 'key-votes',
+    'donor-rollups'). It stays None for sections that are verbatim source facts
+    with no Beholden-computed metric; a metric-bearing section points it at the
+    matching /methodology anchor so "how is this computed?" is answerable from
+    the UI. The values here MUST match the anchor ids the methodology page ships."""
     meta = manifest.get("sources", {}).get(source, {})
     retrieved_at = meta.get("retrieved_at")
     if not retrieved_at:
@@ -63,7 +71,17 @@ def _provenance(source: str, source_url: str, manifest: dict) -> dict:
             "fabricate freshness (no provenance, no publish)")
     return {"source": source, "source_url": source_url,
             "retrieved_at": retrieved_at,
-            "pipeline_version": pipeline_version(), "methodology_id": None}
+            "pipeline_version": pipeline_version(), "methodology_id": methodology_id}
+
+
+# WO-8: methodology anchor ids per computed metric. Each MUST match a section id
+# on the public /methodology page (web/src/ui/chrome.tsx Methodology) and the
+# formula it documents MUST match the code that produced the number. Verbatim
+# source facts (identity, raw filings) carry no methodology id (None).
+METHODOLOGY_IDEOLOGY = "dw-nominate"       # DW-NOMINATE ideology score (voteview.py)
+METHODOLOGY_KEY_VOTES = "key-votes"        # key-vote selection formula (key_votes.py)
+METHODOLOGY_AGREEMENT = "co-voting"        # party_agreement_pct (key_votes.py)
+METHODOLOGY_DONORS = "donor-rollups"       # FEC by_employer top contributors (fec.py)
 
 
 def _office_display(chamber: str, ocd_id: str) -> str:
@@ -265,6 +283,22 @@ def _top_contributors(con) -> dict[str, list[dict]]:
     return out
 
 
+def _bill_policy_areas(con) -> dict[str, list[str]]:
+    """bill_id -> policy_areas[] straight from the bills spine (WO-8). These are
+    congress.gov's OWN policy-area taxonomy (sources/congress_gov.bill_row reads
+    item['policyArea']['name']) — Beholden adds no classification of its own. Used
+    to chip a key vote's decided bill in the money-&-votes juxtaposition; a vote
+    whose bill has no policy area (or a procedural vote with no bill) simply gets
+    no chip (absent, never invented). Rows with a NULL/empty array are skipped."""
+    out: dict[str, list[str]] = {}
+    for bill_id_, areas in con.execute(
+        "SELECT bill_id, policy_areas FROM bills WHERE policy_areas IS NOT NULL").fetchall():
+        cleaned = [a for a in (areas or []) if a]
+        if cleaned:
+            out[bill_id_] = cleaned
+    return out
+
+
 def _all_sponsorships(con) -> dict[str, list[dict]]:
     """person_id -> [{bill_id, url}] of EVERY bill the member sponsored (the graph
     cosponsorship edge needs the full set, not the dossier's top-10). Keyed on the
@@ -324,7 +358,8 @@ def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              leg_spine: dict, cospon: dict, campaign: dict, contributors: dict,
              disclosures: dict, vote_records: dict, rc_meta: dict,
-             party_majority: dict, committees: dict) -> dict:
+             party_majority: dict, committees: dict,
+             policy_areas: dict[str, list[str]]) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -368,7 +403,8 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                         "chamber_median": medians["chamber"].get(h["chamber"])},
             "scope": IDEOLOGY_SCOPE, "explainer_url": "/methodology#dw-nominate",
             "provenance": _provenance("voteview",
-                                      f"https://voteview.com/congress/{h['chamber']}", manifest),
+                                      f"https://voteview.com/congress/{h['chamber']}", manifest,
+                                      methodology_id=METHODOLOGY_IDEOLOGY),
         }
         stats = leg_spine.get(h["person_id"], {})
         # Key votes + party agreement are Voteview-sourced (roll_calls /
@@ -379,6 +415,11 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         agreement = key_votes.agreement_pct(my_votes, h["party"], party_majority)
         for kv in selected:                        # link the citation to the bill page when known
             kv["bill_url"] = congress_gov.bill_public_url(kv["bill_id"]) if kv.get("bill_id") else None
+            # WO-8: attach congress.gov's policy-area taxonomy for the decided bill
+            # (the money-&-votes juxtaposition's only "relatedness" chip). Absent
+            # for procedural votes (no bill) or bills with no classified area —
+            # never invented, and never a Beholden-drawn link.
+            kv["policy_areas"] = policy_areas.get(kv["bill_id"]) if kv.get("bill_id") else None
         # Committee/subcommittee memberships come from the unitedstates
         # congress-legislators YAML, not the congress.gov API — so they carry a
         # dedicated committees_provenance envelope (like votes_provenance above),
@@ -398,7 +439,9 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                                       f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
                                       manifest),
             "votes_provenance": _provenance("voteview",
-                                            f"https://voteview.com/congress/{h['chamber']}", manifest)
+                                            f"https://voteview.com/congress/{h['chamber']}", manifest,
+                                            methodology_id=(METHODOLOGY_AGREEMENT if agreement is not None
+                                                            else METHODOLOGY_KEY_VOTES))
                                 if selected or agreement is not None else None,
             "committees_provenance": _provenance(
                 "unitedstates_legislators",
@@ -411,15 +454,19 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
     money: dict = {}
     cf = campaign.get(h["person_id"])
     if cf and cf["cycles"]:
-        block = {
-            "cycles": cf["cycles"],
-            "provenance": _provenance(
-                "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest)}
         # Top contributors are FEC employer rollups of itemized individual
         # contributions (WO-3), capped at 10 for the dossier. Same FEC envelope;
         # absent (no committee/no itemized receipts) simply omits the block, so
         # the UI never renders a fabricated donor list.
         contribs = contributors.get(h["person_id"])
+        # WO-8: the FEC envelope points at the donor-rollups methodology only when
+        # the block actually carries the aggregated top-contributor metric; the
+        # cycle totals alone are verbatim FEC facts (no Beholden-computed metric).
+        block = {
+            "cycles": cf["cycles"],
+            "provenance": _provenance(
+                "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest,
+                methodology_id=METHODOLOGY_DONORS if contribs else None)}
         if contribs:
             block["top_contributors"] = contribs[:10]
         money["campaign_finance"] = block
@@ -506,6 +553,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     committees = _committees(con)
     all_sponsorships = _all_sponsorships(con)     # graph: full sponsor set (WO-4)
     committee_ids = _committee_ids(con)           # graph: committee_id refs (WO-4)
+    policy_areas = _bill_policy_areas(con)        # WO-8: bill_id -> policy-area chips
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
@@ -521,7 +569,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     # --- dossiers (all members) ---
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
                      contributors, disclosures, vote_records, rc_meta, party_majority,
-                     committees)
+                     committees, policy_areas)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
