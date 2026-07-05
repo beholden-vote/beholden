@@ -41,20 +41,33 @@ interface LayerDef {
   archive: ArchiveId;
   sourceLayer: string;   // tippecanoe layer name inside the archive
   minzoom: number;
+  /** Auto mode: fade the fill/line opacity in over [start, end] (zoom); below
+   *  `start` the layer drops to visibility:none. Absent = always-on in Auto
+   *  (federal levels). The fade avoids the "pop" of toggling visibility on zoom. */
+  autoFade?: { start: number; end: number };
 }
 export const LAYERS: LayerDef[] = [
   { id: "states", archive: "states", sourceLayer: "states", minzoom: 0 },
   { id: "cd", archive: "cd", sourceLayer: "districts", minzoom: 0 },
-  { id: "sldu", archive: "sld", sourceLayer: "sldu", minzoom: 6 },
-  { id: "sldl", archive: "sld", sourceLayer: "sldl", minzoom: 6 },
+  // State chambers fade in past ~z6 so zooming in reveals them without popping.
+  { id: "sldu", archive: "sld", sourceLayer: "sldu", minzoom: 6, autoFade: { start: 6, end: 7 } },
+  { id: "sldl", archive: "sld", sourceLayer: "sldl", minzoom: 6, autoFade: { start: 6, end: 7 } },
+  // Future county/city layer registers here once WO-6b publishes tiles, e.g.:
+  //   { id: "counties", archive: "counties", sourceLayer: "counties", minzoom: 8,
+  //     autoFade: { start: 8.5, end: 9.5 } },
 ];
 const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 
-// Default: federal levels on, state-legislative overlays off — stacking every
-// level at once is the "confusing overlap" on zoom-in. Users opt the rest in.
+// Seed visibility: federal levels on, state-legislative overlays off — stacking
+// every level at once is the "confusing overlap" on zoom-in. In AUTO mode the
+// zoom controller drives what's actually shown (this is only the starting point);
+// in MANUAL mode the user's stored per-layer choices win.
 export const DEFAULT_VISIBLE: Record<LayerId, boolean> = {
   states: true, cd: true, sldu: false, sldl: false,
 };
+
+/** Layer-visibility mode: "auto" = zoom-driven, "manual" = explicit per-layer. */
+export type LayerMode = "auto" | "manual";
 
 async function loadStyleFeed(feed: string): Promise<StyleFeed> {
   try {
@@ -68,6 +81,31 @@ async function loadStyleFeed(feed: string): Promise<StyleFeed> {
 function fillFor(row: StyleRow): string {
   if (row.vacant) return VACANT_FILL;
   return PARTY_COLORS[row.party] ?? PARTY_COLORS.NP;
+}
+
+// Zoom-fade factor (0→1) for a faded layer, as a MapLibre expression. In auto
+// mode this ramps over the layer's [start, end] band; in manual mode it's pinned
+// to 1 (a checked layer is never dimmed). A SELECTED feature is always pinned to
+// 1 too, so a chosen polygon stays solid even below its fade floor.
+type FadeExpr = number | unknown[];
+function fadeFactor(fade: { start: number; end: number } | undefined, manual: boolean): FadeExpr {
+  if (!fade || manual) return 1;
+  const ramp = ["interpolate", ["linear"], ["zoom"], fade.start, 0, fade.end, 1];
+  return ["case", ["boolean", ["feature-state", "selected"], false], 1, ramp];
+}
+
+// Compose the base feature-state opacity case with a zoom-fade factor: the case
+// picks 0.95 (selected) / 0.92 (hover) / 0.8 (base), then the fade scales it.
+function fillOpacityExpr(factor: FadeExpr): unknown[] {
+  return ["*", ["case",
+    ["boolean", ["feature-state", "selected"], false], 0.95,
+    ["boolean", ["feature-state", "hover"], false], 0.92,
+    0.8,
+  ], factor];
+}
+function lineOpacityExpr(factor: FadeExpr): unknown[] {
+  // Lines are opaque by default; only the fade factor modulates them.
+  return ["*", 1, factor];
 }
 
 // Join a style feed to already-loaded geometry via feature-state — tiles stay
@@ -87,8 +125,12 @@ export interface BeholdenMap {
   /** Programmatic selection (search results, tests): fly there, then select. */
   goTo(lng: number, lat: number, zoom?: number): void;
   clearSelection(): void;
-  /** Toggle an administrative level on/off (also affects hit-testing). */
+  /** Toggle an administrative level on/off (also affects hit-testing). In AUTO
+   *  mode this seeds the desired set but zoom still governs sld* fades; call
+   *  setLayerMode("manual") first for an explicit toggle to stick. */
   setLayerVisible(id: LayerId, visible: boolean): void;
+  /** Switch between zoom-driven ("auto") and explicit ("manual") visibility. */
+  setLayerMode(mode: LayerMode): void;
   /** Drop/move the "you are here" marker. precise=false renders the fainter
    *  "approximate area" style (coarse IP location); true = exact (geolocation). */
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
@@ -112,13 +154,37 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
   // Per-layer visibility. Hidden layers also drop out of hover/click hit-testing
   // (queryRenderedFeatures ignores visibility:none), so toggling a level off
   // removes it from the map AND the representation stack.
+  //
+  // Two modes (WO-2):
+  //  - "auto" (default): zoom drives the show/hide. Federal levels stay on;
+  //    faded layers (sld*) go visibility:none below their fade floor and fade in
+  //    above it via a zoom-interpolated paint opacity — no popping.
+  //  - "manual": the user's explicit per-layer choices (desiredVis) win at all
+  //    zooms; fades are pinned fully on so a checked layer is never dimmed away.
+  // A layer that is part of the LIVE SELECTION is never auto-hidden — it stays
+  // interactive until the panel closes, regardless of mode or zoom.
   const desiredVis: Record<LayerId, boolean> = { ...DEFAULT_VISIBLE };
+  let mode: LayerMode = "auto";
+  const selectedLayers = new Set<LayerId>();
+  const fadeDef = (id: LayerId) => LAYERS.find((L) => L.id === id)?.autoFade;
+
+  // Should this layer be present (visibility:visible) at all right now?
+  // In auto, a faded layer hides below its floor; but a selected or manually-on
+  // layer is always kept present.
+  const layerPresent = (id: LayerId): boolean => {
+    if (selectedLayers.has(id)) return true;
+    if (mode === "manual") return desiredVis[id];
+    const fade = fadeDef(id);
+    if (!fade) return desiredVis[id];        // federal: honor seed (always on)
+    return map.getZoom() >= fade.start;      // faded layer: present past the floor
+  };
   const applyVis = (id: LayerId) => {
-    const v = desiredVis[id] ? "visible" : "none";
+    const v = layerPresent(id) ? "visible" : "none";
     for (const suffix of ["fill", "line"] as const) {
       if (map.getLayer(`${id}-${suffix}`)) map.setLayoutProperty(`${id}-${suffix}`, "visibility", v);
     }
   };
+  const applyAllVis = () => LAYERS.forEach((L) => applyVis(L.id));
 
   map.on("load", async () => {
     // One vector source per archive. promoteId lifts ocd_id to the feature id so
@@ -143,17 +209,15 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     // still hit-test for hover/click (geometry, not pixels).
     for (const L of LAYERS) {
       const defaultFill = L.id === "sldu" || L.id === "sldl" ? "rgba(10,34,51,0)" : DEFAULT_FILL;
+      // Auto-mode fade at construction (mode starts "auto"); setLayerMode swaps it.
+      const factor = fadeFactor(L.autoFade, false);
       map.addLayer({
         id: `${L.id}-fill`, source: L.archive, "source-layer": L.sourceLayer, type: "fill",
         minzoom: L.minzoom,
         paint: {
           "fill-color": ["coalesce", ["feature-state", "fill"], defaultFill],
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.95,
-            ["boolean", ["feature-state", "hover"], false], 0.92,
-            0.8,
-          ],
+          // Base feature-state opacity, scaled by the zoom-fade factor (WO-2).
+          "fill-opacity": fillOpacityExpr(factor) as maplibregl.ExpressionSpecification,
         },
       });
       map.addLayer({
@@ -172,11 +236,23 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
             ["boolean", ["feature-state", "hover"], false], 1.4,
             0.6,
           ],
+          "line-opacity": lineOpacityExpr(factor) as maplibregl.ExpressionSpecification,
         },
       });
     }
 
-    LAYERS.forEach((L) => applyVis(L.id)); // apply initial (default) visibility
+    // Sync paint + visibility to the CURRENT mode. If the UI restored a manual
+    // preference before "load" fired, `mode`/`desiredVis` already reflect it but
+    // the paint expressions were built for auto — setLayerMode reconciles both.
+    setLayerMode(mode);
+
+    // Re-evaluate faded-layer presence as the user zooms (auto mode). Cheap:
+    // only touches layout visibility, and only when a layer's present-ness flips.
+    // The opacity fade itself is a paint expression, so it interpolates for free.
+    map.on("zoom", () => {
+      if (mode !== "auto") return;
+      for (const L of LAYERS) if (L.autoFade) applyVis(L.id);
+    });
 
     // ---- orientation context (Natural Earth): barely-visible interstates +
     // city labels ABOVE the district fills, deliberately subordinate to them.
@@ -267,6 +343,11 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
   const clearSelection = () => {
     for (const ref of selected) map.setFeatureState(ref, { selected: false });
     selected = [];
+    // Selection released: those levels may auto-hide again per the current zoom.
+    if (selectedLayers.size) {
+      selectedLayers.clear();
+      applyAllVis();
+    }
   };
   const selectAtPoint = (point: maplibregl.PointLike, lngLat: { lng: number; lat: number }) => {
     const feats = map.queryRenderedFeatures(point, {
@@ -283,7 +364,11 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       const ref = { source: f.source, sourceLayer: f.sourceLayer!, id: String(f.id) };
       map.setFeatureState(ref, { selected: true });
       selected.push(ref);
+      selectedLayers.add(layer);   // never auto-hide a level in the live selection
     }
+    // Keep every selected level present (e.g. a sld* hit clicked below its fade
+    // floor stays interactive until the panel closes).
+    applyAllVis();
     onSelect(hits, lngLat);
   };
   map.on("click", (e) => selectAtPoint(e.point, e.lngLat));
@@ -301,6 +386,27 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     applyVis(id);
   };
 
+  // Swap every faded layer's opacity expression to match the mode (auto = zoom
+  // ramp, manual = pinned on), then re-evaluate visibility. Called on mode flips
+  // and once on init if the restored mode is manual.
+  const setLayerMode = (next: LayerMode) => {
+    mode = next;
+    const manual = mode === "manual";
+    for (const L of LAYERS) {
+      if (!L.autoFade) continue;                 // federal layers have no fade to swap
+      const factor = fadeFactor(L.autoFade, manual);
+      if (map.getLayer(`${L.id}-fill`)) {
+        map.setPaintProperty(`${L.id}-fill`, "fill-opacity",
+          fillOpacityExpr(factor) as maplibregl.ExpressionSpecification);
+      }
+      if (map.getLayer(`${L.id}-line`)) {
+        map.setPaintProperty(`${L.id}-line`, "line-opacity",
+          lineOpacityExpr(factor) as maplibregl.ExpressionSpecification);
+      }
+    }
+    applyAllVis();
+  };
+
   // "You are here" marker. Coarse (IP) on load for ambient bearings; exact when
   // the user taps locate. A DOM marker so it never enters tile hit-testing.
   let userMarker: maplibregl.Marker | null = null;
@@ -315,5 +421,5 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     userMarker.getElement().classList.toggle("you-marker-approx", !precise);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible, setUserLocation };
+  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setUserLocation };
 }

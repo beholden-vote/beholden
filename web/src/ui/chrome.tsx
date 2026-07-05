@@ -13,13 +13,21 @@ const LEVEL_GROUPS: { level: string; layers: LayerId[] }[] = [
   { level: "Local", layers: [] },
 ];
 
-export function LayerControl({ visible, onToggle }: {
+export function LayerControl({ visible, auto, onToggle, onAuto }: {
   visible: Record<LayerId, boolean>;
+  auto: boolean;
   onToggle: (id: LayerId, v: boolean) => void;
+  onAuto: (v: boolean) => void;
 }) {
   return (
     <div className="layer-ctl" role="group" aria-label="Map layers">
       <span className="layer-ctl-title">Layers</span>
+      {/* Master toggle: ON = zoom decides which levels show; touching any per-layer
+          box below drops to manual (the parent flips `auto` off). */}
+      <label className="layer-auto">
+        <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
+        <span>Auto by zoom</span>
+      </label>
       {LEVEL_GROUPS.map((g) => (
         <div className="layer-group" key={g.level}>
           <span className="layer-group-label">{g.level}</span>
@@ -36,7 +44,9 @@ export function LayerControl({ visible, onToggle }: {
           )}
         </div>
       ))}
-      <span className="layer-ctl-hint">State districts show as you zoom in.</span>
+      <span className="layer-ctl-hint">
+        {auto ? "State districts show as you zoom in." : "Manual — Auto by zoom is off."}
+      </span>
     </div>
   );
 }

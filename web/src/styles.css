@@ -110,6 +110,26 @@
 
 /* ---------- stack view ---------- */
 .stack h2 { margin: 2px 0 16px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+
+/* collapsible level section (Federal / State) — a document masthead per level:
+   2px top rule, a short leading amber block, uppercase micro-label, mono count. */
+.stack-section { border-top: 2px solid var(--line); margin-bottom: 14px; }
+.stack-section-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 11px 0 9px; background: none; border: none; cursor: pointer;
+  color: var(--ink); text-align: left;
+}
+.stack-section-caret { color: var(--sig); font-size: 11px; width: 12px; }
+.stack-section-label {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+}
+.stack-section-count {
+  margin-left: auto; font-family: var(--font-mono); font-size: 12px; color: var(--mut);
+  padding: 1px 7px; border: 2px solid var(--line);
+}
+.stack-section-head:hover .stack-section-label { color: var(--sig); }
+.stack-section-head:hover .stack-section-count { border-color: var(--line-2); color: var(--ink); }
+
 .stack-level { margin-bottom: 16px; }
 .stack-level h3 {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.11em; font-weight: 700;
@@ -236,6 +256,13 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
 }
 .layer-ctl-title { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.11em; font-weight: 700; color: var(--mut); margin-bottom: 8px; }
+/* Auto master toggle — sits above the level groups, hairline rule beneath it. */
+.layer-auto {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+  color: var(--ink); padding: 3px 0 8px; margin-bottom: 4px; cursor: pointer;
+  border-bottom: 2px solid var(--line);
+}
+.layer-auto input { accent-color: var(--sig); width: 15px; height: 15px; cursor: pointer; }
 .layer-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); padding: 3px 0; cursor: pointer; }
 .layer-row input { accent-color: var(--sig); width: 15px; height: 15px; cursor: pointer; }
 .layer-ctl-hint { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--dim); margin-top: 8px; }
