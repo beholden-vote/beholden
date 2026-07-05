@@ -15,15 +15,18 @@ const LEVEL_TITLES: Record<string, string> = {
   states: "U.S. Senate",
   sldu: "State Senate",
   sldl: "State House",
+  county: "County",
 };
-// Federal first, then state chambers — the same order for every point on the map.
-const LEVEL_ORDER: Record<string, number> = { cd: 0, states: 1, sldu: 2, sldl: 3 };
+// Federal first, then state chambers, then local (county) — the same order for
+// every point on the map.
+const LEVEL_ORDER: Record<string, number> = { cd: 0, states: 1, sldu: 2, sldl: 3, county: 4 };
 
-// Panel sections mirror the layer control's level axis (Federal / State; County &
+// Panel sections mirror the layer control's level axis (Federal / State / Local;
 // City reserved for later). Entries are bucketed by layer into these sections.
 const PANEL_SECTIONS: { level: string; layers: LayerId[] }[] = [
   { level: "Federal", layers: ["cd", "states"] },
   { level: "State", layers: ["sldu", "sldl"] },
+  { level: "Local", layers: ["county"] },
 ];
 
 const LAYER_PREFS_KEY = "beholden:layers";
@@ -96,6 +99,8 @@ function StackSection({ level, entries, onOpen }: {
             <EmptyNote>
               {entry.layer === "sldu" || entry.layer === "sldl"
                 ? "State-legislature profiles arrive with the state data layer."
+                : entry.layer === "county"
+                ? "County officials arrive with the local data layer."
                 : "No officeholder published for this division yet."}
             </EmptyNote>
           ) : (

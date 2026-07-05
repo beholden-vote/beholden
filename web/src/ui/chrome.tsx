@@ -4,13 +4,15 @@ import { type LayerId } from "../map";
 
 const LAYER_LABELS: Record<LayerId, string> = {
   cd: "U.S. House", states: "U.S. Senate", sldu: "State Senate", sldl: "State House",
+  county: "Counties",
 };
 // Layers sorted by level of government — the axis users actually think in.
-// Local is a placeholder until county/city geometry lands (workplan WO-6b).
+// Local now carries county boundaries (workplan WO-6b); off by default, fades in
+// as you zoom into a metro. City/place geometry joins the group in a later WO.
 const LEVEL_GROUPS: { level: string; layers: LayerId[] }[] = [
   { level: "Federal", layers: ["cd", "states"] },
   { level: "State", layers: ["sldu", "sldl"] },
-  { level: "Local", layers: [] },
+  { level: "Local", layers: ["county"] },
 ];
 
 export function LayerControl({ visible, auto, onToggle, onAuto }: {

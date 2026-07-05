@@ -89,9 +89,10 @@ export interface Dossier {
   graph_ref: string;
 }
 
-/** One rendered polygon level under a clicked point. */
+/** One rendered polygon level under a clicked point. Mirrors map.ts's LayerId
+ *  (kept inline so this contract file stays free of engine imports). */
 export interface StackEntry {
-  layer: "states" | "cd" | "sldu" | "sldl";
+  layer: "states" | "cd" | "sldu" | "sldl" | "county";
   ocdId: string;
   pins: Pin[];
 }

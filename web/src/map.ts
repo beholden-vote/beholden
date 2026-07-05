@@ -28,14 +28,15 @@ const VACANT_FILL = "#2b2f33";
 const DEFAULT_FILL = "#0a2233";
 
 // One vector archive per geometry family (§5); sldu+sldl share the us-sld archive.
-type ArchiveId = "states" | "cd" | "sld";
+type ArchiveId = "states" | "cd" | "sld" | "counties";
 const ARCHIVE_FILE: Record<ArchiveId, string> = {
   states: "us-states",
   cd: "us-cd",
   sld: "us-sld",
+  counties: "us-counties",
 };
 
-export type LayerId = "states" | "cd" | "sldu" | "sldl";
+export type LayerId = "states" | "cd" | "sldu" | "sldl" | "county";
 interface LayerDef {
   id: LayerId;           // also the {layer}-fill id root and the pins/stylefeed name
   archive: ArchiveId;
@@ -52,9 +53,10 @@ export const LAYERS: LayerDef[] = [
   // State chambers fade in past ~z6 so zooming in reveals them without popping.
   { id: "sldu", archive: "sld", sourceLayer: "sldu", minzoom: 6, autoFade: { start: 6, end: 7 } },
   { id: "sldl", archive: "sld", sourceLayer: "sldl", minzoom: 6, autoFade: { start: 6, end: 7 } },
-  // Future county/city layer registers here once WO-6b publishes tiles, e.g.:
-  //   { id: "counties", archive: "counties", sourceLayer: "counties", minzoom: 8,
-  //     autoFade: { start: 8.5, end: 9.5 } },
+  // Local tier (WO-6b): counties fade in past ~z8 — the metro band — so they join
+  // only when you're zoomed into a place, keeping the national/state views clean.
+  // Geometry + OCD-ID only for now (no member data), so it renders line-only.
+  { id: "county", archive: "counties", sourceLayer: "counties", minzoom: 7, autoFade: { start: 8, end: 9 } },
 ];
 const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 
@@ -63,7 +65,7 @@ const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 // zoom controller drives what's actually shown (this is only the starting point);
 // in MANUAL mode the user's stored per-layer choices win.
 export const DEFAULT_VISIBLE: Record<LayerId, boolean> = {
-  states: true, cd: true, sldu: false, sldl: false,
+  states: true, cd: true, sldu: false, sldl: false, county: false,
 };
 
 /** Layer-visibility mode: "auto" = zoom-driven, "manual" = explicit per-layer. */
@@ -201,6 +203,12 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       type: "vector", url: `pmtiles://${DATA}/tiles/${ARCHIVE_FILE.sld}-${VINTAGE}.pmtiles`,
       promoteId: { sldu: "ocd_id", sldl: "ocd_id" },
     });
+    // Local tier (WO-6b): county geometry only — no member style feed yet, so it
+    // renders as outlines (see the transparent default fill below).
+    map.addSource("counties", {
+      type: "vector", url: `pmtiles://${DATA}/tiles/${ARCHIVE_FILE.counties}-${VINTAGE}.pmtiles`,
+      promoteId: { counties: "ocd_id" },
+    });
 
     // Fill + outline per layer, drawn states -> cd -> sld (bottom-up). Hover and
     // selection are feature-states so they cost nothing to toggle. State-chamber
@@ -208,7 +216,11 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     // overlay the colored CD layer as outlines instead of blanketing it — they
     // still hit-test for hover/click (geometry, not pixels).
     for (const L of LAYERS) {
-      const defaultFill = L.id === "sldu" || L.id === "sldl" ? "rgba(10,34,51,0)" : DEFAULT_FILL;
+      // Layers with no style feed yet (state chambers + counties) default to a
+      // TRANSPARENT fill so they overlay as outlines instead of blanketing the
+      // colored CD layer; they still hit-test on geometry.
+      const noFeedYet = L.id === "sldu" || L.id === "sldl" || L.id === "county";
+      const defaultFill = noFeedYet ? "rgba(10,34,51,0)" : DEFAULT_FILL;
       // Auto-mode fade at construction (mode starts "auto"); setLayerMode swaps it.
       const factor = fadeFactor(L.autoFade, false);
       map.addLayer({
