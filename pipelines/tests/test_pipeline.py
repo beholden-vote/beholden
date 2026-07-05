@@ -205,6 +205,39 @@ LEGISLATION = {
 }
 
 
+# --- WO-6a committees ------------------------------------------------------
+# Roster mirrors committees-current.yaml: two top-level committees, each with a
+# subcommittee (a subcommittee's code = parent thomas_id + subcommittee
+# thomas_id, exactly how the membership file keys them). HSAG has no thomas_id-
+# less rows; every committee carries one.
+COMMITTEES = [
+    {"type": "house", "name": "House Committee on Agriculture", "thomas_id": "HSAG",
+     "subcommittees": [{"name": "Forestry and Horticulture", "thomas_id": "15"},
+                       {"name": "Livestock, Dairy, and Poultry", "thomas_id": "29"}]},
+    {"type": "house", "name": "House Committee on Ways and Means", "thomas_id": "HSWM",
+     "subcommittees": [{"name": "Health", "thomas_id": "02"}]},
+    {"type": "senate", "name": "Senate Committee on the Budget", "thomas_id": "SSBU",
+     "subcommittees": []},
+    {"name": "Committee Without A Code",             # no thomas_id -> skipped by mapper
+     "type": "house", "subcommittees": []},
+]
+# Membership mirrors committee-membership-current.yaml: keyed by committee code,
+# each value a list of {bioguide, title?, party, rank?}. Jane chairs HSAG and its
+# Forestry subcommittee, and is a plain member of Ways and Means. Al is Ranking
+# Member of HSAG and a member of its Livestock subcommittee (parent membership
+# present -> no orphan sub). An unknown code and a non-crosswalk bioguide prove
+# both are skipped without crashing. Sam (Senate) is on nothing -> empty path.
+COMMITTEE_MEMBERSHIP = {
+    "HSAG": [{"name": "Jane Rep", "party": "majority", "rank": 1, "title": "Chair", "bioguide": "R000001"},
+             {"name": "Al Large", "party": "minority", "rank": 1, "title": "Ranking Member", "bioguide": "A000002"}],
+    "HSAG15": [{"name": "Jane Rep", "party": "majority", "rank": 1, "title": "Chairman", "bioguide": "R000001"}],
+    "HSAG29": [{"name": "Al Large", "party": "minority", "rank": 1, "bioguide": "A000002"}],  # no title -> member
+    "HSWM": [{"name": "Jane Rep", "party": "majority", "rank": 5, "bioguide": "R000001"}],   # no title -> member
+    "HSWM02": [{"name": "Ghost Member", "party": "majority", "rank": 1, "bioguide": "Z999999"}],  # not in crosswalk
+    "XXZZ": [{"name": "Jane Rep", "party": "majority", "rank": 1, "bioguide": "R000001"}],  # unknown code -> skipped
+}
+
+
 @pytest.fixture
 def slice_dirs(tmp_path):
     raw = tmp_path / "raw"
@@ -212,6 +245,9 @@ def slice_dirs(tmp_path):
     (raw / "voteview").mkdir(parents=True)
     (raw / "congress.gov" / "legislation").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
+    (raw / "unitedstates_legislators" / "committees-current.json").write_text(json.dumps(COMMITTEES))
+    (raw / "unitedstates_legislators" / "committee-membership-current.json").write_text(
+        json.dumps(COMMITTEE_MEMBERSHIP))
     (raw / "voteview" / "HS119_members.csv").write_text(VOTEVIEW)
     (raw / "voteview" / "HS119_rollcalls.csv").write_text(VOTEVIEW_ROLLCALLS)
     (raw / "voteview" / "HS119_votes.csv").write_text(VOTEVIEW_VOTES)
@@ -602,3 +638,107 @@ def test_stock_act_disclosures_link_official_filings(slice_dirs):
     assert disc["provenance"]["source"] == "house_clerk"
     # a member with no filing has no disclosures section
     assert "disclosures" not in _dossier_named(slice_dirs, "Al Large").get("money", {})
+
+
+# --- WO-6a committee memberships --------------------------------------------
+def test_committee_role_mapping_and_flatten():
+    """Titles map to the DDL role enum (member|chair|ranking|vice_chair);
+    unknown/absent -> member (never a stronger claim). committee_rows flattens
+    the roster parents-before-subcommittees with sub code = parent + sub
+    thomas_id, and drops a committee with no thomas_id (can't key memberships)."""
+    from beholden_etl.sources import legislators as L
+    assert L.committee_role("Chair") == "chair"
+    assert L.committee_role("Chairman") == "chair"
+    assert L.committee_role("Chairwoman") == "chair"
+    assert L.committee_role("Cochairman") == "chair"
+    assert L.committee_role("Ranking Member") == "ranking"
+    assert L.committee_role("Vice Chair") == "vice_chair"
+    assert L.committee_role("Vice Chairman") == "vice_chair"
+    assert L.committee_role("Ex Officio") == "member"      # no DDL code -> member
+    assert L.committee_role(None) == "member"
+    assert L.committee_role("") == "member"
+
+    rows = list(L.committee_rows(COMMITTEES))
+    ids = [r["committee_id"] for r in rows]
+    assert "HSAG" in ids and "HSAG15" in ids and "HSAG29" in ids    # parent + subs
+    # subcommittee code = parent thomas_id + subcommittee thomas_id
+    forestry = next(r for r in rows if r["committee_id"] == "HSAG15")
+    assert forestry["parent_id"] == "HSAG" and forestry["name"] == "Forestry and Horticulture"
+    # parent emitted before its subcommittees (self-referential FK ordering)
+    assert ids.index("HSAG") < ids.index("HSAG15")
+    # a committee with no thomas_id is dropped (can't key memberships)
+    assert all(r["name"] != "Committee Without A Code" for r in rows)
+
+
+def test_membership_rows_gated_on_committee_and_crosswalk():
+    """membership_rows emits a row only when both the committee (FK) and the
+    member (crosswalk) resolve. Unknown committee codes and bioguides outside the
+    spine are skipped — never invented. Role comes from the stated title."""
+    from beholden_etl.sources import legislators as L
+    known = {r["committee_id"] for r in L.committee_rows(COMMITTEES)}
+    bio_to_person = {"R000001": "p-jane", "A000002": "p-al"}   # Z999999 absent
+    rows = list(L.membership_rows(COMMITTEE_MEMBERSHIP, 119, known, bio_to_person))
+    # Jane: HSAG(chair), HSAG15(chair), HSWM(member). Al: HSAG(ranking), HSAG29(member).
+    # XXZZ (unknown code) and HSWM02 (Ghost, not in crosswalk) contribute nothing.
+    got = {(r["committee_id"], r["person_id"], r["role"]) for r in rows}
+    assert got == {
+        ("HSAG", "p-jane", "chair"), ("HSAG15", "p-jane", "chair"),
+        ("HSWM", "p-jane", "member"),
+        ("HSAG", "p-al", "ranking"), ("HSAG29", "p-al", "member")}
+    assert all(r["congress"] == 119 for r in rows)
+
+
+def test_committees_land_in_spine(slice_dirs):
+    """The transform fills committees + committee_memberships; unknown codes and
+    non-crosswalk members are excluded without breaking FK integrity, and the
+    self-referential parent_id links subcommittees to their parent."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    # 3 real parents (HSAG, HSWM, SSBU) + 3 subs (HSAG15, HSAG29, HSWM02) land;
+    # the code-less committee is dropped.
+    assert con.execute("SELECT count(*) FROM committees").fetchone()[0] == 6
+    # 5 valid memberships (Jane x3, Al x2); XXZZ + Ghost excluded.
+    assert con.execute("SELECT count(*) FROM committee_memberships").fetchone()[0] == 5
+    assert con.execute(
+        "SELECT parent_id FROM committees WHERE committee_id='HSAG15'").fetchone()[0] == "HSAG"
+    assert con.execute(
+        "SELECT parent_id FROM committees WHERE committee_id='HSAG'").fetchone()[0] is None
+    con.close()
+
+
+def test_dossier_committees_nest_subcommittees_and_provenanced(slice_dirs):
+    """Jane's legislative.committees lists her top-level committees (alphabetical),
+    each with role, nesting the subcommittees she also sits on. The memberships
+    carry a dedicated unitedstates_legislators provenance envelope."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    coms = leg["committees"]
+    names = [c["name"] for c in coms]
+    # deterministic alphabetical order, party-agnostic (rule #3)
+    assert names == ["House Committee on Agriculture", "House Committee on Ways and Means"]
+    ag = next(c for c in coms if c["name"] == "House Committee on Agriculture")
+    assert ag["role"] == "chair"
+    assert ag["subcommittees"] == [{"name": "Forestry and Horticulture", "role": "chair"}]
+    wm = next(c for c in coms if c["name"] == "House Committee on Ways and Means")
+    assert wm["role"] == "member"
+    assert "subcommittees" not in wm                       # no sub membership -> key omitted
+    assert leg["committees_provenance"]["source"] == "unitedstates_legislators"
+
+
+def test_dossier_committees_role_and_subcommittee_only_when_parent(slice_dirs):
+    """Al is Ranking Member of Agriculture and a plain member of its Livestock
+    subcommittee (parent membership present -> the sub nests, no orphan)."""
+    leg = _dossier_named(slice_dirs, "Al Large")["legislative"]
+    coms = leg["committees"]
+    assert [c["name"] for c in coms] == ["House Committee on Agriculture"]
+    ag = coms[0]
+    assert ag["role"] == "ranking"
+    assert ag["subcommittees"] == [{"name": "Livestock, Dairy, and Poultry", "role": "member"}]
+
+
+def test_dossier_committees_empty_when_none(slice_dirs):
+    """A member on no committee gets committees=[] and no committees_provenance
+    stamp — absent is honest, never a fabricated membership. Still contract-valid.
+    Sam (Senate) sits on nothing in the fixture."""
+    leg = _dossier_named(slice_dirs, "Sam Sen")["legislative"]
+    assert leg["committees"] == []
+    assert leg["committees_provenance"] is None
+    dossiers.validate(_dossier_named(slice_dirs, "Sam Sen"))

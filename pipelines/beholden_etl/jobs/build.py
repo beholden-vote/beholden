@@ -7,8 +7,8 @@ Emits, for the current federal legislature:
   coverage.json           per-source freshness vs SLA + artifact counts
 
 Enforces the serving rule via dossiers.validate(): no provenance, no publish.
-The legislative section carries real sponsored/cosponsored/became-law counts and
-recent bills (E2); key votes and committees are the next slices.
+The legislative section carries real sponsored/cosponsored/became-law counts,
+recent bills (E2), key votes (WO-1), and committee memberships (WO-6a).
 """
 from __future__ import annotations
 
@@ -213,6 +213,45 @@ def _campaign_finance(con) -> dict[str, dict]:
     return out
 
 
+def _committees(con) -> dict[str, list[dict]]:
+    """person_id -> [{name, role, subcommittees:[{name, role}]}] from
+    committee_memberships joined to committees (WO-6a). Top-level committees are
+    the entries; subcommittees (parent_id set) nest under the parent the member
+    also sits on. Roles come straight from the source-stated title (member|chair|
+    ranking|vice_chair). Ordering is deterministic and party-agnostic (rule #3):
+    committees alphabetical by name, subcommittees likewise — identical regardless
+    of party or chamber majority."""
+    rows = con.execute(
+        """SELECT cm.person_id, c.committee_id, c.name, c.parent_id, cm.role
+           FROM committee_memberships cm JOIN committees c USING(committee_id)
+           WHERE cm.congress = ?
+           ORDER BY c.name""", [CONGRESS]).fetchall()
+    # Index each person's top-level committee entries so subcommittees can attach
+    # (parent_id is NULL for a top-level committee).
+    parents: dict[str, dict[str, dict]] = {}     # person -> committee_id -> entry
+    subs: list[tuple] = []                        # (person, parent_id, name, role)
+    for pid, cid, name, parent_id, role in rows:
+        pid = str(pid)
+        if parent_id is None:
+            parents.setdefault(pid, {})[cid] = {"name": name, "role": role, "subcommittees": []}
+        else:
+            subs.append((pid, parent_id, name, role))
+    for pid, parent_id, name, role in subs:
+        parent = parents.get(pid, {}).get(parent_id)
+        if parent is not None:                    # every real/fixture sub has its parent (0 orphans)
+            parent["subcommittees"].append({"name": name, "role": role})
+    out: dict[str, list[dict]] = {}
+    for pid, by_cid in parents.items():
+        entries = []
+        for entry in sorted(by_cid.values(), key=lambda e: e["name"]):
+            e = {"name": entry["name"], "role": entry["role"]}
+            if entry["subcommittees"]:
+                e["subcommittees"] = sorted(entry["subcommittees"], key=lambda s: s["name"])
+            entries.append(e)
+        out[pid] = entries
+    return out
+
+
 def _top_contributors(con) -> dict[str, list[dict]]:
     """person_id -> [{name, total_cents}] employer rollups of itemized
     individual contributions, from top_contributors (WO-3), most-recent cycle
@@ -257,7 +296,7 @@ def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              leg_spine: dict, cospon: dict, campaign: dict, contributors: dict,
              disclosures: dict, vote_records: dict, rc_meta: dict,
-             party_majority: dict) -> dict:
+             party_majority: dict, committees: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -312,6 +351,13 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         agreement = key_votes.agreement_pct(my_votes, h["party"], party_majority)
         for kv in selected:                        # link the citation to the bill page when known
             kv["bill_url"] = congress_gov.bill_public_url(kv["bill_id"]) if kv.get("bill_id") else None
+        # Committee/subcommittee memberships come from the unitedstates
+        # congress-legislators YAML, not the congress.gov API — so they carry a
+        # dedicated committees_provenance envelope (like votes_provenance above),
+        # stamped only when the member actually sits on a committee. No
+        # provenance, no publish; absent (never on a committee) omits the stamp
+        # and leaves committees as [].
+        my_committees = committees.get(h["person_id"], [])
         sections["legislative"] = {
             "counts": {"sponsored": stats.get("sponsored", 0),
                        "cosponsored": cospon.get(bio, 0),
@@ -319,13 +365,17 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
             "recent_bills": stats.get("recent_bills", []),
             "key_votes": selected,
             "party_agreement_pct": agreement,
-            "committees": [],
+            "committees": my_committees,
             "provenance": _provenance("congress.gov",
                                       f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
                                       manifest),
             "votes_provenance": _provenance("voteview",
                                             f"https://voteview.com/congress/{h['chamber']}", manifest)
                                 if selected or agreement is not None else None,
+            "committees_provenance": _provenance(
+                "unitedstates_legislators",
+                "https://github.com/unitedstates/congress-legislators", manifest)
+                if my_committees else None,
         }
 
     # Money publishes only where there's real data; absent renders as an honest
@@ -372,6 +422,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     campaign = _campaign_finance(con)
     contributors = _top_contributors(con)
     vote_records = _vote_records(con)
+    committees = _committees(con)
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
@@ -386,7 +437,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
 
     # --- dossiers (all members) ---
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
-                     contributors, disclosures, vote_records, rc_meta, party_majority)
+                     contributors, disclosures, vote_records, rc_meta, party_majority,
+                     committees)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

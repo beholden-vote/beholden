@@ -218,6 +218,32 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
                 chunk = []
         store.insert(con, "vote_positions", chunk)
 
+    # --- committees (WO-6a) -> committees + committee_memberships ---
+    # Roster first (parents before subcommittees so the self-referential
+    # parent_id FK holds — the DuckDB shim drops that FK, but transform ordering
+    # upholds integrity by construction), then memberships gated on both the
+    # committee (FK) and the crosswalk person. bioguide_to_person is the same map
+    # the sponsorships block built above.
+    committees_f = raw / "unitedstates_legislators" / "committees-current.json"
+    membership_f = raw / "unitedstates_legislators" / "committee-membership-current.json"
+    if committees_f.exists() and membership_f.exists():
+        roster = json.loads(committees_f.read_text(encoding="utf-8"))
+        membership = json.loads(membership_f.read_text(encoding="utf-8"))
+        committee_list, seen_cid = [], set()
+        for row in L.committee_rows(roster):
+            cid = row["committee_id"]
+            if cid not in seen_cid:               # dedupe on the committee_id PK
+                seen_cid.add(cid)
+                committee_list.append(row)
+        store.insert(con, "committees", committee_list)
+        cm_rows, seen_cm = [], set()
+        for row in L.membership_rows(membership, CONGRESS, seen_cid, bioguide_to_person):
+            pk = (row["committee_id"], row["person_id"], row["congress"])
+            if pk not in seen_cm:                 # dedupe on the composite PK
+                seen_cm.add(pk)
+                cm_rows.append(row)
+        store.insert(con, "committee_memberships", cm_rows)
+
     # --- campaign finance: FEC totals -> campaign_finance_cycles (E3) ---
     fec_to_person = {r["id_value"]: r["person_id"]
                      for r in uniq_idents if r["id_scheme"] == "fec"}
@@ -310,6 +336,7 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
               for t in ("persons", "divisions", "offices", "terms",
                         "ideology_scores", "bills", "sponsorships",
                         "roll_calls", "vote_positions",
+                        "committees", "committee_memberships",
                         "campaign_finance_cycles", "top_contributors")}
     print("transform:", " ".join(f"{k}={v}" for k, v in counts.items()),
           f"(resolution {rate:.4f})")

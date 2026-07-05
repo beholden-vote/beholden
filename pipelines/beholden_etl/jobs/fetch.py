@@ -40,6 +40,17 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     manifest["sources"]["unitedstates_legislators"] = {
         "retrieved_at": _now(), "source_url": LEGISLATORS_URL, "count": len(legs)}
 
+    # --- committee roster + current memberships (WO-6a): same source family, so
+    # they land under the unitedstates_legislators envelope. Landed as JSON so
+    # transform reads only from raw (contracts §7). ---
+    committees = legislators.fetch_committees()
+    membership = legislators.fetch_committee_membership()
+    _write_json(raw / "unitedstates_legislators" / "committees-current.json", committees)
+    _write_json(raw / "unitedstates_legislators" / "committee-membership-current.json", membership)
+    manifest["sources"]["unitedstates_legislators"]["committees"] = len(committees)
+    manifest["sources"]["unitedstates_legislators"]["committee_memberships"] = sum(
+        len(v or []) for v in membership.values())
+
     # --- current membership (congress.gov): party, state, district, photo ---
     client = congress_gov.CongressGovClient()
     members = list(client.current_members(CONGRESS))
