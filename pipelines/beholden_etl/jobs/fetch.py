@@ -71,6 +71,16 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         "retrieved_at": _now(), "source_url": VOTEVIEW_URL,
         "count": max(csv_text.count("\n") - 1, 0)}
 
+    # --- roll-call votes (WO-1): rollcalls (metadata) + votes (per-member casts).
+    # Same Voteview source envelope; landed alongside the members table so the
+    # transform reads only from raw (contracts §7). votes is the ~9 MB long pole.
+    rollcalls_text = voteview.rollcalls_csv(CONGRESS)
+    (raw / "voteview" / f"HS{CONGRESS}_rollcalls.csv").write_text(rollcalls_text, encoding="utf-8")
+    votes_text = voteview.votes_csv(CONGRESS)
+    (raw / "voteview" / f"HS{CONGRESS}_votes.csv").write_text(votes_text, encoding="utf-8")
+    manifest["sources"]["voteview"]["rollcalls"] = max(rollcalls_text.count("\n") - 1, 0)
+    manifest["sources"]["voteview"]["votes"] = max(votes_text.count("\n") - 1, 0)
+
     # --- campaign finance (FEC, E3): candidate cycle totals ---
     # Keyed via the crosswalk's fec candidate ids; one lookup per candidate.
     fec_client = fec.FECClient()

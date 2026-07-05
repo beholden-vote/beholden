@@ -112,6 +112,36 @@ FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals"
     "last_cash_on_hand_end_period": 334567.89, "coverage_end_date": "2026-06-30T00:00:00"}}}
 
 
+# --- roll-call votes (WO-1) -------------------------------------------------
+# 3 House roll calls for the 119th. RC1 links to Jane's law HR100 (bill_number
+# "HR100" -> us/119/hr/100). RC2 is procedural (blank bill_number -> NULL FK).
+# RC3 is a lopsided vote. Al (icpsr 22) is the other House member; Sam (icpsr 33,
+# Senate) and the President (blank icpsr) never appear in these House rows.
+# Tallies drive the closeness score: RC2 (11 v 10) is the tightest, RC1 (12 v 9)
+# next, RC3 (20 v 1) least — so key-vote order should be RC2, RC1, RC3.
+VOTEVIEW_ROLLCALLS = (
+    "congress,chamber,rollnumber,date,session,clerk_rollnumber,yea_count,nay_count,"
+    "bill_number,vote_result,vote_desc,vote_question\n"
+    "119,House,1,2025-02-01,1,10,12,9,HR100,Passed,Passage of HR100,On Passage\n"
+    "119,House,2,2025-03-01,1,11,11,10,,Agreed to,A procedural motion,On the Motion\n"
+    "119,House,3,2025-04-01,1,12,20,1,,Passed,A lopsided vote,On Agreeing\n"
+)
+# Per-member cast codes. cast_code: 1=yea, 6=nay(variant), 9=not voting, 0=not a
+# member. Jane (11): yea/yea/nay. Al (22): nay/yea/yea. Rows for icpsr 99 (not in
+# the crosswalk) and cast_code 0 must be skipped without crashing.
+VOTEVIEW_VOTES = (
+    "congress,chamber,rollnumber,icpsr,cast_code,prob\n"
+    "119,House,1,11,1,99.0\n"
+    "119,House,1,22,6,99.0\n"
+    "119,House,2,11,1,99.0\n"
+    "119,House,2,22,1,99.0\n"
+    "119,House,3,11,6,99.0\n"
+    "119,House,3,22,1,99.0\n"
+    "119,House,1,99,1,99.0\n"      # icpsr not in crosswalk -> skipped
+    "119,House,3,33,0,99.0\n"      # cast_code 0 (not a member) -> skipped
+)
+
+
 # Jane (R000001) sponsored two bills, one now law; Sam has no legislation file
 # at all -> exercises the zero-legislation path (counts 0, still contract-valid).
 LEGISLATION = {
@@ -134,6 +164,8 @@ def slice_dirs(tmp_path):
     (raw / "congress.gov" / "legislation").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
     (raw / "voteview" / "HS119_members.csv").write_text(VOTEVIEW)
+    (raw / "voteview" / "HS119_rollcalls.csv").write_text(VOTEVIEW_ROLLCALLS)
+    (raw / "voteview" / "HS119_votes.csv").write_text(VOTEVIEW_VOTES)
     (raw / "fec" / "totals").mkdir(parents=True)
     for bio, rec in LEGISLATION.items():
         (raw / "congress.gov" / "legislation" / f"{bio}.json").write_text(json.dumps(rec))
@@ -300,6 +332,127 @@ def test_state_legislators_light_up_state_layers(slice_dirs):
     assert "ideology" not in doss and "legislative" not in doss
     assert doss["identity"]["provenance"]["source"] == "openstates"
     assert doss["identity"]["office"]["chamber"] == "upper"
+
+
+# --- WO-1 roll-call votes ---------------------------------------------------
+def test_cast_code_and_bill_normalization():
+    """cast_code families map to positions; Voteview bill tokens normalize to the
+    bills-spine id (or None for procedural votes with no bill number)."""
+    from beholden_etl.sources import voteview as vv
+    assert vv.CAST_CODE_POSITION[1] == "yea" and vv.CAST_CODE_POSITION[3] == "yea"
+    assert vv.CAST_CODE_POSITION[6] == "nay" and vv.CAST_CODE_POSITION[9] == "not_voting"
+    assert 0 not in vv.CAST_CODE_POSITION            # "not a member" -> skipped, never a position
+    assert vv.normalize_bill_id("HR100", 119) == "us/119/hr/100"
+    assert vv.normalize_bill_id("HRES5", 119) == "us/119/hres/5"
+    assert vv.normalize_bill_id("", 119) is None      # speaker election: no bill
+    assert vv.normalize_bill_id("PN123", 119) == "us/119/pn/123"  # normalizes but won't match a bills row
+
+
+def test_roll_call_public_urls_both_chambers():
+    """Both official-record URL patterns (verified live 2026-07-05). House keys on
+    year+clerk_rollnumber; Senate on congress/session/clerk_rollnumber (zero-padded)."""
+    from beholden_etl.sources import voteview as vv
+    assert vv.roll_call_public_url("house", 119, 1, 12, "2025-04-01") == \
+        "https://clerk.house.gov/Votes/202512"
+    assert vv.roll_call_public_url("senate", 119, 1, 1, "2025-01-09") == \
+        ("https://www.senate.gov/legislative/LIS/roll_call_votes/"
+         "vote1191/vote_119_1_00001.htm")
+
+
+def test_key_vote_selection_is_by_closeness_and_recency():
+    """Salience = closeness + recency_bonus, top-N, deterministic. RC2 (11v10) is
+    tightest, RC1 (12v9) next, RC3 (20v1) least -> selection order RC2,RC1,RC3;
+    output is re-sorted newest-first."""
+    from beholden_etl.build import key_votes as kv
+    meta = {"a": {"yea": 12, "nay": 9, "date": "2025-02-01", "url": "http://a"},
+            "b": {"yea": 11, "nay": 10, "date": "2025-03-01", "url": "http://b"},
+            "c": {"yea": 20, "nay": 1, "date": "2025-04-01", "url": "http://c"}}
+    votes = [
+        {"roll_call_id": "a", "position": "yea", "question": "Q-a", "result": "Passed",
+         "held_at": "2025-02-01 00:00:00+00", "bill_id": "us/119/hr/100"},
+        {"roll_call_id": "b", "position": "yea", "question": "Q-b", "result": "Agreed",
+         "held_at": "2025-03-01 00:00:00+00", "bill_id": None},
+        {"roll_call_id": "c", "position": "nay", "question": "Q-c", "result": "Passed",
+         "held_at": "2025-04-01 00:00:00+00", "bill_id": None},
+        {"roll_call_id": "d", "position": "present", "question": "Q-d", "result": "x",
+         "held_at": "2025-05-01 00:00:00+00", "bill_id": None},   # present: never a key vote
+    ]
+    top2 = kv.select_key_votes(votes, meta, limit=2)
+    assert [v["roll_call_id"] for v in top2] == ["b", "a"]        # newest-first among {b,a}
+    assert top2[0]["url"] == "http://b" and top2[1]["bill_id"] == "us/119/hr/100"
+    # present/not_voting excluded; only decided votes are eligible
+    all_selected = kv.select_key_votes(votes, meta, limit=10)
+    assert {v["roll_call_id"] for v in all_selected} == {"a", "b", "c"}
+
+
+def test_party_agreement_math_and_min_votes():
+    """Agreement = % matching the party majority over decided votes; None below
+    MIN_AGREEMENT_VOTES so a tiny denominator can't publish a false precision."""
+    from beholden_etl.build import key_votes as kv
+    # Two R members: majority follows the 2-of-3 side per roll call.
+    rows = [{"roll_call_id": "r1", "party": "R", "position": "yea"},
+            {"roll_call_id": "r1", "party": "R", "position": "yea"},
+            {"roll_call_id": "r1", "party": "R", "position": "nay"},
+            {"roll_call_id": "r2", "party": "R", "position": "yea"},
+            {"roll_call_id": "r2", "party": "R", "position": "nay"}]  # tie -> no majority
+    maj = kv.party_majority_positions(rows)
+    assert maj["r1\tR"] == "yea"
+    assert "r2\tR" not in maj                        # equal split -> excluded
+    # Below the min-vote gate: even a perfect record returns None.
+    member = [{"roll_call_id": "r1", "position": "yea"}]
+    assert kv.agreement_pct(member, "R", maj) is None
+    # At/above the gate, percentage is published. 21 votes, 20 agree -> 95.2%.
+    big_maj = {f"m{i}\tR": "yea" for i in range(21)}
+    member = [{"roll_call_id": f"m{i}", "position": "yea"} for i in range(20)]
+    member.append({"roll_call_id": "m20", "position": "nay"})
+    assert kv.agreement_pct(member, "R", big_maj) == 95.2
+
+
+def test_dossier_key_votes_populated_and_provenanced(slice_dirs):
+    """Jane's dossier carries her decided votes as key_votes[], each with position,
+    question, held_at, result, url; RC1 links to her law HR100, procedural votes
+    link NULL. The vote-derived facts carry a Voteview provenance envelope."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    kvs = leg["key_votes"]
+    assert len(kvs) == 3                             # 3 decided House votes
+    for v in kvs:
+        assert v["position"] in ("yea", "nay")
+        assert v["question"] and v["held_at"] and v["result"] and v["url"]
+    by_rc = {v["roll_call_id"]: v for v in kvs}
+    assert by_rc["us/119/house/1"]["position"] == "yea"
+    assert by_rc["us/119/house/1"]["bill_id"] == "us/119/hr/100"   # links to Jane's law
+    assert by_rc["us/119/house/1"]["url"] == "https://clerk.house.gov/Votes/202510"
+    assert by_rc["us/119/house/1"]["bill_url"] == \
+        "https://www.congress.gov/bill/119th-congress/house-bill/100"
+    assert by_rc["us/119/house/2"]["bill_id"] is None              # procedural -> NULL
+    assert leg["votes_provenance"]["source"] == "voteview"
+    # Only 3 votes (< MIN_AGREEMENT_VOTES) -> agreement omitted, not faked.
+    assert leg["party_agreement_pct"] is None
+
+
+def test_roll_calls_and_positions_land_in_spine(slice_dirs):
+    """The transform fills roll_calls + vote_positions; non-crosswalk ICPSRs and
+    cast_code 0 rows are dropped without breaking FK integrity."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    assert con.execute("SELECT count(*) FROM roll_calls").fetchone()[0] == 3
+    # 6 valid casts (Jane x3, Al x3); icpsr 99 + cast_code 0 rows are excluded.
+    assert con.execute("SELECT count(*) FROM vote_positions").fetchone()[0] == 6
+    # RC1 links to the existing bills row; procedural RC2/RC3 keep NULL bill_id.
+    linked = con.execute(
+        "SELECT bill_id FROM roll_calls WHERE roll_call_id='us/119/house/1'").fetchone()[0]
+    assert linked == "us/119/hr/100"
+    assert con.execute(
+        "SELECT bill_id FROM roll_calls WHERE roll_call_id='us/119/house/2'").fetchone()[0] is None
+    con.close()
+
+
+def test_senate_dossier_has_no_key_votes_without_positions(slice_dirs):
+    """Sam (Senate) has no roll-call positions in the fixture -> empty key_votes,
+    no agreement, and no orphan votes_provenance. Still contract-valid."""
+    leg = _dossier_named(slice_dirs, "Sam Sen")["legislative"]
+    assert leg["key_votes"] == []
+    assert leg["party_agreement_pct"] is None
+    assert leg["votes_provenance"] is None
 
 
 # --- STOCK Act disclosures --------------------------------------------------

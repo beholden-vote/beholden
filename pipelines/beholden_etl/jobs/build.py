@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import CONGRESS, PAGES_DIST, SOURCES, pipeline_version
-from ..build import dossiers, stylefeeds
-from ..sources import congress_gov, house_clerk
+from ..build import dossiers, key_votes, stylefeeds
+from ..sources import congress_gov, house_clerk, voteview
 from .transform import DEFAULT_DB
 from .. import store
 
@@ -156,6 +156,37 @@ def _legislative_stats(con) -> dict[str, dict]:
     return stats
 
 
+def _vote_records(con) -> dict[str, list[dict]]:
+    """person_id -> [{roll_call_id, position, question, held_at, result, bill_id,
+    party}] of every roll call the member cast a position on. party comes from
+    the member's current term so agreement can be scored against their party."""
+    out: dict[str, list[dict]] = {}
+    # held_at is cast to VARCHAR in SQL: materializing a TIMESTAMPTZ into Python
+    # pulls in DuckDB's timezone path (needs pytz, not a declared dep). We only
+    # want the date for ordering/display, so a string keeps the query dep-free.
+    for pid, rcid, position, party, question, result, held_at, bill_id in con.execute(
+        """SELECT vp.person_id, vp.roll_call_id, vp.position, t.party,
+                  rc.question, rc.result, rc.held_at::VARCHAR AS held_at, rc.bill_id
+           FROM vote_positions vp
+           JOIN roll_calls rc USING(roll_call_id)
+           JOIN terms t ON t.person_id = vp.person_id AND t.end_date IS NULL
+        """).fetchall():
+        out.setdefault(str(pid), []).append({
+            "roll_call_id": rcid, "position": position, "party": party,
+            "question": question, "result": result,
+            "held_at": held_at, "bill_id": bill_id})
+    return out
+
+
+def _rollcall_meta(raw_dir: Path) -> dict[str, dict]:
+    """roll_call_id -> {yea, nay, date, url} from the raw rollcalls CSV — the
+    closeness inputs + official record link that don't live in the spine table."""
+    f = raw_dir / "voteview" / f"HS{CONGRESS}_rollcalls.csv"
+    if not f.exists():
+        return {}
+    return voteview.to_rollcall_meta(f.read_text(encoding="utf-8"), CONGRESS)
+
+
 def _cosponsored_counts(raw_dir: Path) -> dict[str, int]:
     """bioguide -> cosponsored total, read from the landed legislation snapshots."""
     out: dict[str, int] = {}
@@ -211,7 +242,8 @@ def _disclosures(raw_dir: Path, holders: list[dict]) -> dict[str, list[dict]]:
 
 
 def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
-             leg_spine: dict, cospon: dict, campaign: dict, disclosures: dict) -> dict:
+             leg_spine: dict, cospon: dict, campaign: dict, disclosures: dict,
+             vote_records: dict, rc_meta: dict, party_majority: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -258,15 +290,28 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                                       f"https://voteview.com/congress/{h['chamber']}", manifest),
         }
         stats = leg_spine.get(h["person_id"], {})
+        # Key votes + party agreement are Voteview-sourced (roll_calls /
+        # vote_positions), so the legislative section carries a second provenance
+        # envelope for its vote-derived facts — no provenance, no publish.
+        my_votes = vote_records.get(h["person_id"], [])
+        selected = key_votes.select_key_votes(my_votes, rc_meta)
+        agreement = key_votes.agreement_pct(my_votes, h["party"], party_majority)
+        for kv in selected:                        # link the citation to the bill page when known
+            kv["bill_url"] = congress_gov.bill_public_url(kv["bill_id"]) if kv.get("bill_id") else None
         sections["legislative"] = {
             "counts": {"sponsored": stats.get("sponsored", 0),
                        "cosponsored": cospon.get(bio, 0),
                        "became_law": stats.get("became_law", 0)},
             "recent_bills": stats.get("recent_bills", []),
-            "key_votes": [], "committees": [],
+            "key_votes": selected,
+            "party_agreement_pct": agreement,
+            "committees": [],
             "provenance": _provenance("congress.gov",
                                       f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
                                       manifest),
+            "votes_provenance": _provenance("voteview",
+                                            f"https://voteview.com/congress/{h['chamber']}", manifest)
+                                if selected or agreement is not None else None,
         }
 
     # Money publishes only where there's real data; absent renders as an honest
@@ -303,13 +348,22 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     holders = _current_holders(con)
     leg_spine = _legislative_stats(con)
     campaign = _campaign_finance(con)
+    vote_records = _vote_records(con)
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
     disclosures = _disclosures(raw_dir, holders)
+    rc_meta = _rollcall_meta(raw_dir)
+
+    # Party-majority position per (roll_call, party), from every decided vote —
+    # the reference each member's agreement is scored against (symmetric: same
+    # rule for both parties). Built once across all members, not per dossier.
+    party_majority = key_votes.party_majority_positions(
+        [r for rows in vote_records.values() for r in rows])
 
     # --- dossiers (all members) ---
-    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign, disclosures)
+    docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
+                     disclosures, vote_records, rc_meta, party_majority)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

@@ -185,6 +185,39 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "bills", list(bills.values()))
         store.insert(con, "sponsorships", sponsorships)
 
+    # --- roll-call votes (WO-1) -> roll_calls + vote_positions ---
+    # rollcalls first (roll_calls rows + the valid-id set that gates positions on
+    # the FK), then the ~500k votes table, streamed and chunk-inserted. bill_id
+    # links only to a bills row that already exists (procedural votes stay NULL).
+    rollcalls_csv = raw / "voteview" / f"HS{CONGRESS}_rollcalls.csv"
+    votes_csv = raw / "voteview" / f"HS{CONGRESS}_votes.csv"
+    if rollcalls_csv.exists() and votes_csv.exists():
+        known_bill_ids = {r[0] for r in con.execute("SELECT bill_id FROM bills").fetchall()}
+        rc_text = rollcalls_csv.read_text(encoding="utf-8")
+        roll_calls, seen_rc = [], set()
+        for row in voteview.to_roll_call_rows(rc_text, CONGRESS, known_bill_ids):
+            rcid = row["roll_call_id"]
+            if rcid not in seen_rc:               # dedupe on PK before insert
+                seen_rc.add(rcid)
+                roll_calls.append(row)
+        store.insert(con, "roll_calls", roll_calls)
+
+        # Positions: only for roll calls we actually ingested (FK integrity) and
+        # ICPSRs in the crosswalk. Chunk-insert to keep memory + the transaction
+        # bounded across ~500k rows.
+        votes_text = votes_csv.read_text(encoding="utf-8")
+        chunk, seen_vp = [], set()
+        for row in voteview.to_position_rows(votes_text, CONGRESS, icpsr_to_person, seen_rc):
+            pk = (row["roll_call_id"], row["person_id"])
+            if pk in seen_vp:
+                continue                          # dedupe on (roll_call_id, person_id) PK
+            seen_vp.add(pk)
+            chunk.append(row)
+            if len(chunk) >= 10000:
+                store.insert(con, "vote_positions", chunk)
+                chunk = []
+        store.insert(con, "vote_positions", chunk)
+
     # --- campaign finance: FEC totals -> campaign_finance_cycles (E3) ---
     fec_to_person = {r["id_value"]: r["person_id"]
                      for r in uniq_idents if r["id_scheme"] == "fec"}
@@ -257,6 +290,7 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
               for t in ("persons", "divisions", "offices", "terms",
                         "ideology_scores", "bills", "sponsorships",
+                        "roll_calls", "vote_positions",
                         "campaign_finance_cycles")}
     print("transform:", " ".join(f"{k}={v}" for k, v in counts.items()),
           f"(resolution {rate:.4f})")
