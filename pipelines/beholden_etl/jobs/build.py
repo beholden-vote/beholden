@@ -478,6 +478,18 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     for layer in ("cd", "states", "sldu", "sldl"):
         (out / "pins" / f"{layer}.json").write_text(json.dumps(pins(by_layer[layer]), separators=(",", ":")))
 
+    # --- people search index (WO-5): flat name index for the topbar search, so a
+    # name query jumps straight to a dossier without fanning out dossier fetches.
+    # One row per current officeholder across every layer — the same fields for
+    # every official (symmetric by construction). Lazy-loaded client-side. ---
+    people = [{"person_id": h["person_id"], "full_name": h["full_name"],
+               "office": _office_display(h["chamber"], h["ocd_id"]),
+               "party": h["party"], "ocd_id": h["ocd_id"]}
+              for h in holders if h["full_name"]]
+    people.sort(key=lambda r: r["full_name"])
+    (out / "search").mkdir(parents=True, exist_ok=True)
+    (out / "search" / "people.json").write_text(json.dumps(people, separators=(",", ":")))
+
     # --- coverage dashboard: freshness vs SLA, computed not just echoed (G2) ---
     def _source_row(k: str) -> dict:
         retrieved_at = manifest.get("sources", {}).get(k, {}).get("retrieved_at")

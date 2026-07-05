@@ -291,6 +291,26 @@ def test_pins_carry_display_fields(slice_dirs):
     assert {p["chamber"] for p in states} == {"senate"}
 
 
+def test_people_search_index_emitted(slice_dirs):
+    """search/people.json is a flat name index (WO-5): one row per current
+    officeholder across every layer, each carrying the fields the client search
+    needs to jump to a dossier. Same fields for every official (symmetric)."""
+    people = json.loads((slice_dirs / "data" / "search" / "people.json").read_text())
+    # 3 federal + 2 state legislators, all with names.
+    assert len(people) == 5
+    for row in people:
+        assert set(row) == {"person_id", "full_name", "office", "party", "ocd_id"}
+    jane = next(p for p in people if p["full_name"] == "Jane Rep")
+    assert jane["office"] == "U.S. House · TN-6"
+    assert jane["ocd_id"] == "ocd-division/country:us/state:tn/cd:6"
+    assert jane["party"] == "R"
+    # a state legislator is indexed identically (no federal-only special-casing).
+    pat = next(p for p in people if p["full_name"] == "Pat Upper")
+    assert pat["office"] == "TN State Senate · District 5"
+    # sorted by name for a stable, diff-friendly artifact.
+    assert [p["full_name"] for p in people] == sorted(p["full_name"] for p in people)
+
+
 def test_every_dossier_is_contract_valid(slice_dirs):
     files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
     assert len(files) == 5                          # 3 federal + 2 state legislators
