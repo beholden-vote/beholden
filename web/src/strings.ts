@@ -27,6 +27,15 @@ export const STRINGS = {
   ideologyPendingInsufficientVotes:
     "Not enough recorded votes yet this Congress to estimate a score.",
 
+  // Connections (entity graph, WO-4) — descriptive, symmetric copy only.
+  connectionsTitle: "Connections",
+  connectionsLoading: "Loading connections…",
+  connectionsEmpty:
+    "No connections published yet. Connections are computed from shared bills, votes, committees, and reported contributors — they appear as those records sync.",
+  connectionsNote:
+    "Each connection is computed from public records and links to its source. A shared connection describes overlap only — it implies no coordination.",
+  connectionsEvidenceMore: "+{n} more, in the full record",
+
   // Provenance
   sourceLabel: "Source",
   retrievedLabel: "retrieved",

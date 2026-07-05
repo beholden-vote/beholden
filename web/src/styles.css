@@ -272,6 +272,45 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .dossier-foot p { margin: 0 0 4px; }
 .dossier-foot .muted { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--dim); }
 
+/* ---------- connections (entity graph, WO-4) ---------- */
+/* List-first: one row per connection, expandable to its cited evidence. Hard
+   edges, mono facts, amber the only action color (DESIGN). Party appears as a
+   data chip only — no chrome emphasis, symmetric by construction. */
+.conn-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.conn-row { border-bottom: 1px solid var(--line); padding: 2px 0; }
+.conn-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  background: none; border: 0; padding: 7px 4px; cursor: pointer;
+  color: var(--ink); text-align: left; font: inherit;
+  border-left: 2px solid transparent;
+}
+.conn-head:hover { background: var(--surf2); border-left-color: var(--sig); }
+.conn-caret { color: var(--dim); font-size: 10px; flex: none; width: 12px; }
+.conn-name { font-weight: 500; flex: 1; }
+.conn-chip {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em;
+  color: var(--mut); border: 1px solid var(--line-2); padding: 2px 7px;
+  white-space: nowrap; text-transform: uppercase;
+}
+.conn-office {
+  margin: 0 0 2px 24px; color: var(--dim); font-family: var(--font-mono);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.conn-detail { margin: 0 0 8px 24px; padding: 2px 0 4px; }
+.conn-window { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; margin: 2px 0 6px; }
+.conn-evidence { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.conn-evidence li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.conn-evidence a { color: var(--sig); text-decoration: none; font-family: var(--font-mono); font-size: 12px; }
+.conn-evidence a:hover { text-decoration: underline; }
+.conn-evidence span { font-family: var(--font-mono); font-size: 12px; }
+.conn-more, .conn-method { font-size: 11px; margin: 6px 0 0; }
+/* The correlation caveat renders verbatim wherever its edge appears (contract). */
+.conn-caveat {
+  font-size: 11px; color: var(--flag); margin: 7px 0 0; line-height: 1.45;
+  border-left: 2px solid var(--flag); padding-left: 8px;
+}
+.conn-foot { font-size: 11px; margin: 10px 0 0; line-height: 1.5; }
+
 /* ---------- ideology scale ---------- */
 .lean { margin: 6px 0; }
 .lean-track { position: relative; height: 24px; }

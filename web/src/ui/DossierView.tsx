@@ -1,11 +1,16 @@
 /** Full accountability dossier for one official. Renders ONLY published,
  *  provenance-carrying contract data; sections that haven't synced yet say so
  *  honestly instead of showing fabricated zeros. */
+import { lazy, Suspense } from "react";
 import type { Dossier } from "../types";
 import { STRINGS } from "../strings";
 import { formatDate, formatMoneyCents, legislativeIsStub } from "../lib/data";
 import { Avatar, EmptyNote, PartyChip, Section } from "./bits";
 import { IdeologyScale } from "./Ideology";
+
+// WO-4: the Connections view + entity-graph code load only when a dossier opens
+// (dynamic import keeps the graph fetch/types out of the main bundle).
+const Connections = lazy(() => import("./Connections"));
 
 /** WO-6a: committee role enum -> display label. Party-agnostic (rule #3): the
  *  same mapping regardless of which party holds the chair. */
@@ -206,6 +211,16 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
           <EmptyNote>{STRINGS.moneyPending}</EmptyNote>
         </section>
       )}
+
+      {/* WO-4: entity-graph neighborhood. Every connection carries its own inline
+          evidence links, so this section's receipts live per-row (no single
+          section-level source tag). Lazy — the graph code loads with the view. */}
+      <section className="panel-section">
+        <div className="section-head"><h3>{STRINGS.connectionsTitle}</h3></div>
+        <Suspense fallback={<EmptyNote>{STRINGS.connectionsLoading}</EmptyNote>}>
+          <Connections personId={dossier.person_id} />
+        </Suspense>
+      </section>
 
       <footer className="dossier-foot">
         <p>{STRINGS.provenanceTagline}</p>
