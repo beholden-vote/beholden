@@ -25,3 +25,13 @@ tippecanoe -o "../../us-cd-$V.pmtiles"     -l districts "${TIPPE[@]}" cd.geojson
 # Both state-legislative chambers share one archive, one layer each (§5).
 tippecanoe -o "../../us-sld-$V.pmtiles" \
   -L "sldu:sldu.geojsonl" -L "sldl:sldl.geojsonl" "${TIPPE[@]}"
+
+# Orientation context (Natural Earth, public domain): US city points + major
+# roads, one archive, two layers. Points need -r1 so tippecanoe never drops
+# sparse city labels at low zoom.
+CTX="python3 ../../spike/context_layers.py"
+ogr2ogr -f GeoJSONSeq /vsistdout/ ne_10m_populated_places_simple.shp | $CTX places > places.geojsonl
+ogr2ogr -f GeoJSONSeq /vsistdout/ ne_10m_roads.shp | $CTX roads > roads.geojsonl
+tippecanoe -o "../../us-context-$V.pmtiles" \
+  -L "places:places.geojsonl" -L "roads:roads.geojsonl" \
+  --minimum-zoom=3 --maximum-zoom=10 -r1 --force --quiet

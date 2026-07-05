@@ -89,12 +89,19 @@ export interface BeholdenMap {
   clearSelection(): void;
   /** Toggle an administrative level on/off (also affects hit-testing). */
   setLayerVisible(id: LayerId, visible: boolean): void;
+  /** Drop/move the "you are here" marker. precise=false renders the fainter
+   *  "approximate area" style (coarse IP location); true = exact (geolocation). */
+  setUserLocation(lng: number, lat: number, precise?: boolean): void;
 }
 
 export function initMap(container: HTMLElement, onSelect: SelectHandler): BeholdenMap {
   const map = new maplibregl.Map({
     container,
-    style: { version: 8, sources: {}, layers: [
+    style: { version: 8, sources: {},
+      // Self-hosted glyphs (tiles-build publishes Noto PBF ranges to R2) — the
+      // only text on the map is orientation labels, served from our own origin.
+      glyphs: `${DATA}/fonts/{fontstack}/{range}.pbf`,
+      layers: [
       { id: "bg", type: "background", paint: { "background-color": "#04121c" } }, // sonar depth base
     ]},
     center: [-96.5, 38.5], zoom: 4, minZoom: 3, maxZoom: 12,
@@ -171,6 +178,50 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
 
     LAYERS.forEach((L) => applyVis(L.id)); // apply initial (default) visibility
 
+    // ---- orientation context (Natural Earth): barely-visible interstates +
+    // city labels ABOVE the district fills, deliberately subordinate to them.
+    // Non-interactive: never hit-tested, never in the representation stack.
+    map.addSource("context", {
+      type: "vector", url: `pmtiles://${DATA}/tiles/us-context-${VINTAGE}.pmtiles`,
+    });
+    map.addLayer({
+      id: "ctx-roads", source: "context", "source-layer": "roads", type: "line",
+      minzoom: 4,
+      paint: {
+        "line-color": "#31536b",
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.12, 7, 0.3, 10, 0.4],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.4, 8, 1.1],
+      },
+    });
+    map.addLayer({
+      id: "ctx-place-dots", source: "context", "source-layer": "places", type: "circle",
+      minzoom: 5,
+      paint: { "circle-radius": 1.6, "circle-color": "#7f97a8", "circle-opacity": 0.45 },
+    });
+    // Major cities label early; smaller ones only as you zoom in.
+    map.addLayer({
+      id: "ctx-place-labels", source: "context", "source-layer": "places", type: "symbol",
+      minzoom: 3.5,
+      filter: ["<=", ["get", "rank"], 2],
+      layout: {
+        "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
+        "text-size": 11, "text-anchor": "bottom", "text-offset": [0, -0.3],
+      },
+      paint: { "text-color": "#6c8598", "text-opacity": 0.75,
+               "text-halo-color": "#04121c", "text-halo-width": 1.1 },
+    });
+    map.addLayer({
+      id: "ctx-place-labels-minor", source: "context", "source-layer": "places", type: "symbol",
+      minzoom: 6,
+      filter: [">", ["get", "rank"], 2],
+      layout: {
+        "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
+        "text-size": 10.5, "text-anchor": "bottom", "text-offset": [0, -0.3],
+      },
+      paint: { "text-color": "#5e788a", "text-opacity": 0.7,
+               "text-halo-color": "#04121c", "text-halo-width": 1.1 },
+    });
+
     // Load every feed up front; apply once the matching source has tiles.
     const feeds = new Map<string, StyleFeed>();
     await Promise.all(LAYERS.map(async (L) => feeds.set(L.id, await loadStyleFeed(L.id))));
@@ -244,5 +295,19 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     applyVis(id);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible };
+  // "You are here" marker. Coarse (IP) on load for ambient bearings; exact when
+  // the user taps locate. A DOM marker so it never enters tile hit-testing.
+  let userMarker: maplibregl.Marker | null = null;
+  const setUserLocation = (lng: number, lat: number, precise = true) => {
+    if (!userMarker) {
+      const el = document.createElement("div");
+      el.className = "you-marker";
+      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
+    } else {
+      userMarker.setLngLat([lng, lat]);
+    }
+    userMarker.getElement().classList.toggle("you-marker-approx", !precise);
+  };
+
+  return { map, goTo, clearSelection, setLayerVisible, setUserLocation };
 }

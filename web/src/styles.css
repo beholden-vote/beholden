@@ -239,6 +239,26 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .layer-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); padding: 3px 0; cursor: pointer; }
 .layer-row input { accent-color: var(--sig); width: 15px; height: 15px; cursor: pointer; }
 .layer-ctl-hint { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--dim); margin-top: 8px; }
+.layer-group { margin-bottom: 6px; }
+.layer-group-label { display: block; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sig); margin: 7px 0 3px; }
+.layer-soon { display: block; font-size: 11px; color: var(--dim); font-style: italic; padding: 2px 0; }
+
+/* "you are here" marker (DOM marker; approx = coarse IP, exact = geolocation) */
+.you-marker {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--sig); border: 2px solid #06131d;
+  box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.28); cursor: default;
+}
+.you-marker-approx {
+  width: 12px; height: 12px; background: rgba(242, 177, 52, 0.55);
+  border-color: rgba(6, 19, 29, 0.6); box-shadow: 0 0 0 9px rgba(242, 177, 52, 0.1);
+  animation: you-pulse 2.6s ease-in-out infinite;
+}
+@keyframes you-pulse {
+  0%, 100% { box-shadow: 0 0 0 7px rgba(242, 177, 52, 0.10); }
+  50% { box-shadow: 0 0 0 12px rgba(242, 177, 52, 0.05); }
+}
+@media (prefers-reduced-motion: reduce) { .you-marker-approx { animation: none; } }
 
 /* ---------- footer ---------- */
 .site-foot {

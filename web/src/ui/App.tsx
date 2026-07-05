@@ -109,7 +109,23 @@ export function App({ mapRef, handleRef }: {
 
   const flyTo = useCallback((lng: number, lat: number) => {
     setPlaces([]); setSearchMsg(null);
+    mapRef.current?.setUserLocation(lng, lat, true);   // exact "you are here"
     mapRef.current?.goTo(lng, lat, 9);
+  }, [mapRef]);
+
+  // Ambient bearings without a permission prompt: coarse IP location from our own
+  // edge (/api/whereami) drops a faint marker so the map isn't a blank field.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/whereami")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => {
+        if (!cancelled && w && typeof w.lat === "number" && typeof w.lng === "number") {
+          mapRef.current?.setUserLocation(w.lng, w.lat, false);
+        }
+      })
+      .catch(() => { /* no bearings marker — fine */ });
+    return () => { cancelled = true; };
   }, [mapRef]);
 
   // Debounced typeahead; each keystroke cancels the last in-flight lookup.

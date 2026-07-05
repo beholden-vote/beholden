@@ -1,10 +1,17 @@
 /** Map chrome: the layer control, the footer, and the info overlays
  *  (why Beholden exists, privacy, and the source registry). */
-import { LAYERS, type LayerId } from "../map";
+import { type LayerId } from "../map";
 
 const LAYER_LABELS: Record<LayerId, string> = {
   cd: "U.S. House", states: "U.S. Senate", sldu: "State Senate", sldl: "State House",
 };
+// Layers sorted by level of government — the axis users actually think in.
+// Local is a placeholder until county/city geometry lands (workplan WO-6b).
+const LEVEL_GROUPS: { level: string; layers: LayerId[] }[] = [
+  { level: "Federal", layers: ["cd", "states"] },
+  { level: "State", layers: ["sldu", "sldl"] },
+  { level: "Local", layers: [] },
+];
 
 export function LayerControl({ visible, onToggle }: {
   visible: Record<LayerId, boolean>;
@@ -13,12 +20,21 @@ export function LayerControl({ visible, onToggle }: {
   return (
     <div className="layer-ctl" role="group" aria-label="Map layers">
       <span className="layer-ctl-title">Layers</span>
-      {LAYERS.map((L) => (
-        <label className="layer-row" key={L.id}>
-          <input type="checkbox" checked={!!visible[L.id]}
-                 onChange={(e) => onToggle(L.id, e.target.checked)} />
-          <span>{LAYER_LABELS[L.id]}</span>
-        </label>
+      {LEVEL_GROUPS.map((g) => (
+        <div className="layer-group" key={g.level}>
+          <span className="layer-group-label">{g.level}</span>
+          {g.layers.length === 0 ? (
+            <span className="layer-soon">Counties · coming soon</span>
+          ) : (
+            g.layers.map((id) => (
+              <label className="layer-row" key={id}>
+                <input type="checkbox" checked={!!visible[id]}
+                       onChange={(e) => onToggle(id, e.target.checked)} />
+                <span>{LAYER_LABELS[id]}</span>
+              </label>
+            ))
+          )}
+        </div>
       ))}
       <span className="layer-ctl-hint">State districts show as you zoom in.</span>
     </div>
