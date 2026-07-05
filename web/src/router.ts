@@ -45,6 +45,28 @@ export function divisionHash(ocdId: string): string {
   return `#/d/${encodeURIComponent(ocdId)}`;
 }
 
+/** Methodology page hash (WO-8). A flat info hash like #about/#privacy/#sources —
+ *  NOT a `#/`-prefixed route — so it coexists with the router without either
+ *  scheme touching the other. An optional in-page anchor rides after a slash
+ *  (`#methodology/key-votes`) so a dossier's "how is this computed?" link opens
+ *  the page scrolled to the right section. `parseMethodologyHash` reads it back. */
+export function methodologyHash(anchor?: string): string {
+  return anchor ? `#methodology/${anchor}` : "#methodology";
+}
+
+/** Parse the CURRENT hash into a methodology target, or null if it isn't one.
+ *  `{ anchor: null }` = the page with no specific section. Recognizes both the
+ *  flat `#methodology` and `#methodology/<anchor>` forms. */
+export function parseMethodologyHash(hash: string = location.hash): { anchor: string | null } | null {
+  const h = hash.replace(/^#/, "");
+  if (h === "methodology") return { anchor: null };
+  if (h.startsWith("methodology/")) {
+    const anchor = h.slice("methodology/".length);
+    return { anchor: anchor || null };
+  }
+  return null;
+}
+
 /** Write a route hash WITHOUT a history entry (replaceState) — opening dossiers
  *  as the user browses shouldn't stack the back button. */
 export function replaceHash(hash: string): void {

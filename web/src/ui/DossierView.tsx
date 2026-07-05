@@ -7,10 +7,16 @@ import { STRINGS } from "../strings";
 import { formatDate, formatMoneyCents, legislativeIsStub } from "../lib/data";
 import { Avatar, EmptyNote, PartyChip, Section } from "./bits";
 import { IdeologyScale } from "./Ideology";
+import { methodologyHash } from "../router";
 
 // WO-4: the Connections view + entity-graph code load only when a dossier opens
 // (dynamic import keeps the graph fetch/types out of the main bundle).
 const Connections = lazy(() => import("./Connections"));
+
+// WO-8: the money-&-votes juxtaposition module. Imported eagerly (its data is
+// already in the dossier, no extra fetch) but gated on hasMoneyVotes — it renders
+// only when BOTH top contributors and key votes exist (absent ≠ implied).
+import { MoneyVotes, hasMoneyVotes } from "./MoneyVotes";
 
 /** WO-6a: committee role enum -> display label. Party-agnostic (rule #3): the
  *  same mapping regardless of which party holds the chair. */
@@ -63,6 +69,12 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
       {ideology && (
         <Section title="Ideological lean" provenance={ideology.provenance}>
           <IdeologyScale ideology={ideology} partyCode={identity.party.code} />
+          {/* WO-8: resolve the ideology explainer to the real methodology anchor.
+              The provenance envelope's methodology_id ("dw-nominate") points at
+              the same section. */}
+          <p className="links">
+            <a href={methodologyHash("dw-nominate")}>{STRINGS.methodologyLink}</a>
+          </p>
         </Section>
       )}
 
@@ -116,6 +128,10 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
                     </li>
                   ))}
                 </ul>
+                {/* WO-8: key-vote selection is a computed metric → link its formula. */}
+                <p className="links">
+                  <a href={methodologyHash("key-votes")}>{STRINGS.methodologyLink}</a>
+                </p>
               </>
             )}
             {legislative.recent_bills.length > 0 && (
@@ -186,6 +202,11 @@ export function DossierView({ dossier, onBack }: { dossier: Dossier; onBack?: ()
           <p className="muted">{STRINGS.campaignFinanceNote}</p>
         </Section>
       )}
+
+      {/* WO-8: "Money & votes, side by side" — placed after Campaign finance.
+          Renders ONLY when both top contributors and key votes are published;
+          purely descriptive juxtaposition with a verbatim non-causation caveat. */}
+      {hasMoneyVotes(dossier) && <MoneyVotes dossier={dossier} />}
 
       {money?.disclosures && money.disclosures.count > 0 && (
         <Section title={STRINGS.disclosuresTitle} provenance={money.disclosures.provenance}>

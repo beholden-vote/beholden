@@ -15,6 +15,7 @@ import { Ballot } from "./Ballot";
 import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
 import {
   parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
+  parseMethodologyHash, methodologyHash,
   type Route,
 } from "../router";
 
@@ -65,9 +66,15 @@ function loadLayerPrefs(): LayerPrefs {
   } catch { /* fall through to defaults */ }
   return fallback;
 }
-function hashToPage(): InfoPage | null {
+// Info overlays are hash-linkable: the flat #about / #privacy / #sources, plus
+// WO-8's #methodology (and #methodology/<anchor> to open a specific section).
+type InfoState = { page: InfoPage; anchor?: string | null };
+function hashToInfo(): InfoState | null {
   const h = location.hash.replace("#", "");
-  return h === "about" || h === "privacy" || h === "sources" ? h : null;
+  if (h === "about" || h === "privacy" || h === "sources") return { page: h };
+  const meth = parseMethodologyHash();
+  if (meth) return { page: "methodology", anchor: meth.anchor };
+  return null;
 }
 
 type PanelState =
@@ -154,7 +161,7 @@ export function App({ mapRef, handleRef }: {
   const [activeIdx, setActiveIdx] = useState(-1);                // keyboard nav across suggestions
   const [prefs, setPrefs] = useState<LayerPrefs>(loadLayerPrefs);
   const layerVis = prefs.visible;
-  const [info, setInfo] = useState<InfoPage | null>(hashToPage);
+  const [info, setInfo] = useState<InfoState | null>(hashToInfo);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
@@ -173,9 +180,9 @@ export function App({ mapRef, handleRef }: {
     try { localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ok */ }
   }, [prefs, mapRef]);
 
-  // Info pages are hash-linkable (#about / #privacy / #sources).
+  // Info pages are hash-linkable (#about / #privacy / #sources / #methodology).
   useEffect(() => {
-    const onHash = () => setInfo(hashToPage());
+    const onHash = () => setInfo(hashToInfo());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -394,7 +401,13 @@ export function App({ mapRef, handleRef }: {
   // Auto master toggle. Re-checking Auto restores zoom-driven behavior; the stored
   // per-layer visibility is left intact so unchecking Auto again returns to it.
   const setAuto = (on: boolean) => setPrefs((p) => ({ ...p, mode: on ? "auto" : "manual" }));
-  const openInfo = (p: InfoPage) => { location.hash = p; setInfo(p); };
+  // Open an info overlay and reflect it in the hash so it's shareable/back-able.
+  // Methodology uses the #methodology[/anchor] form (WO-8); the flat pages keep
+  // their bare #about / #privacy / #sources hash.
+  const openInfo = (p: InfoPage, anchor?: string | null) => {
+    location.hash = p === "methodology" ? methodologyHash(anchor ?? undefined) : p;
+    setInfo({ page: p, anchor });
+  };
   const closeInfo = () => {
     history.replaceState(null, "", location.pathname + location.search);
     setInfo(null);
@@ -502,7 +515,10 @@ export function App({ mapRef, handleRef }: {
       <LayerControl visible={layerVis} auto={prefs.mode === "auto"}
                     onToggle={toggleLayer} onAuto={setAuto} />
       <Footer onOpen={openInfo} />
-      {info && <InfoOverlay page={info} onClose={closeInfo} />}
+      {info && (
+        <InfoOverlay page={info.page} anchor={info.anchor} onClose={closeInfo}
+                     onOpenInfo={(p) => openInfo(p)} />
+      )}
     </>
   );
 }

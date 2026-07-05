@@ -50,7 +50,17 @@ export interface Dossier {
   legislative?: {
     counts: { sponsored: number; cosponsored: number; became_law: number };
     recent_bills: { bill_id: string; title: string; status: string; url?: string }[];
-    key_votes: { roll_call_id: string; question: string; position: string; held_at: string; url?: string }[];
+    key_votes: {
+      roll_call_id: string; question: string; position: string; held_at: string;
+      url?: string;
+      /** WO-1: the roll call's outcome, and the bill it decided (null for
+       *  procedural votes with no bill). bill_url links the bill page when known. */
+      result?: string; bill_id?: string | null; bill_url?: string | null;
+      /** WO-8: congress.gov's own policy-area taxonomy for the decided bill, if
+       *  any — a descriptive chip, never our inference. Absent for procedural
+       *  votes or bills with no classified policy area. */
+      policy_areas?: string[] | null;
+    }[];
     committees: { name: string; role?: string; subcommittees?: { name: string; role?: string }[] }[];
     provenance: Provenance;
     /** WO-6a: committee memberships come from the unitedstates YAML, so they

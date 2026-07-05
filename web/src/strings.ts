@@ -27,6 +27,29 @@ export const STRINGS = {
   ideologyPendingInsufficientVotes:
     "Not enough recorded votes yet this Congress to estimate a score.",
 
+  // Money & votes, side by side (WO-8) — DESCRIPTIVE JUXTAPOSITION ONLY. This
+  // module places two independently-sourced facts next to each other; it makes
+  // no claim of influence, coordination, or causation. The caveat is verbatim
+  // and counsel-reviewable, and mirrors the WO-4 shared-donor caveat pattern.
+  moneyVotesTitle: "Money & votes, side by side",
+  moneyVotesLede:
+    "Two public records, placed next to each other: who gave to this member's campaign, and how this member voted. Nothing here links a specific contribution to a specific vote.",
+  moneyVotesContributorsHead: "Top contributors",
+  moneyVotesVotesHead: "Key votes",
+  // THE non-causation caveat — rendered verbatim, always, wherever this module
+  // appears. Left side is as reported to the FEC; right side is the public
+  // roll-call record; their adjacency asserts no relationship between them.
+  moneyVotesCaveat:
+    "Contributions are as reported to the FEC. Votes are the public roll-call record. These two records are shown side by side for reference only — their presentation implies no causal relationship between any contribution and any vote.",
+  // Policy-area chips are congress.gov's own taxonomy on the bill, not our
+  // inference — the note states that plainly so the chip is never read as a link.
+  moneyVotesPolicyNote:
+    "Policy-area labels are congress.gov's own classification of each bill, not a connection drawn by Beholden.",
+  moneyVotesMethodLink: "How is this computed?",
+  // Generic "how is this computed?" affordance linking a metric to its
+  // /methodology anchor. Reused across ideology, key votes, and party agreement.
+  methodologyLink: "How is this computed?",
+
   // Connections (entity graph, WO-4) — descriptive, symmetric copy only.
   connectionsTitle: "Connections",
   connectionsLoading: "Loading connections…",

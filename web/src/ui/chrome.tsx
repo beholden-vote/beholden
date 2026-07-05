@@ -1,6 +1,13 @@
 /** Map chrome: the layer control, the footer, and the info overlays
- *  (why Beholden exists, privacy, and the source registry). */
+ *  (why Beholden exists, privacy, the source registry, and — WO-8 — the public
+ *  methodology page). */
+import { lazy, Suspense } from "react";
 import { type LayerId } from "../map";
+
+// WO-8: the methodology page's content loads only when an info overlay opens on
+// it (dynamic import keeps the formula copy out of the main bundle, matching the
+// lazy-load discipline used for Connections).
+const Methodology = lazy(() => import("./Methodology"));
 
 const LAYER_LABELS: Record<LayerId, string> = {
   cd: "U.S. House", states: "U.S. Senate", sldu: "State Senate", sldl: "State House",
@@ -53,19 +60,27 @@ export function LayerControl({ visible, auto, onToggle, onAuto }: {
   );
 }
 
-export type InfoPage = "about" | "privacy" | "sources";
+export type InfoPage = "about" | "privacy" | "sources" | "methodology";
 
 export function Footer({ onOpen }: { onOpen: (p: InfoPage) => void }) {
   return (
     <footer className="site-foot">
       <button type="button" onClick={() => onOpen("about")}>Why Beholden</button>
       <button type="button" onClick={() => onOpen("sources")}>Sources</button>
+      <button type="button" onClick={() => onOpen("methodology")}>Methodology</button>
       <button type="button" onClick={() => onOpen("privacy")}>Privacy</button>
     </footer>
   );
 }
 
-export function InfoOverlay({ page, onClose }: { page: InfoPage; onClose: () => void }) {
+export function InfoOverlay({ page, anchor, onClose, onOpenInfo }: {
+  page: InfoPage;
+  /** WO-8: in-page section for the methodology page (from #methodology/<anchor>). */
+  anchor?: string | null;
+  onClose: () => void;
+  /** Lets one overlay cross-link to another (methodology → Sources registry). */
+  onOpenInfo?: (p: InfoPage) => void;
+}) {
   return (
     <div className="info-scrim" role="dialog" aria-modal="true" aria-label={page}
          onClick={onClose}>
@@ -74,6 +89,11 @@ export function InfoOverlay({ page, onClose }: { page: InfoPage; onClose: () => 
         {page === "about" && <About />}
         {page === "privacy" && <Privacy />}
         {page === "sources" && <Sources />}
+        {page === "methodology" && (
+          <Suspense fallback={<p className="empty-note">Loading methodology…</p>}>
+            <Methodology anchor={anchor} onOpenInfo={onOpenInfo} />
+          </Suspense>
+        )}
       </article>
     </div>
   );
