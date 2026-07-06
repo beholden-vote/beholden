@@ -43,6 +43,8 @@ interaction.
 --party-L:       #9a8a5a
 --party-G:       #5b9a63
 --party-NP:      #64717c
+--party-SPLIT:   #7a6a8f   /* split U.S. Senate delegation — a D/R-luminance
+                              purple-gray that is deliberately NEITHER hue */
 --vacant:        #2b2f33
 ```
 Roles: **amber = the only chromatic action color** (anti-slop: no teal, one accent).

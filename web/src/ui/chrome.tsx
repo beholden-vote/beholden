@@ -2,7 +2,7 @@
  *  (why Beholden exists, privacy, the source registry, and — WO-8 — the public
  *  methodology page). */
 import { lazy, Suspense } from "react";
-import { type LayerId } from "../map";
+import { PARTY_COLORS, VACANT_FILL, type LayerId } from "../map";
 
 // WO-8: the methodology page's content loads only when an info overlay opens on
 // it (dynamic import keeps the formula copy out of the main bundle, matching the
@@ -21,6 +21,45 @@ const LEVEL_GROUPS: { level: string; layers: LayerId[] }[] = [
   { level: "State", layers: ["sldu", "sldl"] },
   { level: "Local", layers: ["county"] },
 ];
+
+// Legend swatches: every party code the feeds can carry, in a fixed
+// party-agnostic order (alphabetical by code — same deterministic rule as
+// committee ordering; symmetric by construction). SPLIT and vacant are keyed to
+// map states, not parties, so they render as their own labeled rows below.
+const LEGEND_PARTIES: [code: string, label: string][] = [
+  ["D", "Democratic"], ["G", "Green"], ["I", "Independent"],
+  ["L", "Libertarian"], ["NP", "Nonpartisan"], ["R", "Republican"],
+];
+
+/** Tiny mono legend for the map fills (WO-14). "Split delegation" appears only
+ *  while the U.S. Senate (states) layer is on — it's the one fill that encodes
+ *  a two-seat delegation rather than a person's party. */
+function Legend({ showSplit }: { showSplit: boolean }) {
+  return (
+    <div className="legend" aria-label="Map fill legend">
+      <span className="legend-title">Fill = party</span>
+      <div className="legend-grid">
+        {LEGEND_PARTIES.map(([code, label]) => (
+          <span className="legend-item" key={code} title={label}>
+            <span className="legend-swatch" aria-hidden="true"
+                  style={{ background: PARTY_COLORS[code] }} />{code}
+          </span>
+        ))}
+      </div>
+      {showSplit && (
+        <span className="legend-item legend-wide"
+              title="The state's two U.S. senators are from different parties">
+          <span className="legend-swatch" aria-hidden="true"
+                style={{ background: PARTY_COLORS.SPLIT }} />Split delegation
+        </span>
+      )}
+      <span className="legend-item legend-wide" title="Seat currently vacant">
+        <span className="legend-swatch" aria-hidden="true"
+              style={{ background: VACANT_FILL }} />Vacant
+      </span>
+    </div>
+  );
+}
 
 export function LayerControl({ visible, auto, onToggle, onAuto }: {
   visible: Record<LayerId, boolean>;
@@ -53,6 +92,7 @@ export function LayerControl({ visible, auto, onToggle, onAuto }: {
           )}
         </div>
       ))}
+      <Legend showSplit={!!visible.states} />
       <span className="layer-ctl-hint">
         {auto ? "State districts show as you zoom in." : "Manual — Auto by zoom is off."}
       </span>

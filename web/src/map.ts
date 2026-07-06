@@ -23,8 +23,13 @@ type StyleFeed = Record<string, StyleRow>;
 export const PARTY_COLORS: Record<string, string> = {
   // Matched-luminance, symmetric by construction (DESIGN.md §2): neither party louder.
   D: "#4b83bd", R: "#c25b5b", I: "#8f8f5e", L: "#9a8a5a", G: "#5b9a63", NP: "#64717c",
+  // Split U.S. Senate delegation (WO-14): a neutral purple-gray blend held to the
+  // same luminance band as D/R — deliberately reads as "neither red nor blue",
+  // and stays distinct from the I/G/L hues. Never used for a person, only for a
+  // state's two-seat delegation.
+  SPLIT: "#7a6a8f",
 };
-const VACANT_FILL = "#2b2f33";
+export const VACANT_FILL = "#2b2f33";
 const DEFAULT_FILL = "#0a2233";
 
 // One vector archive per geometry family (§5); sldu+sldl share the us-sld archive.
@@ -211,16 +216,18 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     });
 
     // Fill + outline per layer, drawn states -> cd -> sld (bottom-up). Hover and
-    // selection are feature-states so they cost nothing to toggle. State-chamber
-    // polygons default to TRANSPARENT until their style feed publishes, so they
-    // overlay the colored CD layer as outlines instead of blanketing it — they
-    // still hit-test for hover/click (geometry, not pixels).
+    // selection are feature-states so they cost nothing to toggle. Every layer
+    // with a style feed (states = Senate delegation, cd, sldu, sldl) colors via
+    // the same feature-state fill path; the coalesce default below only shows
+    // where the feed has no row.
     for (const L of LAYERS) {
-      // Layers with no style feed yet (state chambers + counties) default to a
-      // TRANSPARENT fill so they overlay as outlines instead of blanketing the
-      // colored CD layer; they still hit-test on geometry.
-      const noFeedYet = L.id === "sldu" || L.id === "sldl" || L.id === "county";
-      const defaultFill = noFeedYet ? "rgba(10,34,51,0)" : DEFAULT_FILL;
+      // Overlay layers (state chambers + counties) default to a TRANSPARENT fill
+      // so a division their feed doesn't cover — or counties, which carry no
+      // officials at all (honest: outline-only) — overlays the colored layers
+      // beneath as outlines instead of blanketing them; they still hit-test on
+      // geometry. Base layers (states, cd) keep the opaque navy default.
+      const overlay = L.id === "sldu" || L.id === "sldl" || L.id === "county";
+      const defaultFill = overlay ? "rgba(10,34,51,0)" : DEFAULT_FILL;
       // Auto-mode fade at construction (mode starts "auto"); setLayerMode swaps it.
       const factor = fadeFactor(L.autoFade, false);
       map.addLayer({
