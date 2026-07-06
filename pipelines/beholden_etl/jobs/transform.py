@@ -182,10 +182,29 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     store.insert(con, "offices", list(offices.values()))
     store.insert(con, "terms", terms)
 
-    # --- ideology: Voteview joined through the ICPSR crosswalk ---
+    # --- ICPSR crosswalk: congress-legislators id.icpsr, AUGMENTED from Voteview ---
+    # The congress-legislators YAML lags on ICPSR for freshmen (~217 of 537 members
+    # lacked id.icpsr for the 119th), which would leave their votes + ideology dark.
+    # Voteview IS the ICPSR authority and its members file carries bioguide_id for
+    # every member, so fill the crosswalk by joining Voteview's icpsr<->bioguide
+    # through our complete bioguide crosswalk. No fabrication — Voteview asserts the
+    # pairing; the filled ids are persisted so the warehouse crosswalk is complete.
+    bioguide_to_person = {r["id_value"]: r["person_id"]
+                          for r in uniq_idents if r["id_scheme"] == "bioguide"}
     icpsr_to_person = {r["id_value"]: r["person_id"] for r in uniq_idents if r["id_scheme"] == "icpsr"}
     csv_path = raw / "voteview" / f"HS{CONGRESS}_members.csv"
-    if csv_path.exists():
+    csv_text = csv_path.read_text(encoding="utf-8") if csv_path.exists() else ""   # matches fetch's write
+    if csv_text:
+        derived = [{"person_id": bioguide_to_person[bio], "id_scheme": "icpsr", "id_value": icpsr}
+                   for icpsr, bio in voteview.member_icpsr_to_bioguide(csv_text).items()
+                   if bio in bioguide_to_person and icpsr not in icpsr_to_person]
+        for r in derived:
+            icpsr_to_person[r["id_value"]] = r["person_id"]
+        if derived:
+            store.insert(con, "person_identifiers", derived)   # deduped on (scheme, value) PK
+
+    # --- ideology: Voteview scores through the (now complete) ICPSR crosswalk ---
+    if csv_text:
         # The fetch manifest's retrieved_at is the honest computed_as_of for a
         # continuously re-estimated score (see voteview.to_score_rows docstring).
         manifest_path = raw / "manifest.json"
@@ -194,7 +213,6 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
             manifest = json.loads(manifest_path.read_text())
             as_of = manifest.get("sources", {}).get("voteview", {}).get("retrieved_at")
         scores, seen_pk = [], set()
-        csv_text = csv_path.read_text(encoding="utf-8")   # matches fetch's write
         for row in voteview.to_score_rows(csv_text, CONGRESS, icpsr_to_person,
                                           as_of=as_of):
             pk = (row["person_id"], row["scheme"], row["scope"])
@@ -205,9 +223,8 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
 
     # --- legislative: sponsored bills -> bills + sponsorships spine (E2) ---
     # Only sponsored rows land in the spine (walked in full); the cosponsored
-    # total stays a per-member count in raw, read at build time.
-    bioguide_to_person = {r["id_value"]: r["person_id"]
-                          for r in uniq_idents if r["id_scheme"] == "bioguide"}
+    # total stays a per-member count in raw, read at build time. (bioguide_to_person
+    # was built above for the ICPSR-crosswalk augmentation.)
     leg_dir = raw / "congress.gov" / "legislation"
     if leg_dir.exists():
         bills: dict[str, dict] = {}

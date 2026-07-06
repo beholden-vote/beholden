@@ -1213,3 +1213,22 @@ def test_money_and_votes_both_present_for_juxtaposition(slice_dirs):
     # The two sides share no linking field — they are independent cited facts.
     kv0 = jane["legislative"]["key_votes"][0]
     assert "contributor" not in kv0 and "donor" not in kv0
+
+
+# --- ICPSR crosswalk augmentation from Voteview (votes/ideology coverage fix) ---
+def test_voteview_member_icpsr_to_bioguide_fills_crosswalk():
+    """Voteview's members file maps every current member's icpsr<->bioguide, so it
+    can fill the ICPSR crosswalk for members whose congress-legislators entry has no
+    id.icpsr yet. icpsr must be normalized exactly as the score/vote joins key it
+    (str(int(float(...)))), House/Senate only, rows missing either id skipped."""
+    from beholden_etl.sources import voteview
+    csv_text = (
+        "chamber,icpsr,bioguide_id,bioname\n"
+        "House,20301.0,R000575,\"ROGERS, Mike\"\n"      # icpsr normalizes 20301.0 -> 20301
+        "Senate,21102,S001185,\"SEWELL, Terri\"\n"
+        "President,99999,P999999,\"PREZ\"\n"            # non-legislator -> skipped
+        "House,,B000000,\"NO ICPSR\"\n"                  # missing icpsr -> skipped
+        "House,42424,,\"NO BIOGUIDE\"\n"                 # missing bioguide -> skipped
+    )
+    m = voteview.member_icpsr_to_bioguide(csv_text)
+    assert m == {"20301": "R000575", "21102": "S001185"}

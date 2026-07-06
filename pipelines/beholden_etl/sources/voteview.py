@@ -43,6 +43,28 @@ def member_scores_csv(congress: int) -> str:
     return r.text
 
 
+def member_icpsr_to_bioguide(csv_text: str) -> dict[str, str]:
+    """{normalized_icpsr: bioguide_id} for House/Senate members of a Voteview
+    members file. Voteview is the ICPSR authority and carries bioguide_id for every
+    member, so this fills the ICPSR crosswalk for current members whose
+    congress-legislators entry has no id.icpsr yet (freshmen lag). icpsr is
+    normalized exactly as to_score_rows / to_position_rows key it, so the maps
+    line up. Rows lacking either id (or non-legislator rows) are skipped."""
+    out: dict[str, str] = {}
+    for row in csv.DictReader(io.StringIO(csv_text)):
+        if row.get("chamber") not in ("House", "Senate"):
+            continue
+        bio = (row.get("bioguide_id") or "").strip()
+        raw_icpsr = (row.get("icpsr") or "").strip()
+        if not bio or not raw_icpsr:
+            continue
+        try:
+            out[str(int(float(raw_icpsr)))] = bio
+        except ValueError:
+            continue
+    return out
+
+
 def to_score_rows(csv_text: str, congress: int, icpsr_to_person: dict[str, str],
                   as_of: str | None = None):
     """Yield ideology_scores rows. Members with too few votes -> status pending.
