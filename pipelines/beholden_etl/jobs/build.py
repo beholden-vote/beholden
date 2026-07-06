@@ -161,16 +161,23 @@ def _legislative_stats(con) -> dict[str, dict]:
            FROM sponsorships s JOIN bills b USING(bill_id)
            WHERE s.role='sponsor' GROUP BY s.person_id""").fetchall():
         stats[str(pid)] = {"sponsored": sponsored, "became_law": became_law, "recent_bills": []}
-    for pid, bill_id_, title, status in con.execute(
-        """SELECT s.person_id, b.bill_id, b.title, b.status
+    # Dates are cast to VARCHAR in SQL (same reasoning as held_at in
+    # _vote_records): the dossier needs the ISO date string, not a Python date.
+    for pid, bill_id_, title, status, introduced_on, latest_action_on in con.execute(
+        """SELECT s.person_id, b.bill_id, b.title, b.status,
+                  b.introduced_on::VARCHAR, b.latest_action_on::VARCHAR
            FROM sponsorships s JOIN bills b USING(bill_id)
            WHERE s.role='sponsor'
            QUALIFY row_number() OVER (PARTITION BY s.person_id
                    ORDER BY b.latest_action_on DESC NULLS LAST, b.bill_id) <= 10""").fetchall():
         stats.setdefault(str(pid), {"sponsored": 0, "became_law": 0, "recent_bills": []})
+        # WO-12: introduced_on / latest_action_on were already warehoused (used
+        # for the recency sort above); published verbatim, null when the source
+        # omitted them — honest absence, never an invented date.
         stats[str(pid)]["recent_bills"].append(
             {"bill_id": bill_id_, "title": title, "status": status,
-             "url": congress_gov.bill_public_url(bill_id_)})
+             "url": congress_gov.bill_public_url(bill_id_),
+             "introduced_on": introduced_on, "latest_action_on": latest_action_on})
     return stats
 
 
@@ -205,6 +212,50 @@ def _rollcall_meta(raw_dir: Path) -> dict[str, dict]:
     return voteview.to_rollcall_meta(f.read_text(encoding="utf-8"), CONGRESS)
 
 
+def _bill_titles(con) -> dict[str, str]:
+    """bill_id -> title straight from the bills spine (WO-12): lets a key vote
+    show WHAT its decided bill is without a fetch to congress.gov. Titles are
+    verbatim from the source; a roll call with no bills row (procedural votes,
+    Senate nominations) has no entry, so bill_title publishes null — honest
+    absence, never an invented title."""
+    return {bill_id_: title for bill_id_, title in
+            con.execute("SELECT bill_id, title FROM bills").fetchall()}
+
+
+def _roll_call_tallies(con) -> dict[str, tuple]:
+    """roll_call_id -> (yea_count, nay_count) from the roll_calls spine (WO-12,
+    migration 005). Persisted verbatim from the Voteview rollcalls CSV by the
+    transform; NULL tallies publish as null, never a fabricated 0. The key-vote
+    closeness score keeps reading raw via _rollcall_meta — this map only feeds
+    the published per-vote tally."""
+    return {rcid: (yea, nay) for rcid, yea, nay in con.execute(
+        "SELECT roll_call_id, yea_count, nay_count FROM roll_calls").fetchall()}
+
+
+def _committee_urls(raw_dir: Path) -> dict[str, str]:
+    """committee_id -> official committee site from the raw committees-current
+    roster (WO-12). SOURCE-PROVIDED urls only — the yaml's own `url` field
+    (sample urls verified live 2026-07-06), never a constructed pattern. A
+    committee the source ships no url for (2 select committees today; every
+    subcommittee) publishes committee_id only: honest absence over an
+    unverified link. Keyed exactly like sources/legislators.committee_rows
+    (subcommittee id = parent thomas_id + subcommittee thomas_id)."""
+    f = raw_dir / "unitedstates_legislators" / "committees-current.json"
+    if not f.exists():
+        return {}
+    out: dict[str, str] = {}
+    for c in json.loads(f.read_text(encoding="utf-8")):
+        tid = c.get("thomas_id")
+        if not tid:
+            continue
+        if c.get("url"):
+            out[tid] = c["url"]
+        for sub in c.get("subcommittees") or []:
+            if sub.get("thomas_id") and sub.get("url"):
+                out[tid + sub["thomas_id"]] = sub["url"]
+    return out
+
+
 def _cosponsored_counts(raw_dir: Path) -> dict[str, int]:
     """bioguide -> cosponsored total, read from the landed legislation snapshots."""
     out: dict[str, int] = {}
@@ -231,38 +282,49 @@ def _campaign_finance(con) -> dict[str, dict]:
     return out
 
 
-def _committees(con) -> dict[str, list[dict]]:
-    """person_id -> [{name, role, subcommittees:[{name, role}]}] from
-    committee_memberships joined to committees (WO-6a). Top-level committees are
-    the entries; subcommittees (parent_id set) nest under the parent the member
-    also sits on. Roles come straight from the source-stated title (member|chair|
-    ranking|vice_chair). Ordering is deterministic and party-agnostic (rule #3):
-    committees alphabetical by name, subcommittees likewise — identical regardless
-    of party or chamber majority."""
+def _committees(con, committee_urls: dict[str, str]) -> dict[str, list[dict]]:
+    """person_id -> [{committee_id, name, role, url?, subcommittees:[{committee_id,
+    name, role, url?}]}] from committee_memberships joined to committees (WO-6a).
+    Top-level committees are the entries; subcommittees (parent_id set) nest under
+    the parent the member also sits on. Roles come straight from the source-stated
+    title (member|chair|ranking|vice_chair). WO-12 adds the deterministic
+    committee_id plus the SOURCE-PROVIDED official url (see _committee_urls) —
+    the url key is present only when the source ships one, applied by the same
+    lookup for every committee. Ordering is deterministic and party-agnostic
+    (rule #3): committees alphabetical by name, subcommittees likewise —
+    identical regardless of party or chamber majority."""
     rows = con.execute(
         """SELECT cm.person_id, c.committee_id, c.name, c.parent_id, cm.role
            FROM committee_memberships cm JOIN committees c USING(committee_id)
            WHERE cm.congress = ?
            ORDER BY c.name""", [CONGRESS]).fetchall()
+
+    def item(cid: str, name: str, role: str) -> dict:
+        e = {"committee_id": cid, "name": name, "role": role}
+        url = committee_urls.get(cid)
+        if url:                                   # source-provided only (WO-12)
+            e["url"] = url
+        return e
+
     # Index each person's top-level committee entries so subcommittees can attach
     # (parent_id is NULL for a top-level committee).
     parents: dict[str, dict[str, dict]] = {}     # person -> committee_id -> entry
-    subs: list[tuple] = []                        # (person, parent_id, name, role)
+    subs: list[tuple] = []                        # (person, parent_id, cid, name, role)
     for pid, cid, name, parent_id, role in rows:
         pid = str(pid)
         if parent_id is None:
-            parents.setdefault(pid, {})[cid] = {"name": name, "role": role, "subcommittees": []}
+            parents.setdefault(pid, {})[cid] = {**item(cid, name, role), "subcommittees": []}
         else:
-            subs.append((pid, parent_id, name, role))
-    for pid, parent_id, name, role in subs:
+            subs.append((pid, parent_id, cid, name, role))
+    for pid, parent_id, cid, name, role in subs:
         parent = parents.get(pid, {}).get(parent_id)
         if parent is not None:                    # every real/fixture sub has its parent (0 orphans)
-            parent["subcommittees"].append({"name": name, "role": role})
+            parent["subcommittees"].append(item(cid, name, role))
     out: dict[str, list[dict]] = {}
     for pid, by_cid in parents.items():
         entries = []
         for entry in sorted(by_cid.values(), key=lambda e: e["name"]):
-            e = {"name": entry["name"], "role": entry["role"]}
+            e = {k: v for k, v in entry.items() if k != "subcommittees"}
             if entry["subcommittees"]:
                 e["subcommittees"] = sorted(entry["subcommittees"], key=lambda s: s["name"])
             entries.append(e)
@@ -271,15 +333,17 @@ def _committees(con) -> dict[str, list[dict]]:
 
 
 def _top_contributors(con) -> dict[str, list[dict]]:
-    """person_id -> [{name, total_cents}] employer rollups of itemized
+    """person_id -> [{name, total_cents, rank}] employer rollups of itemized
     individual contributions, from top_contributors (WO-3), most-recent cycle
-    first and ordered by rank. Same FEC envelope as the cycle totals; the
-    dossier caps the list at 10."""
+    first and ordered by rank. rank (WO-12) is the warehoused 1..N position in
+    FEC's own -total order — published so the UI can show 10 and expand to the
+    full list. Same FEC envelope as the cycle totals; the dossier caps the list
+    at 25 (the aggregation rule is otherwise unchanged from WO-3)."""
     out: dict[str, list[dict]] = {}
-    for pid, name, total in con.execute(
-        """SELECT person_id, contributor_name, total_cents
+    for pid, name, total, rank in con.execute(
+        """SELECT person_id, contributor_name, total_cents, rank
            FROM top_contributors ORDER BY person_id, cycle DESC, rank""").fetchall():
-        out.setdefault(str(pid), []).append({"name": name, "total_cents": total})
+        out.setdefault(str(pid), []).append({"name": name, "total_cents": total, "rank": rank})
     return out
 
 
@@ -359,7 +423,8 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              leg_spine: dict, cospon: dict, campaign: dict, contributors: dict,
              disclosures: dict, vote_records: dict, rc_meta: dict,
              party_majority: dict, committees: dict,
-             policy_areas: dict[str, list[str]]) -> dict:
+             policy_areas: dict[str, list[str]], bill_titles: dict[str, str],
+             rc_tallies: dict[str, tuple]) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
@@ -415,11 +480,21 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         agreement = key_votes.agreement_pct(my_votes, h["party"], party_majority)
         for kv in selected:                        # link the citation to the bill page when known
             kv["bill_url"] = congress_gov.bill_public_url(kv["bill_id"]) if kv.get("bill_id") else None
+            # WO-12: the decided bill's warehoused title, so the drill-down shows
+            # what the vote decided. Null for procedural votes with no bill —
+            # honest absence, never an invented title.
+            kv["bill_title"] = bill_titles.get(kv["bill_id"]) if kv.get("bill_id") else None
             # WO-8: attach congress.gov's policy-area taxonomy for the decided bill
             # (the money-&-votes juxtaposition's only "relatedness" chip). Absent
             # for procedural votes (no bill) or bills with no classified area —
             # never invented, and never a Beholden-drawn link.
             kv["policy_areas"] = policy_areas.get(kv["bill_id"]) if kv.get("bill_id") else None
+            # WO-12: Voteview's secondary vote text, verbatim, only when it adds
+            # information beyond `question` (voteview.question_and_description).
+            kv["description"] = (rc_meta.get(kv["roll_call_id"]) or {}).get("description")
+            # WO-12: chamber-wide tallies, persisted on roll_calls (migration
+            # 005) and published verbatim; null when the source lacked a tally.
+            kv["yea_count"], kv["nay_count"] = rc_tallies.get(kv["roll_call_id"], (None, None))
         # Committee/subcommittee memberships come from the unitedstates
         # congress-legislators YAML, not the congress.gov API — so they carry a
         # dedicated committees_provenance envelope (like votes_provenance above),
@@ -455,9 +530,10 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
     cf = campaign.get(h["person_id"])
     if cf and cf["cycles"]:
         # Top contributors are FEC employer rollups of itemized individual
-        # contributions (WO-3), capped at 10 for the dossier. Same FEC envelope;
-        # absent (no committee/no itemized receipts) simply omits the block, so
-        # the UI never renders a fabricated donor list.
+        # contributions (WO-3), capped at 25 for the dossier (WO-12; the UI
+        # shows 10 and expands via rank). Same FEC envelope; absent (no
+        # committee/no itemized receipts) simply omits the block, so the UI
+        # never renders a fabricated donor list.
         contribs = contributors.get(h["person_id"])
         # WO-8: the FEC envelope points at the donor-rollups methodology only when
         # the block actually carries the aggregated top-contributor metric; the
@@ -468,7 +544,7 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                 "fec", f"https://www.fec.gov/data/candidate/{cf['candidate_id']}/", manifest,
                 methodology_id=METHODOLOGY_DONORS if contribs else None)}
         if contribs:
-            block["top_contributors"] = contribs[:10]
+            block["top_contributors"] = contribs[:25]
         money["campaign_finance"] = block
     filings = disclosures.get(h["person_id"])
     if filings:
@@ -550,10 +626,12 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     campaign = _campaign_finance(con)
     contributors = _top_contributors(con)
     vote_records = _vote_records(con)
-    committees = _committees(con)
+    committees = _committees(con, _committee_urls(raw_dir))
     all_sponsorships = _all_sponsorships(con)     # graph: full sponsor set (WO-4)
     committee_ids = _committee_ids(con)           # graph: committee_id refs (WO-4)
     policy_areas = _bill_policy_areas(con)        # WO-8: bill_id -> policy-area chips
+    bill_titles = _bill_titles(con)               # WO-12: key-vote bill_title join
+    rc_tallies = _roll_call_tallies(con)          # WO-12: persisted yea/nay tallies
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
@@ -569,7 +647,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     # --- dossiers (all members) ---
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
                      contributors, disclosures, vote_records, rc_meta, party_majority,
-                     committees, policy_areas)
+                     committees, policy_areas, bill_titles, rc_tallies)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

@@ -119,7 +119,9 @@ CREATE TABLE roll_calls (
   chamber      TEXT NOT NULL,
   question     TEXT NOT NULL,
   held_at      TIMESTAMPTZ NOT NULL,
-  result       TEXT NOT NULL
+  result       TEXT NOT NULL,
+  yea_count    INTEGER,                    -- WO-12: chamber-wide tallies, verbatim
+  nay_count    INTEGER                     --        from source; NULL = unrecorded
 );
 
 CREATE TABLE vote_positions (

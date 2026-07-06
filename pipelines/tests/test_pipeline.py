@@ -140,9 +140,10 @@ FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals"
     "last_cash_on_hand_end_period": 334567.89, "coverage_end_date": "2026-06-30T00:00:00"}}}
 
 # Jane's FEC by_employer rollups (WO-3), as the API returns them: employers
-# uppercased, totals in dollars, already -total-sorted. 12 rows to prove the
-# dossier caps at 10; blank / "NOT EMPLOYED" / "RETIRED" are legitimate FEC
-# categories kept verbatim (never editorialized or filtered).
+# uppercased, totals in dollars, already -total-sorted. 27 rows to prove the
+# dossier caps at 25 (WO-12; ranks 26-27 fall off); blank / "NOT EMPLOYED" /
+# "RETIRED" are legitimate FEC categories kept verbatim (never editorialized
+# or filtered).
 FEC_CONTRIBUTORS = {"H8TN06001": {
     "candidate_id": "H8TN06001", "cycle": 2026, "committee_id": "C00CANDJANE",
     "by_employer": [
@@ -156,8 +157,11 @@ FEC_CONTRIBUTORS = {"H8TN06001": {
         {"employer": "DELTA CO", "total": 8000.0, "count": 5},
         {"employer": "EPSILON GROUP", "total": 7000.0, "count": 4},
         {"employer": "ZETA PARTNERS", "total": 6000.0, "count": 3},
-        {"employer": "ETA HOLDINGS", "total": 5000.0, "count": 2},   # rank 11 -> capped
-        {"employer": "THETA VENTURES", "total": 4000.0, "count": 1}, # rank 12 -> capped
+        {"employer": "ETA HOLDINGS", "total": 5000.0, "count": 2},
+        {"employer": "THETA VENTURES", "total": 4000.0, "count": 1},
+    ] + [  # ranks 13..27, still -total-sorted; 26 and 27 exceed the 25 cap
+        {"employer": f"FIRM {i:02d}", "total": 3000.0 - i, "count": 1}
+        for i in range(13, 28)
     ]}}
 
 
@@ -168,12 +172,14 @@ FEC_CONTRIBUTORS = {"H8TN06001": {
 # Senate) and the President (blank icpsr) never appear in these House rows.
 # Tallies drive the closeness score: RC2 (11 v 10) is the tightest, RC1 (12 v 9)
 # next, RC3 (20 v 1) least — so key-vote order should be RC2, RC1, RC3.
+# WO-12: RC1/RC2 carry a vote_desc that differs from vote_question (-> published
+# as description); RC3's vote_desc is blank (-> no description, honest absence).
 VOTEVIEW_ROLLCALLS = (
     "congress,chamber,rollnumber,date,session,clerk_rollnumber,yea_count,nay_count,"
     "bill_number,vote_result,vote_desc,vote_question\n"
     "119,House,1,2025-02-01,1,10,12,9,HR100,Passed,Passage of HR100,On Passage\n"
     "119,House,2,2025-03-01,1,11,11,10,,Agreed to,A procedural motion,On the Motion\n"
-    "119,House,3,2025-04-01,1,12,20,1,,Passed,A lopsided vote,On Agreeing\n"
+    "119,House,3,2025-04-01,1,12,20,1,,Passed,,On Agreeing\n"
 )
 # Per-member cast codes. cast_code: 1=yea, 6=nay(variant), 9=not voting, 0=not a
 # member. Jane (11): yea/yea/nay. Al (22): nay/yea/yea. Rows for icpsr 99 (not in
@@ -209,9 +215,13 @@ LEGISLATION = {
 # Roster mirrors committees-current.yaml: two top-level committees, each with a
 # subcommittee (a subcommittee's code = parent thomas_id + subcommittee
 # thomas_id, exactly how the membership file keys them). HSAG has no thomas_id-
-# less rows; every committee carries one.
+# less rows; every committee carries one. WO-12: HSAG carries the source's own
+# `url` (as 47/49 real committees do, verified live 2026-07-06); HSWM has none
+# (like the 2 real select committees) -> committee_id only, never a constructed
+# link. Real subcommittees never carry a url.
 COMMITTEES = [
     {"type": "house", "name": "House Committee on Agriculture", "thomas_id": "HSAG",
+     "url": "https://agriculture.house.gov/",
      "subcommittees": [{"name": "Forestry and Horticulture", "thomas_id": "15"},
                        {"name": "Livestock, Dairy, and Poultry", "thomas_id": "29"}]},
     {"type": "house", "name": "House Committee on Ways and Means", "thomas_id": "HSWM",
@@ -469,7 +479,7 @@ def test_top_contributors_land_in_spine_ranked(slice_dirs):
     contributors file gets no rows."""
     con = store.connect(str(slice_dirs / "wh.duckdb"))
     n = con.execute("SELECT count(*) FROM top_contributors").fetchone()[0]
-    assert n == 12                                             # all 12 fixture rows land
+    assert n == 27                                             # all 27 fixture rows land
     top = con.execute(
         """SELECT contributor_name, total_cents FROM top_contributors
            ORDER BY rank LIMIT 1""").fetchone()
@@ -478,16 +488,19 @@ def test_top_contributors_land_in_spine_ranked(slice_dirs):
 
 
 def test_dossier_top_contributors_capped_and_provenanced(slice_dirs):
-    """Jane's money.campaign_finance carries top_contributors[0..9] (capped at 10)
-    with name + total_cents, under the same FEC envelope. FEC categories like
-    N/A / RETIRED / NOT EMPLOYED are surfaced verbatim, not filtered."""
+    """Jane's money.campaign_finance carries top_contributors[0..24] (capped at
+    25, WO-12) with name + total_cents + rank, under the same FEC envelope. rank
+    is the warehoused FEC -total position so the UI can show 10 and expand. FEC
+    categories like N/A / RETIRED / NOT EMPLOYED are surfaced verbatim, not
+    filtered."""
     jane = _dossier_named(slice_dirs, "Jane Rep")
     cf = jane["money"]["campaign_finance"]
     tc = cf["top_contributors"]
-    assert len(tc) == 10                                       # 12 rollups capped to 10
-    assert tc[0] == {"name": "N/A", "total_cents": 5000000}
+    assert len(tc) == 25                                       # 27 rollups capped to 25
+    assert tc[0] == {"name": "N/A", "total_cents": 5000000, "rank": 1}
     assert [c["name"] for c in tc[:4]] == ["N/A", "SELF-EMPLOYED", "RETIRED", "NOT EMPLOYED"]
-    assert set(tc[0]) == {"name", "total_cents"}              # exactly the contract shape
+    assert set(tc[0]) == {"name", "total_cents", "rank"}      # exactly the contract shape
+    assert [c["rank"] for c in tc] == list(range(1, 26))      # 1..25, no gaps past the cap
     # monotonically non-increasing (FEC -total order preserved through the cap)
     assert all(tc[i]["total_cents"] >= tc[i + 1]["total_cents"] for i in range(len(tc) - 1))
     assert cf["provenance"]["source"] == "fec"                # same envelope as totals
@@ -736,7 +749,8 @@ def test_dossier_committees_nest_subcommittees_and_provenanced(slice_dirs):
     assert names == ["House Committee on Agriculture", "House Committee on Ways and Means"]
     ag = next(c for c in coms if c["name"] == "House Committee on Agriculture")
     assert ag["role"] == "chair"
-    assert ag["subcommittees"] == [{"name": "Forestry and Horticulture", "role": "chair"}]
+    assert ag["subcommittees"] == [
+        {"committee_id": "HSAG15", "name": "Forestry and Horticulture", "role": "chair"}]
     wm = next(c for c in coms if c["name"] == "House Committee on Ways and Means")
     assert wm["role"] == "member"
     assert "subcommittees" not in wm                       # no sub membership -> key omitted
@@ -751,7 +765,8 @@ def test_dossier_committees_role_and_subcommittee_only_when_parent(slice_dirs):
     assert [c["name"] for c in coms] == ["House Committee on Agriculture"]
     ag = coms[0]
     assert ag["role"] == "ranking"
-    assert ag["subcommittees"] == [{"name": "Livestock, Dairy, and Poultry", "role": "member"}]
+    assert ag["subcommittees"] == [
+        {"committee_id": "HSAG29", "name": "Livestock, Dairy, and Poultry", "role": "member"}]
 
 
 def test_dossier_committees_empty_when_none(slice_dirs):
@@ -1208,7 +1223,7 @@ def test_money_and_votes_both_present_for_juxtaposition(slice_dirs):
     independent, each-cited records — the UI gate (hasMoneyVotes) is satisfiable
     without any donor→vote linkage in the data."""
     jane = _dossier_named(slice_dirs, "Jane Rep")
-    assert len(jane["money"]["campaign_finance"]["top_contributors"]) == 10
+    assert len(jane["money"]["campaign_finance"]["top_contributors"]) == 25
     assert len(jane["legislative"]["key_votes"]) == 3
     # The two sides share no linking field — they are independent cited facts.
     kv0 = jane["legislative"]["key_votes"][0]
@@ -1502,3 +1517,117 @@ def test_publish_writes_last_good_pointer_dry_run(tmp_path):
     assert "raw/latest/manifest.json" in keys
     assert "raw/latest/congress.gov/members-119.json" in keys
     assert all(k.startswith("raw/latest/") for k in keys)
+
+
+# --- WO-12 cited drill-down data ---------------------------------------------
+def test_question_and_description_rule():
+    """`question` keeps the WO-1 first-non-blank rule; `description` carries the
+    OTHER Voteview text VERBATIM only when it is non-blank and differs from the
+    chosen question (adds information) — otherwise None, never padded/invented."""
+    from beholden_etl.sources import voteview as vv
+    # both present and different -> question from vote_question, desc published
+    assert vv.question_and_description(
+        {"vote_question": "On Passage", "vote_desc": "Passage of HR100"}) == \
+        ("On Passage", "Passage of HR100")
+    # blank vote_desc -> no description (honest absence)
+    assert vv.question_and_description(
+        {"vote_question": "On Agreeing", "vote_desc": ""}) == ("On Agreeing", None)
+    # identical texts -> desc adds nothing -> None
+    assert vv.question_and_description(
+        {"vote_question": "On Passage", "vote_desc": "On Passage"}) == ("On Passage", None)
+    # blank vote_question -> question falls back to vote_desc, and the "other"
+    # text (the blank question) is never published as a description
+    assert vv.question_and_description(
+        {"vote_question": "", "vote_desc": "A procedural motion"}) == \
+        ("A procedural motion", None)
+    assert vv.question_and_description({}) == ("", None)
+
+
+def test_roll_call_rows_carry_tallies_and_blank_is_null():
+    """to_roll_call_rows persists the CSV's yea/nay tallies verbatim (migration
+    005 columns); a blank tally cell lands as NULL, never a fabricated 0."""
+    from beholden_etl.sources import voteview as vv
+    header = ("congress,chamber,rollnumber,date,session,clerk_rollnumber,"
+              "yea_count,nay_count,bill_number,vote_result,vote_desc,vote_question\n")
+    rows = list(vv.to_roll_call_rows(
+        header + "119,House,7,2025-05-01,1,13,217,213,,Passed,Something,On Passage\n"
+               + "119,House,8,2025-05-02,1,14,,,,Passed,Another,On Passage\n", 119, set()))
+    assert (rows[0]["yea_count"], rows[0]["nay_count"]) == (217, 213)
+    assert rows[1]["yea_count"] is None and rows[1]["nay_count"] is None
+
+
+def test_roll_call_tallies_land_in_spine(slice_dirs):
+    """The transform persists yea_count/nay_count on roll_calls (WO-12,
+    005_roll_call_tallies.sql), verbatim from the rollcalls CSV."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    tallies = dict((rcid, (y, n)) for rcid, y, n in con.execute(
+        "SELECT roll_call_id, yea_count, nay_count FROM roll_calls").fetchall())
+    con.close()
+    assert tallies["us/119/house/1"] == (12, 9)
+    assert tallies["us/119/house/2"] == (11, 10)
+    assert tallies["us/119/house/3"] == (20, 1)
+
+
+def test_key_votes_carry_title_description_and_tallies(slice_dirs):
+    """Each key vote publishes the drill-down facts (WO-12): the decided bill's
+    warehoused title (null for procedural votes — honest absence, never an
+    invented title), Voteview's secondary text as description only when it adds
+    information (blank vote_desc -> None), and the persisted chamber tallies."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    by_rc = {v["roll_call_id"]: v for v in leg["key_votes"]}
+    rc1, rc2, rc3 = (by_rc[f"us/119/house/{i}"] for i in (1, 2, 3))
+    # RC1 decided HR100 -> its spine title, verbatim from congress.gov
+    assert rc1["bill_title"] == "A Bill To Do X"
+    assert rc1["description"] == "Passage of HR100"           # vote_desc != question
+    assert (rc1["yea_count"], rc1["nay_count"]) == (12, 9)
+    # RC2 is procedural (no bill) -> bill_title null, never invented
+    assert rc2["bill_id"] is None and rc2["bill_title"] is None
+    assert rc2["description"] == "A procedural motion"
+    assert (rc2["yea_count"], rc2["nay_count"]) == (11, 10)
+    # RC3's vote_desc is blank in the fixture -> no description (honest absence)
+    assert rc3["description"] is None
+    assert (rc3["yea_count"], rc3["nay_count"]) == (20, 1)
+    # existing citation fields are untouched alongside the new ones
+    assert rc1["url"] == "https://clerk.house.gov/Votes/202510"
+    assert rc1["bill_url"] == "https://www.congress.gov/bill/119th-congress/house-bill/100"
+
+
+def test_recent_bills_carry_dates(slice_dirs):
+    """recent_bills publishes introduced_on / latest_action_on (WO-12) — the
+    warehoused congress.gov dates already used for the recency sort — verbatim
+    per bill, newest action first."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    by_bill = {b["bill_id"]: b for b in leg["recent_bills"]}
+    assert by_bill["us/119/hr/100"]["introduced_on"] == "2025-02-01"
+    assert by_bill["us/119/hr/100"]["latest_action_on"] == "2025-06-01"
+    assert by_bill["us/119/hr/200"]["introduced_on"] == "2025-03-01"
+    assert by_bill["us/119/hr/200"]["latest_action_on"] == "2025-04-01"
+    # ordering (latest action desc) is unchanged by the added fields
+    assert [b["bill_id"] for b in leg["recent_bills"]] == ["us/119/hr/100", "us/119/hr/200"]
+
+
+def test_dossier_committees_carry_id_and_source_url_only(slice_dirs):
+    """Committee items publish the deterministic committee_id plus the official
+    url ONLY when the source roster provides one (WO-12): HSAG carries its yaml
+    url; HSWM (no url in the roster) publishes committee_id alone — never a
+    constructed/unverified link; subcommittees (never url'd in the source) carry
+    committee_id alone. Same lookup for every committee (rule #3)."""
+    leg = _dossier_named(slice_dirs, "Jane Rep")["legislative"]
+    ag = next(c for c in leg["committees"] if c["name"] == "House Committee on Agriculture")
+    assert ag["committee_id"] == "HSAG"
+    assert ag["url"] == "https://agriculture.house.gov/"      # source-provided, verbatim
+    wm = next(c for c in leg["committees"] if c["name"] == "House Committee on Ways and Means")
+    assert wm["committee_id"] == "HSWM"
+    assert "url" not in wm                                    # no source url -> id only
+    sub = ag["subcommittees"][0]
+    assert sub["committee_id"] == "HSAG15" and "url" not in sub
+
+
+def test_committee_urls_helper_reads_source_roster_only(slice_dirs):
+    """_committee_urls maps committee_id -> the roster's OWN url field; a
+    committee without one is simply absent (no fallback pattern), and a missing
+    roster file degrades to an empty map rather than inventing links."""
+    from beholden_etl.jobs.build import _committee_urls
+    urls = _committee_urls(slice_dirs / "raw")
+    assert urls == {"HSAG": "https://agriculture.house.gov/"}
+    assert _committee_urls(slice_dirs / "nonexistent") == {}

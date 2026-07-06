@@ -155,16 +155,39 @@ def roll_call_public_url(chamber: str, congress: int, session: int | str,
             f"vote{congress}{session}/vote_{congress}_{session}_{int(clerk_rollnumber):05d}.htm")
 
 
+def question_and_description(row: dict) -> tuple[str, str | None]:
+    """Voteview carries TWO free-text fields per roll call: vote_question (the
+    formal question, e.g. 'On Passage') and vote_desc (what was voted on, e.g.
+    'Passage of HR100'). `question` keeps the WO-1 rule — first non-blank of the
+    two. `description` (WO-12) carries the OTHER text, verbatim from the CSV,
+    ONLY when it is non-blank and differs from the chosen question (it adds
+    information); otherwise None — never padded, edited, or invented."""
+    q = (row.get("vote_question") or "").strip()
+    d = (row.get("vote_desc") or "").strip()
+    return q or d, (d if q and d and d != q else None)
+
+
+def _tally(value) -> int | None:
+    """A Voteview tally cell -> int, or None when blank/malformed (honest
+    absence — a missing tally is never coerced to a fabricated 0)."""
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 def to_roll_call_rows(csv_text: str, congress: int, known_bill_ids: set[str]):
     """Yield roll_calls rows from the rollcalls CSV. held_at is the vote date at
     midnight UTC (the CSV carries no time of day). Rows missing a date or any
     question/description are skipped — a placeholder question would be an
-    invented fact — and their positions drop with them via the FK id set."""
+    invented fact — and their positions drop with them via the FK id set.
+    yea_count/nay_count (WO-12, migration 005) persist the CSV's chamber-wide
+    tallies verbatim; NULL when the cell is blank."""
     for row in csv.DictReader(io.StringIO(csv_text)):
         chamber = (row.get("chamber") or "").lower()
         if str(row.get("congress")) != str(congress) or chamber not in ("house", "senate"):
             continue
-        question = (row.get("vote_question") or "").strip() or (row.get("vote_desc") or "").strip()
+        question, _ = question_and_description(row)
         if not (row.get("rollnumber") and row.get("date") and question):
             continue
         bill_id = normalize_bill_id(row.get("bill_number") or "", congress)
@@ -175,6 +198,8 @@ def to_roll_call_rows(csv_text: str, congress: int, known_bill_ids: set[str]):
             "question": question,
             "held_at": f"{row['date']} 00:00:00+00",
             "result": (row.get("vote_result") or "").strip() or "(not recorded)",
+            "yea_count": _tally(row.get("yea_count")),
+            "nay_count": _tally(row.get("nay_count")),
         }
 
 
@@ -203,8 +228,9 @@ def to_position_rows(csv_text: str, congress: int, icpsr_to_person: dict[str, st
 
 
 def to_rollcall_meta(csv_text: str, congress: int) -> dict[str, dict]:
-    """roll_call_id -> {yea, nay, date, url}: the salience inputs (tallies for the
-    closeness score) + the official record link. These live only in the raw
+    """roll_call_id -> {yea, nay, date, url, description}: the salience inputs
+    (tallies for the closeness score) + the official record link + the secondary
+    vote text (WO-12; see question_and_description). These live only in the raw
     rollcalls CSV — the spine table keeps the contract columns, and build reads
     raw for the rest (same pattern as cosponsored counts read at build time)."""
     meta: dict[str, dict] = {}
@@ -221,5 +247,6 @@ def to_rollcall_meta(csv_text: str, congress: int) -> dict[str, dict]:
             "date": row["date"],
             "url": roll_call_public_url(chamber, congress, row["session"],
                                         row["clerk_rollnumber"], row["date"]),
+            "description": question_and_description(row)[1],
         }
     return meta

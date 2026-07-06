@@ -49,22 +49,33 @@ export interface Dossier {
   /** Federal-only for now; render only when present. */
   legislative?: {
     counts: { sponsored: number; cosponsored: number; became_law: number };
-    recent_bills: { bill_id: string; title: string; status: string; url?: string }[];
+    recent_bills: {
+      bill_id: string; title: string; status: string; url?: string;
+      /** WO-12: warehoused congress.gov dates; null when the source omits them. */
+      introduced_on?: string | null; latest_action_on?: string | null;
+    }[];
     key_votes: {
       roll_call_id: string; question: string; position: string; held_at: string;
       url?: string;
       /** WO-1: the roll call's outcome, and the bill it decided (null for
        *  procedural votes with no bill). bill_url links the bill page when known. */
       result?: string; bill_id?: string | null; bill_url?: string | null;
-      /** WO-12 (pipeline, in flight): the decided bill's display title. Optional
-       *  and absent-safe — feeds without it render the row unchanged. */
-      bill_title?: string | null;
+      /** WO-12: the decided bill's title (null for procedural votes — honest
+       *  absence), Voteview's secondary vote text when it adds information
+       *  beyond question, and the chamber-wide tallies (null when unrecorded). */
+      bill_title?: string | null; description?: string | null;
+      yea_count?: number | null; nay_count?: number | null;
       /** WO-8: congress.gov's own policy-area taxonomy for the decided bill, if
        *  any — a descriptive chip, never our inference. Absent for procedural
        *  votes or bills with no classified policy area. */
       policy_areas?: string[] | null;
     }[];
-    committees: { name: string; role?: string; subcommittees?: { name: string; role?: string }[] }[];
+    /** WO-12: committee_id is the deterministic thomas code; url is the
+     *  SOURCE-PROVIDED official site, present only when the source ships one. */
+    committees: {
+      committee_id?: string; name: string; role?: string; url?: string;
+      subcommittees?: { committee_id?: string; name: string; role?: string; url?: string }[];
+    }[];
     provenance: Provenance;
     /** WO-6a: committee memberships come from the unitedstates YAML, so they
      *  carry their own envelope; present only when the member sits on one. */
@@ -92,7 +103,8 @@ export interface Dossier {
         total_spent_cents: number | null; cash_on_hand_cents: number | null;
         as_of: string;
       }[];
-      top_contributors?: { name: string; total_cents: number }[];
+      /** WO-12: rank is FEC's own -total order (1..N); list capped at 25. */
+      top_contributors?: { name: string; total_cents: number; rank?: number }[];
       provenance?: Provenance;
     };
     /** STOCK Act periodic transaction reports — links to the official filings. */
