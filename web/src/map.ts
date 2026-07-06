@@ -90,29 +90,40 @@ function fillFor(row: StyleRow): string {
   return PARTY_COLORS[row.party] ?? PARTY_COLORS.NP;
 }
 
-// Zoom-fade factor (0→1) for a faded layer, as a MapLibre expression. In auto
-// mode this ramps over the layer's [start, end] band; in manual mode it's pinned
-// to 1 (a checked layer is never dimmed). A SELECTED feature is always pinned to
-// 1 too, so a chosen polygon stays solid even below its fade floor.
-type FadeExpr = number | unknown[];
-function fadeFactor(fade: { start: number; end: number } | undefined, manual: boolean): FadeExpr {
-  if (!fade || manual) return 1;
-  const ramp = ["interpolate", ["linear"], ["zoom"], fade.start, 0, fade.end, 1];
-  return ["case", ["boolean", ["feature-state", "selected"], false], 1, ramp];
-}
+// The base (non-faded) feature-state opacity case: 0.95 selected / 0.92 hover /
+// 0.8 otherwise. Used directly when a layer has no fade or is pinned (manual).
+const FILL_OPACITY_CASE = [
+  "case",
+  ["boolean", ["feature-state", "selected"], false], 0.95,
+  ["boolean", ["feature-state", "hover"], false], 0.92,
+  0.8,
+] as const;
 
-// Compose the base feature-state opacity case with a zoom-fade factor: the case
-// picks 0.95 (selected) / 0.92 (hover) / 0.8 (base), then the fade scales it.
-function fillOpacityExpr(factor: FadeExpr): unknown[] {
-  return ["*", ["case",
-    ["boolean", ["feature-state", "selected"], false], 0.95,
-    ["boolean", ["feature-state", "hover"], false], 0.92,
-    0.8,
-  ], factor];
+// MapLibre's style spec requires a "zoom" expression to be the DIRECT input to
+// a TOP-LEVEL "interpolate"/"step" — it may not be nested inside "case"/"*"/etc.
+// (nesting it fails style validation and silently drops the whole layer; this
+// bit the sld*/county layers for their entire lifetime — WO-2/WO-6b built the
+// fade as `["*", caseExpr, ["case", selected, 1, ["interpolate", zoom, ...]]]`,
+// which validates but never actually adds the layer). The legal pattern instead
+// makes the interpolate itself the top-level expression, with the CASE living
+// in the interpolation stops (per-feature expressions as stop values are fully
+// supported) — so a selected feature evaluates to full opacity at every stop,
+// and an unselected one fades from 0 at `start` to the normal case at `end`.
+function fillOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean): unknown {
+  if (!fade || manual) return FILL_OPACITY_CASE;
+  const selected = ["boolean", ["feature-state", "selected"], false];
+  return ["interpolate", ["linear"], ["zoom"],
+    fade.start, ["case", selected, 0.95, 0],
+    fade.end, FILL_OPACITY_CASE,
+  ];
 }
-function lineOpacityExpr(factor: FadeExpr): unknown[] {
-  // Lines are opaque by default; only the fade factor modulates them.
-  return ["*", 1, factor];
+function lineOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean): unknown {
+  if (!fade || manual) return 1;
+  const selected = ["boolean", ["feature-state", "selected"], false];
+  return ["interpolate", ["linear"], ["zoom"],
+    fade.start, ["case", selected, 1, 0],
+    fade.end, 1,
+  ];
 }
 
 // Join a style feed to already-loaded geometry via feature-state — tiles stay
@@ -228,15 +239,17 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       // geometry. Base layers (states, cd) keep the opaque navy default.
       const overlay = L.id === "sldu" || L.id === "sldl" || L.id === "county";
       const defaultFill = overlay ? "rgba(10,34,51,0)" : DEFAULT_FILL;
-      // Auto-mode fade at construction (mode starts "auto"); setLayerMode swaps it.
-      const factor = fadeFactor(L.autoFade, false);
+      // Build for whatever mode is current at construction time (usually "auto",
+      // but a persisted manual preference can already be set if setLayerMode ran
+      // before "load" fired — see setLayerMode's own note below).
+      const manualAtInit = mode === "manual";
       map.addLayer({
         id: `${L.id}-fill`, source: L.archive, "source-layer": L.sourceLayer, type: "fill",
         minzoom: L.minzoom,
         paint: {
           "fill-color": ["coalesce", ["feature-state", "fill"], defaultFill],
           // Base feature-state opacity, scaled by the zoom-fade factor (WO-2).
-          "fill-opacity": fillOpacityExpr(factor) as maplibregl.ExpressionSpecification,
+          "fill-opacity": fillOpacityExpr(L.autoFade, manualAtInit) as maplibregl.ExpressionSpecification,
         },
       });
       map.addLayer({
@@ -255,7 +268,7 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
             ["boolean", ["feature-state", "hover"], false], 1.4,
             0.6,
           ],
-          "line-opacity": lineOpacityExpr(factor) as maplibregl.ExpressionSpecification,
+          "line-opacity": lineOpacityExpr(L.autoFade, manualAtInit) as maplibregl.ExpressionSpecification,
         },
       });
     }
@@ -413,14 +426,13 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     const manual = mode === "manual";
     for (const L of LAYERS) {
       if (!L.autoFade) continue;                 // federal layers have no fade to swap
-      const factor = fadeFactor(L.autoFade, manual);
       if (map.getLayer(`${L.id}-fill`)) {
         map.setPaintProperty(`${L.id}-fill`, "fill-opacity",
-          fillOpacityExpr(factor) as maplibregl.ExpressionSpecification);
+          fillOpacityExpr(L.autoFade, manual) as maplibregl.ExpressionSpecification);
       }
       if (map.getLayer(`${L.id}-line`)) {
         map.setPaintProperty(`${L.id}-line`, "line-opacity",
-          lineOpacityExpr(factor) as maplibregl.ExpressionSpecification);
+          lineOpacityExpr(L.autoFade, manual) as maplibregl.ExpressionSpecification);
       }
     }
     applyAllVis();
