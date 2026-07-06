@@ -11,7 +11,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
 
-const VINTAGE = "2024";
+const VINTAGE = "2025";
 
 // PMTiles protocol: the browser reads byte ranges of a single archive on the CDN.
 const protocol = new Protocol();
