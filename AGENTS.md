@@ -55,6 +55,7 @@ graphify-out/        knowledge graph of this repo (see "Knowledge graph" below)
 | [`docs/DATA-CONTRACTS.md`](docs/DATA-CONTRACTS.md) | Spine DDL, dossier JSON, entity graph, tile contracts |
 | [`docs/workplan/README.md`](docs/workplan/README.md) | Work orders, lanes, and the live status board |
 | [`docs/TRUSTED-EXTRACTION.md`](docs/TRUSTED-EXTRACTION.md) | How bulk public records become cited facts (no models in the path) |
+| [`docs/BRAND.md`](docs/BRAND.md) | The `[B]` mark, colorways, avatar/social-card usage — the identity system |
 | [`docs/SETUP.md`](docs/SETUP.md) | Zero-to-running: accounts, secrets, first pipeline run |
 | [`spike/README.md`](spike/README.md) | O6 tile-density spike — PASS |
 

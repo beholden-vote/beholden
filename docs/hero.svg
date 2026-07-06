@@ -63,12 +63,19 @@
 
     <rect width="1200" height="360" fill="url(#fade)"/>
 
+    <!-- mark: [B] source bracket (docs/brand/mark-source-tag.svg), primary colorway -->
+    <g transform="translate(80,60)" fill="none" stroke="#f2b134" stroke-width="6" stroke-linecap="square" stroke-linejoin="miter">
+      <polyline points="24,0 8,0 8,72 24,72"/>
+      <polyline points="48,0 64,0 64,72 48,72"/>
+      <text x="36" y="38" text-anchor="middle" dominant-baseline="central" font-family="'Helvetica Neue',Arial,sans-serif" font-weight="700" font-size="34" fill="#eaf2f8" stroke="none">B</text>
+    </g>
+
     <!-- wordmark -->
-    <text x="80" y="150" fill="#eaf2f8" font-size="86" font-weight="700" letter-spacing="1">BEHOLDEN</text>
-    <rect x="82" y="172" width="150" height="6" fill="#f2b134"/>
-    <text x="84" y="214" fill="#f2b134" font-size="23" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace" letter-spacing="0.5">power, on the public record</text>
-    <text x="84" y="250" fill="#cddae4" font-size="21">See who represents you — and what they've</text>
-    <text x="84" y="278" fill="#cddae4" font-size="21">actually done. <tspan fill="#8ba3b4">Every fact linked to its source.</tspan></text>
+    <text x="180" y="150" fill="#eaf2f8" font-size="86" font-weight="700" letter-spacing="1">BEHOLDEN</text>
+    <rect x="182" y="172" width="150" height="6" fill="#f2b134"/>
+    <text x="184" y="214" fill="#f2b134" font-size="23" font-weight="700" font-family="ui-monospace,'SF Mono',Menlo,monospace" letter-spacing="0.5">power, on the public record</text>
+    <text x="182" y="250" fill="#cddae4" font-size="21">See who represents you — and what they've</text>
+    <text x="182" y="278" fill="#cddae4" font-size="21">actually done. <tspan fill="#8ba3b4">Every fact linked to its source.</tspan></text>
 
     <!-- brutalist frame accents -->
     <rect x="0" y="0" width="1200" height="6" fill="#f2b134"/>

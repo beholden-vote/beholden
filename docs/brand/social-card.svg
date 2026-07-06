@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-label="Beholden — see who represents you, and what they've actually done. Every fact linked to its source.">
+  <rect width="1200" height="600" fill="#06131d"/>
+
+  <!-- faint oversized bracket field, decorative -->
+  <g opacity="0.9" transform="translate(760,50)">
+    <svg viewBox="0 0 100 100" width="520" height="520" fill="none" stroke="#0e2536" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter">
+      <polyline points="40,8 12,8 12,92 40,92"/>
+      <polyline points="60,8 88,8 88,92 60,92"/>
+    </svg>
+  </g>
+
+  <!-- mark + wordmark -->
+  <g transform="translate(60,56)" font-family="'Space Grotesk',sans-serif">
+    <g fill="none" stroke="#f2b134" stroke-width="7" stroke-linecap="square" stroke-linejoin="miter">
+      <polyline points="24,3 12,3 12,57 24,57"/>
+      <polyline points="36,3 48,3 48,57 36,57"/>
+      <text x="30" y="32" text-anchor="middle" dominant-baseline="central" font-weight="700" font-size="29" fill="#eaf2f8" stroke="none">B</text>
+    </g>
+    <text x="70" y="38" font-size="30" font-weight="700" letter-spacing="-0.6" fill="#eaf2f8">Beholden</text>
+  </g>
+
+  <!-- headline + tagline -->
+  <g font-family="'Space Grotesk',sans-serif">
+    <text x="60" y="330" font-size="52" font-weight="700" letter-spacing="-1" fill="#eaf2f8">
+      <tspan x="60" dy="0">See who represents you —</tspan>
+      <tspan x="60" dy="60">and what they've actually done.</tspan>
+    </text>
+    <text x="60" y="440" font-family="'IBM Plex Mono',monospace" font-size="15" letter-spacing="1" fill="#f2b134">[ EVERY FACT LINKED TO ITS SOURCE ↗ ]</text>
+  </g>
+</svg>

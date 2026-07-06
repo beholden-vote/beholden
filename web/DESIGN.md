@@ -5,6 +5,10 @@ and modern political tech. The look of the **public record itself** — disclosu
 filings, roll-call sheets, official seals — rendered as a high-contrast,
 interactive instrument. Data-dense × editorial × cinematic-dark.
 
+> This file covers the UI component system. For the `[B]` mark, logo colorways,
+> and avatar/social-card usage, see [`docs/BRAND.md`](../docs/BRAND.md) — it
+> shares the exact color tokens defined here.
+
 > **Rule 0 (outranks this doc):** *symmetric by construction.* No color, weight,
 > motion, or copy choice may favor a party. The chrome is party-neutral amber;
 > blue and red appear **only** as equal-weight data encodings (map fills,
