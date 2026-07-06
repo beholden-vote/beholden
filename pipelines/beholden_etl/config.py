@@ -34,7 +34,7 @@ RAW_DIST = "dist/raw"        # immutable landed snapshots, per source
 
 # Current scope of the federal legislative slice.
 CONGRESS = 119
-TILE_VINTAGE = "2024"
+TILE_VINTAGE = "2025"  # Census cartographic-boundary release (GENZ2025); bump on new vintage
 FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congress
 
 

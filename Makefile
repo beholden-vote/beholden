@@ -16,13 +16,13 @@ publish:        ## push artifacts to Pages dir + R2
 	$(PY).jobs.publish
 
 tiles-fetch:
-	bash spike/fetch_tiger.sh 2024
+	bash spike/fetch_tiger.sh 2025
 
 tiles-build:
-	bash spike/build_pmtiles.sh 2024
+	bash spike/build_pmtiles.sh 2025
 
 tiles-publish:
-	bash spike/publish_tiles.sh 2024
+	bash spike/publish_tiles.sh 2025
 
 spike:          ## O6 density spike with synthetic geometry (runs anywhere, no downloads)
 	python3 spike/generate_synthetic_sld.py && bash spike/run_spike.sh
