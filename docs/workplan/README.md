@@ -71,7 +71,12 @@ sequentially — the WOs touch the same files.
 | 8 | Donor↔vote juxtaposition + methodology pages | INT (after 4) | merged |
 | 9 | SOS bulk-disclosure pilot (WA PDC, Tier A) | P (independent) | merged |
 
-**All work orders merged (2026-07-05).** Open follow-ons (not WOs yet): surface WA
-disclosure data once a deterministic filer↔legislator crosswalk exists; build the
-state-votes vertical (OpenStates API v3 — GO per `docs/research/state-votes-evaluation.md`);
-committees CI needs Python 3.11.
+| 10 | Resilient · incremental · parallel fetch | P (independent) | open — **recommended next** |
+
+**Core expansion pack WO-1…9 merged (2026-07-05).** WO-10 (open) hardens the nightly fetch
+after three distinct production failures (timeout · FEC 429-storm OOM · congress.gov read
+timeout) exposed that a monolithic 2-hour no-checkpoint fetch is structurally fragile.
+
+Other open follow-ons (not WOs yet): surface WA disclosure data once a deterministic
+filer↔legislator crosswalk exists; build the state-votes vertical (OpenStates API v3 — GO per
+`docs/research/state-votes-evaluation.md`); committees CI needs Python 3.11.
