@@ -1,5 +1,5 @@
 # Beholden — Data Contracts v1
-**Status:** Draft for review · Pairs with PRD v1.0 §7 and Phase 1 tickets E1/E5/E6
+**Status:** v1, deployed (the shipping pipeline + frontend implement these contracts) · Pairs with PRD v1.0 §7
 **Conventions:** all timestamps UTC ISO-8601 · all money in integer USD cents where exact, bracket enums where disclosed · every serving-layer object carries a provenance envelope · schema changes are additive within a major version; breaking changes bump `schema_version`.
 
 ---
@@ -60,7 +60,7 @@ CREATE TABLE quarantine_identities (       -- unresolved records; never joined t
 CREATE TABLE divisions (
   ocd_id      TEXT PRIMARY KEY,            -- 'ocd-division/country:us/state:tn/cd:6'
   parent_ocd  TEXT REFERENCES divisions,
-  level       TEXT NOT NULL,               -- 'country'|'state'|'cd'|'sldu'|'sldl'|'county'|'place' (P2-ready)
+  level       TEXT NOT NULL,               -- 'country'|'state'|'cd'|'sldu'|'sldl'|'county' (shipped) | 'place' (P2-ready)
   name        TEXT NOT NULL,
   geoid       TEXT,                        -- Census GEOID crosslink
   valid_from  DATE NOT NULL,               -- redistricting-aware

@@ -105,9 +105,9 @@ domain name. *(Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).)*
 |---|---|
 | 🏛️ **Federal** | Every sitting member of the U.S. House & Senate — full profiles: votes, committees, money, donors, disclosures, connections |
 | 🏫 **State** | State legislators nationwide (both chambers) with profiles and ideology |
-| 🗺️ **Local** | County boundaries rolling out for orientation |
+| 🗺️ **Local** | County boundaries for orientation |
 
-**🔜 Coming next** — state *voting records* (source confirmed) · state *campaign finance* from public-record filings · county & city officials · a public API.
+**🔜 Coming next** — richer profile drill-downs (tabs, cited vote details, an interactive connections graph) · state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county & city officials · a public API.
 
 We only expand where we can stay honest. When a data source has restrictive licensing or can’t be verified, we
 **say so and wait** rather than ship something we can’t stand behind — see the

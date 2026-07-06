@@ -53,7 +53,8 @@ graphify-out/        knowledge graph of this repo (see "Knowledge graph" below)
 | [`docs/PRD.md`](docs/PRD.md) | Product spec: principles, goals, dossier UX, phasing |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Free-tier hosting design, component map, scale-up path |
 | [`docs/DATA-CONTRACTS.md`](docs/DATA-CONTRACTS.md) | Spine DDL, dossier JSON, entity graph, tile contracts |
-| [`docs/TICKETS-PHASE1.md`](docs/TICKETS-PHASE1.md) | 12-week engineering breakdown |
+| [`docs/workplan/README.md`](docs/workplan/README.md) | Work orders, lanes, and the live status board |
+| [`docs/TRUSTED-EXTRACTION.md`](docs/TRUSTED-EXTRACTION.md) | How bulk public records become cited facts (no models in the path) |
 | [`docs/SETUP.md`](docs/SETUP.md) | Zero-to-running: accounts, secrets, first pipeline run |
 | [`spike/README.md`](spike/README.md) | O6 tile-density spike — PASS |
 
