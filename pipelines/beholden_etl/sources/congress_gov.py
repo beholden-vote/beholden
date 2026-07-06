@@ -24,7 +24,10 @@ class CongressGovClient:
         if not self.api_key:
             raise RuntimeError("CONGRESS_GOV_API_KEY is not set (see docs/SETUP.md §1)")
         self._last_call = 0.0
-        self._http = httpx.Client(timeout=30)
+        # 60s read timeout + generous connect: congress.gov can be slow to first
+        # byte on the busier per-member endpoints; a monolithic ~2h fetch makes
+        # thousands of calls, so a single slow response must not be fatal.
+        self._http = httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0))
 
     def _throttle(self):
         wait = MIN_INTERVAL_S - (time.monotonic() - self._last_call)
@@ -32,8 +35,8 @@ class CongressGovClient:
             time.sleep(wait)
         self._last_call = time.monotonic()
 
-    @retry(stop=stop_after_attempt(5),
-           wait=wait_exponential(multiplier=2, max=120),
+    @retry(stop=stop_after_attempt(8),
+           wait=wait_exponential(multiplier=2, max=60),
            retry=retry_if_exception_type(_RETRYABLE))
     def get(self, path: str, **params) -> dict:
         self._throttle()

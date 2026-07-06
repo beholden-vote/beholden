@@ -35,7 +35,9 @@ class FECClient:
         if not self.api_key:
             raise RuntimeError("FEC_API_KEY is not set (see docs/SETUP.md §1)")
         self._last_call = 0.0
-        self._http = httpx.Client(timeout=30)
+        # Match congress.gov client resilience: a slow first byte on any one of
+        # the ~1,600 per-run calls must not sink a multi-hour fetch.
+        self._http = httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0))
 
     def _throttle(self):
         wait = MIN_INTERVAL_S - (time.monotonic() - self._last_call)
@@ -43,8 +45,8 @@ class FECClient:
             time.sleep(wait)
         self._last_call = time.monotonic()
 
-    @retry(stop=stop_after_attempt(5),
-           wait=wait_exponential(multiplier=2, max=120),
+    @retry(stop=stop_after_attempt(8),
+           wait=wait_exponential(multiplier=2, max=60),
            retry=retry_if_exception_type(_RETRYABLE))
     def get(self, path: str, **params) -> dict:
         self._throttle()
