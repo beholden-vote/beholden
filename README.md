@@ -32,9 +32,9 @@ to the government document it came from.** No opinions, no scores, no side. Just
 
 <table>
 <tr>
-<td width="33%" align="center"><h3>1 · Find your spot</h3>Type your address, tap <b>“use my location,”</b> or just <b>click the map.</b><br/></td>
-<td width="33%" align="center"><h3>2 · Meet your reps</h3>Everyone who represents that point stacks up — <b>federal, state, local.</b><br/></td>
-<td width="33%" align="center"><h3>3 · Open the receipts</h3>Tap any name for a <b>fully-cited profile.</b> Tap any fact to jump to the source.</td>
+<td width="33%" align="center"><h3>1 · Find your spot</h3>Type your address, tap <b>“use my location,”</b> or just <b>click the map.</b><br/><br/></td>
+<td width="33%" align="center"><h3>2 · Meet your reps</h3>Everyone who represents that point stacks up — <b>federal, state, local.</b><br/><br/></td>
+<td width="33%" align="center"><h3>3 · Open the receipts</h3>Tap any name for a <b>fully-cited profile.</b> Tap any fact to jump to the source.<br/><br/></td>
 </tr>
 </table>
 
