@@ -11,10 +11,10 @@
  *  the user navigates use replaceState so opening dossiers doesn't spam history.
  */
 
-/** The dossier tabs (WO-11), in display order. The hash's optional tab segment is
- *  whitelisted against this — an unknown segment degrades to the default tab, it
- *  never breaks the person link. */
-export const DOSSIER_TABS = ["overview", "record", "committees", "money", "connections"] as const;
+/** The dossier tabs (WO-11; WO-16 adds "social"), in display order. The hash's
+ *  optional tab segment is whitelisted against this — an unknown segment
+ *  degrades to the default tab, it never breaks the person link. */
+export const DOSSIER_TABS = ["overview", "record", "committees", "money", "connections", "social"] as const;
 export type DossierTab = (typeof DOSSIER_TABS)[number];
 
 /** A parsed deep-link. `home` means no route hash is active (info hashes and the

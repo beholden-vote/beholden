@@ -222,6 +222,23 @@
   border: 2px solid var(--line-2); flex: none;
 }
 
+/* ---------- header action row (WO-16) ---------- */
+/* Amber-outline ghost buttons, same hard-offset-shadow-on-hover language as
+   .ballot-copy. Identical treatment for every button regardless of party —
+   only WHICH buttons render varies, driven purely by which contact fields the
+   dossier published (never a party- or chamber-conditioned style). Renders
+   below the masthead, above the tab bar; absent entirely when no contact
+   field exists (no empty row, no disabled placeholders). */
+.dossier-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.dossier-action {
+  display: inline-block; padding: 8px 14px;
+  background: none; border: 2px solid var(--sig); color: var(--sig);
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  text-decoration: none; cursor: pointer;
+}
+.dossier-action:hover { background: var(--sig); color: var(--on-sig); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
+
 /* ---------- dossier tabs (WO-11) ---------- */
 /* Sticky full-bleed rail under the masthead (negative side margins match the
    panel padding). Chrome is amber/ink/mut ONLY — party hues never appear here
@@ -578,6 +595,32 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   font-size: 12px; color: var(--flag); line-height: 1.5;
   border-left: 2px solid var(--flag); padding-left: 10px; margin: 14px 0 0;
 }
+
+/* ---------- previous roles (WO-16, Overview) ---------- */
+/* Most-recent-first (already sorted upstream, never re-sorted here); party
+   chip carries the SAME data-only weight as everywhere else it appears. */
+.prev-roles { padding-left: 0; list-style: none; }
+.prev-role-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.prev-role-name { font-weight: 500; }
+.prev-role-dates { font-family: var(--font-mono); font-size: 12px; }
+
+/* ---------- social tab (WO-16) ---------- */
+/* Link-out cards ONLY — no embeds, no iframes, no third-party widgets/scripts
+   (a deliberate privacy/zero-tracker requirement). Hard edges, same rectangular
+   "stamp-chip" language as the rest of the dossier; identical treatment for
+   every platform and every official. */
+.social-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.social-card a {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 14px; border: 2px solid var(--line-2); color: var(--ink);
+  text-decoration: none; background: var(--surf2);
+}
+.social-card a:hover { border-color: var(--sig); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
+.social-card-platform {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.social-card-handle { color: var(--sig); font-size: 12px; }
 
 @media (max-width: 560px) {
   /* Stack the two columns on narrow screens (DESIGN §8: mono tables → stacked). */

@@ -50,13 +50,41 @@ export const STRINGS = {
   // /methodology anchor. Reused across ideology, key votes, and party agreement.
   methodologyLink: "How is this computed?",
 
-  // Dossier tab labels (WO-11) — the same five tabs, in the same order, for
-  // every official; tabs without published data hide identically for everyone.
+  // Dossier tab labels (WO-11; WO-16 adds Social) — the same tabs, in the same
+  // order, for every official; tabs without published data hide identically
+  // for everyone.
   tabOverview: "Overview",
   tabRecord: "Record",
   tabCommittees: "Committees",
   tabMoney: "Money",
   tabConnections: "Connections",
+  tabSocial: "Social",
+
+  // Header action row (WO-16) — Call/Email/Contact/Website. Identical labels
+  // and treatment regardless of party (Rule 0); each renders only when its own
+  // contact field is published (absence stays invisible, never a dead button).
+  actionCall: "Call",
+  actionEmail: "Email",
+  actionContactForm: "Contact",
+  actionWebsite: "Website",
+
+  // Overview additions (WO-16)
+  previousRolesTitle: "Previous roles",
+  birthYearLabel: "Born",
+  educationTitle: "Education",
+  // Wikidata is a crowd-edited source (not an official government filing) —
+  // this verbatim note renders wherever education appears, styled with the
+  // same always-visible weight as the money/votes non-causation caveat, never
+  // a tooltip or collapsed aside (contract requirement, see WO-15/16).
+  educationCredibilityFallback:
+    "Sourced from Wikidata, a publicly edited encyclopedia — verify against the member's official biography.",
+
+  // Social tab (WO-16) — link-out cards only, no embeds/iframes/third-party
+  // widgets (privacy/zero-tracker requirement). Identical card treatment per
+  // platform regardless of party.
+  socialTitle: "Social",
+  socialEmpty:
+    "No social media accounts published yet for this official.",
 
   // Connections (entity graph, WO-4) — descriptive, symmetric copy only.
   connectionsTitle: "Connections",

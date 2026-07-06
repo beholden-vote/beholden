@@ -1,6 +1,6 @@
 /** Small shared UI atoms: party chip, avatar, section shell, provenance line. */
 import type { ReactNode } from "react";
-import type { Provenance } from "../types";
+import type { Dossier, Provenance } from "../types";
 import { PARTY_COLORS } from "../map";
 import { STRINGS } from "../strings";
 import { formatDate } from "../lib/data";
@@ -51,4 +51,39 @@ export function Section({ title, provenance, children }: {
 
 export function EmptyNote({ children }: { children: ReactNode }) {
   return <p className="empty-note">{children}</p>;
+}
+
+/** Header action row (WO-16): Call / Email / Contact / Website. Each button
+ *  renders ONLY when its own contact field is published — no empty row, no
+ *  disabled placeholders (absence stays honest and invisible). The four
+ *  fields are mutually exclusive by source (federal ships contact_form/
+ *  website, never email; state ships email, never contact_form) so gating on
+ *  field presence alone already yields "Email: state only" / "Contact:
+ *  federal only" — no chamber check needed. Identical button treatment for
+ *  every party (Rule 0): amber-outline ghost buttons, hard edges, no color
+ *  varies by anything except which fields exist. */
+export function HeaderActions({ contact }: { contact: Dossier["identity"]["contact"] }) {
+  if (!contact) return null;
+  const { phone, email, contact_form, website } = contact;
+  if (!phone && !email && !contact_form && !website) return null;
+  return (
+    <div className="dossier-actions">
+      {phone && (
+        <a className="dossier-action" href={`tel:${phone}`}>{STRINGS.actionCall}</a>
+      )}
+      {email && (
+        <a className="dossier-action" href={`mailto:${email}`}>{STRINGS.actionEmail}</a>
+      )}
+      {contact_form && (
+        <a className="dossier-action" href={contact_form} target="_blank" rel="noopener noreferrer">
+          {STRINGS.actionContactForm} ↗
+        </a>
+      )}
+      {website && (
+        <a className="dossier-action" href={website} target="_blank" rel="noopener noreferrer">
+          {STRINGS.actionWebsite} ↗
+        </a>
+      )}
+    </div>
+  );
 }

@@ -8,12 +8,17 @@
  *  whose data isn't published are HIDDEN (not disabled) — the same rule for
  *  every official, so a sparse dossier never shows dead chrome (symmetric by
  *  construction). Only the active tab renders (a hidden tab's content — and
- *  Connections' lazy fetch — defers to first activation). */
+ *  Connections' lazy fetch — defers to first activation).
+ *
+ *  WO-16 adds: a header action row (Call/Email/Contact/Website, gated per
+ *  field — see HeaderActions in bits.tsx), Overview additions (previous
+ *  roles, birth year, Wikidata education with its verbatim credibility
+ *  note), and a sixth Social tab (link-out cards only, no embeds). */
 import { lazy, Suspense, useEffect, useRef } from "react";
 import type { Dossier } from "../types";
 import { STRINGS } from "../strings";
 import { formatDate, formatMoneyCents, legislativeIsStub } from "../lib/data";
-import { Avatar, EmptyNote, PartyChip, Section } from "./bits";
+import { Avatar, EmptyNote, HeaderActions, PartyChip, Section } from "./bits";
 import { IdeologyScale } from "./Ideology";
 import { methodologyHash, type DossierTab } from "../router";
 import { TabBar } from "./Tabs";
@@ -34,8 +39,60 @@ const COMMITTEE_ROLE_LABEL: Record<string, string> = {
 };
 const committeeRole = (role: string) => COMMITTEE_ROLE_LABEL[role] ?? role;
 
+/** WO-16: past terms from our own warehoused `terms` table, most-recent-first
+ *  (already sorted upstream — never re-sorted here). Role/chamber/date range
+ *  + a party chip per row, same chip component used everywhere else so a
+ *  past term's party reads with identical (data-only) weight to any other
+ *  party mention. */
+function PreviousRoles({ roles, provenance }: {
+  roles: NonNullable<Dossier["identity"]["previous_roles"]>;
+  provenance: Dossier["identity"]["provenance"];
+}) {
+  return (
+    <Section title={STRINGS.previousRolesTitle} provenance={provenance}>
+      <ul className="plain-list prev-roles">
+        {roles.map((r, i) => (
+          <li key={`${r.role}-${r.start_date}-${i}`} className="prev-role-row">
+            <span className="prev-role-name">{r.role}</span>
+            <span className="muted"> · {r.chamber}</span>
+            <span className="prev-role-dates muted">
+              {" "}· {formatDate(r.start_date) ?? r.start_date}–{formatDate(r.end_date) ?? r.end_date}
+            </span>
+            <PartyChip code={r.party} />
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/** WO-16: federal-only Wikidata education. A crowd-edited source is a lower
+ *  trust tier than the government-filing facts elsewhere on the page, so its
+ *  credibility_note is rendered VERBATIM, always visible, styled with the
+ *  same always-on weight as the money/votes non-causation caveat (never a
+ *  tooltip, never collapsed) — education must never carry the same
+ *  unqualified visual weight as an official-source fact. */
+function Education({ education }: { education: NonNullable<Dossier["identity"]["education"]> }) {
+  return (
+    <Section title={STRINGS.educationTitle} provenance={education.provenance}>
+      <ul className="plain-list">
+        {education.items.map((it, i) => (
+          <li key={`${it.institution}-${i}`}>
+            {it.institution}
+            {it.degree && <span className="muted"> · {it.degree}</span>}
+            {it.year && <span className="muted"> · {it.year}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="mv-caveat">{education.credibility_note || STRINGS.educationCredibilityFallback}</p>
+    </Section>
+  );
+}
+
 /** Overview: tenure + ideological lean (and the honest pending note when
- *  neither a legislative record nor an ideology score is published yet). */
+ *  neither a legislative record nor an ideology score is published yet).
+ *  WO-16 adds, when published: birth year alongside tenure, previous roles,
+ *  and (federal-only) Wikidata education with its credibility note. */
 function OverviewTab({ dossier }: { dossier: Dossier }) {
   const { identity, ideology, legislative } = dossier;
   const tenureStart = formatDate(identity.tenure.first_took_office);
@@ -44,6 +101,7 @@ function OverviewTab({ dossier }: { dossier: Dossier }) {
     <>
       <Section title="Tenure" provenance={identity.provenance}>
         <dl className="kv">
+          {identity.birth_year && (<><dt>{STRINGS.birthYearLabel}</dt><dd>{identity.birth_year}</dd></>)}
           {tenureStart && (<><dt>In office since</dt><dd>{tenureStart}</dd></>)}
           {tenureEnd && (<><dt>Current term ends</dt><dd>{tenureEnd}</dd></>)}
           {identity.next_election && (<><dt>Next election</dt><dd>{formatDate(identity.next_election)}</dd></>)}
@@ -76,6 +134,12 @@ function OverviewTab({ dossier }: { dossier: Dossier }) {
           <EmptyNote>{STRINGS.stateLegPending}</EmptyNote>
         </Section>
       )}
+
+      {identity.previous_roles && identity.previous_roles.length > 0 && (
+        <PreviousRoles roles={identity.previous_roles} provenance={identity.provenance} />
+      )}
+
+      {identity.education && <Education education={identity.education} />}
     </>
   );
 }
@@ -297,6 +361,67 @@ function ConnectionsTab({ personId, onOpenPerson }: {
   );
 }
 
+/** WO-16: verbatim-handle -> profile URL per platform. Every field here is a
+ *  handle exactly as published by the source (legislators-social-media.json
+ *  for federal; the OpenStates CSV for state) — never a guessed/derived one,
+ *  only the LINK TARGET is constructed. No embeds, no iframes, no third-party
+ *  widgets: this module only ever produces an <a> to the platform.
+ *
+ *  twitter/facebook/instagram are bare handles on both sources -> straight
+ *  path append. youtube is inconsistent in the source data (a legacy custom
+ *  name, a modern "@handle", or a raw "UC..." channel id) — handled by shape,
+ *  not by chamber. mastodon (federal only) already ships as a full
+ *  "@user@instance" mention; the instance is part of the handle, so it maps
+ *  straight onto that instance's profile path. */
+const SOCIAL_LABEL: Record<string, string> = {
+  twitter: "X (Twitter)", facebook: "Facebook", instagram: "Instagram",
+  youtube: "YouTube", mastodon: "Mastodon",
+};
+function socialUrl(platform: string, handle: string): string {
+  switch (platform) {
+    case "twitter":
+      return `https://x.com/${handle}`;
+    case "facebook":
+      return `https://facebook.com/${handle}`;
+    case "instagram":
+      return `https://instagram.com/${handle}`;
+    case "youtube":
+      if (/^UC[A-Za-z0-9_-]{22}$/.test(handle)) return `https://youtube.com/channel/${handle}`;
+      return handle.startsWith("@") ? `https://youtube.com/${handle}` : `https://youtube.com/@${handle}`;
+    case "mastodon": {
+      // "@user@instance.tld" -> https://instance.tld/@user
+      const m = /^@?([^@]+)@(.+)$/.exec(handle);
+      return m ? `https://${m[2]}/@${m[1]}` : handle;
+    }
+    default:
+      return handle;
+  }
+}
+
+/** Social: link-out cards to each published platform handle. NO embedded
+ *  feeds/iframes/third-party scripts — a deliberate privacy/zero-tracker
+ *  requirement, not a style choice. Hidden entirely (by the caller's gate)
+ *  when identity.social has no handle at all. */
+function SocialTab({ social }: { social: NonNullable<Dossier["identity"]["social"]> }) {
+  const platforms = (["twitter", "facebook", "instagram", "youtube", "mastodon"] as const)
+    .filter((p) => social[p]);
+  return (
+    <section className="panel-section">
+      <div className="section-head"><h3>{STRINGS.socialTitle}</h3></div>
+      <ul className="social-cards">
+        {platforms.map((p) => (
+          <li key={p} className="social-card">
+            <a href={socialUrl(p, social[p]!)} target="_blank" rel="noopener noreferrer">
+              <span className="social-card-platform">{SOCIAL_LABEL[p]}</span>
+              <span className="social-card-handle mono">{social[p]} ↗</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }: {
   dossier: Dossier;
   tab: DossierTab;
@@ -310,11 +435,14 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }:
 
   // Tab visibility — hide, don't disable. Data-driven and identical for every
   // official: record iff a legislative section exists; committees iff any
-  // membership is published; overview/money/connections always.
+  // membership is published; social (WO-16) iff any handle is published;
+  // overview/money/connections always.
+  const hasSocial = !!identity.social && Object.keys(identity.social).length > 0;
   const tabs: { id: DossierTab; label: string }[] = [{ id: "overview", label: STRINGS.tabOverview }];
   if (legislative) tabs.push({ id: "record", label: STRINGS.tabRecord });
   if (legislative && legislative.committees.length > 0) tabs.push({ id: "committees", label: STRINGS.tabCommittees });
   tabs.push({ id: "money", label: STRINGS.tabMoney }, { id: "connections", label: STRINGS.tabConnections });
+  if (hasSocial) tabs.push({ id: "social", label: STRINGS.tabSocial });
 
   // A deep link to a hidden tab clamps to overview WITHOUT rewriting the hash —
   // the link stays shareable as written; we just don't render dead chrome.
@@ -349,6 +477,8 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }:
         </div>
       </header>
 
+      <HeaderActions contact={identity.contact} />
+
       <TabBar tabs={tabs} active={active} onSelect={onSelectTab} idPrefix="dossier" />
 
       <div
@@ -363,6 +493,7 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }:
         {active === "committees" && legislative && <CommitteesTab dossier={dossier} />}
         {active === "money" && <MoneyTab dossier={dossier} />}
         {active === "connections" && <ConnectionsTab personId={dossier.person_id} onOpenPerson={onOpenPerson} />}
+        {active === "social" && hasSocial && <SocialTab social={identity.social!} />}
       </div>
 
       <footer className="dossier-foot">
