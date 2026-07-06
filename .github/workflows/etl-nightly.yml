@@ -5,13 +5,17 @@ on:
   workflow_dispatch:
     inputs:
       backfill_since: {description: "ISO date to backfill from", required: false}
+      full_rebuild:
+        description: "Bypass raw-lake hydration + freshness — re-fetch every source from scratch"
+        type: boolean
+        required: false
+        default: false
 
-# One full rebuild a night. The pipeline reconstructs everything from scratch each
-# run (raw is not persisted between runs), so there's no cheap "light" intra-day
-# pass — an every-4h full rebuild just re-ran the ~40-min legislation fetch six
-# times and, with the one-at-a-time guard below, churned cancelled runs. Sub-daily
-# freshness (PTR/votes, PRD G2) is a future optimization: persist raw to R2 and
-# re-fetch only the fast-moving sources incrementally.
+# The nightly hydrates dist/raw from R2 raw/latest/ (the last-good lake) and
+# re-fetches only sources past their freshness SLA (WO-10) — an interrupted or
+# re-dispatched run resumes instead of re-crawling the ~2-hour serial fetch, and
+# congress.gov + FEC run concurrently. The full_rebuild dispatch input bypasses
+# hydration + freshness for a clean from-scratch run.
 # One run at a time: a manual dispatch must never race the nightly's publish.
 concurrency:
   group: etl-nightly
@@ -20,13 +24,11 @@ concurrency:
 jobs:
   etl:
     runs-on: ubuntu-latest
-    # The from-scratch fetch walks congress.gov sponsored legislation per member
-    # (~40 min) then FEC totals + committee + by-employer rollups per candidate
-    # (~3 calls each, rate-limited) — sequentially, ~2.5-3 h against 1k/hr API
-    # caps. 120 min was too tight once WO-3 tripled the FEC volume, so a full
-    # rebuild timed out mid-fetch and never published. Give it real headroom
-    # (GitHub's job ceiling is 6 h); the standing fix is to parallelize the two
-    # independent API loops + persist raw to R2 for incremental fetch (see header).
+    # Incremental fetch (WO-10) resumes from the hydrated lake and runs the two
+    # long-pole API loops (congress.gov + FEC) concurrently, so a nightly is well
+    # under an hour. A full_rebuild still walks every source from scratch — keep
+    # generous headroom (GitHub's job ceiling is 6 h) so a clean rebuild can't time
+    # out mid-fetch and fail to publish.
     timeout-minutes: 330
     permissions:
       contents: write        # the pipeline-version tag push at the end of the run
@@ -49,7 +51,14 @@ jobs:
       - name: Unit tests (fail before spending API calls)
         run: pytest pipelines/tests -q
       - name: Fetch + land raw (immutable)
-        run: make fetch   # snapshots -> dist/raw (publish lands them in R2 /raw/{date}/)
+        # Default: hydrate dist/raw from R2 raw/latest/ and re-fetch only stale
+        # sources. full_rebuild=true bypasses both for a clean from-scratch fetch.
+        run: |
+          if [ "${{ github.event.inputs.full_rebuild }}" = "true" ]; then
+            python -m beholden_etl.jobs.fetch --full
+          else
+            make fetch
+          fi
       - name: Transform (DuckDB) + quality gates
         run: make transform   # FAILS closed if spine resolution < 0.995
       - name: Build serving artifacts

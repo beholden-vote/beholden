@@ -24,6 +24,11 @@ from ..config import PAGES_DIST, R2_BUCKET, RAW_DIST
 CACHE_CONTROL = "public, max-age=300, s-maxage=300"
 # Raw snapshots are write-once per run date: safe to cache forever.
 RAW_CACHE_CONTROL = "public, max-age=31536000, immutable"
+# WO-10 last-good pointer: a mirror of the newest good raw lake, overwritten each
+# successful run. fetch hydrates dist/raw from here to resume incrementally, so it
+# must NOT be cached — the fetcher always needs the current pointer.
+LATEST_PREFIX = "raw/latest/"
+LATEST_CACHE_CONTROL = "no-cache, max-age=0"
 REQUIRED_ENV = ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
 
 # Public-record data read cross-origin by the SPA (beholden.vote -> data.beholden.vote,
@@ -86,6 +91,16 @@ def _raw_batch(raw_dir: Path) -> list[tuple[Path, str]]:
             for p in sorted(raw_dir.rglob("*")) if p.is_file()]
 
 
+def _latest_batch(raw_dir: Path) -> list[tuple[Path, str]]:
+    """(file, bucket_key) pairs mirroring the raw lake at raw/latest/… (WO-10) —
+    the last-good pointer the next fetch hydrates from. Same files as _raw_batch,
+    keyed under the stable latest/ prefix instead of the dated partition."""
+    if not raw_dir.is_dir():
+        return []
+    return [(p, f"{LATEST_PREFIX}{p.relative_to(raw_dir).as_posix()}")
+            for p in sorted(raw_dir.rglob("*")) if p.is_file()]
+
+
 def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         dry_run: bool | None = None) -> int:
     data_dir = Path(data_dir)
@@ -95,12 +110,14 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
     if dry_run is None:
         dry_run = not all(os.environ.get(k) for k in REQUIRED_ENV)
 
+    latest = _latest_batch(Path(raw_dir))                  # WO-10 last-good pointer
     if dry_run:
         total = 0
-        for p, key in serving + raw:
+        for p, key in serving + raw + latest:
             total += p.stat().st_size
             print(f"publish[dry-run] {key:52} {p.stat().st_size:>8} B  {_content_type(p)}")
-        print(f"publish[dry-run]: {len(serving)} serving + {len(raw)} raw files, {total} B "
+        print(f"publish[dry-run]: {len(serving)} serving + {len(raw)} raw "
+              f"+ {len(latest)} latest-pointer files, {total} B "
               f"(set {'/'.join(REQUIRED_ENV)} to upload to r2://{R2_BUCKET})")
         return len(serving) + len(raw)
 
@@ -114,7 +131,16 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         client.put_object(
             Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
             ContentType=_content_type(p), CacheControl=RAW_CACHE_CONTROL)
-    print(f"publish: {len(serving)} serving + {len(raw)} raw -> r2://{R2_BUCKET}/")
+    # --- WO-10: write the last-good pointer AFTER the run's raw lake is uploaded.
+    # A mirror of dist/raw at raw/latest/…, overwritten each successful run; the
+    # next fetch hydrates from it to resume incrementally instead of re-crawling.
+    # Written last so the pointer only ever names a fully-landed lake.
+    for p, key in latest:
+        client.put_object(
+            Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
+            ContentType=_content_type(p), CacheControl=LATEST_CACHE_CONTROL)
+    print(f"publish: {len(serving)} serving + {len(raw)} raw "
+          f"+ {len(latest)} latest-pointer -> r2://{R2_BUCKET}/")
     return len(serving) + len(raw)
 
 

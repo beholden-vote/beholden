@@ -1,19 +1,39 @@
 """Stage 1 — land raw snapshots (immutable) into dist/raw/{source}/.
 
-Pulls the federal legislative slice: the unitedstates crosswalk (identity), the
-congress.gov current membership (party/state/district/photo), and the Voteview
-DW-NOMINATE table (ideology). Writes a manifest.json recording, per source, the
-retrieved_at + source_url that transform/build stamp into provenance envelopes.
+Pulls the federal legislative slice plus the state / money / disclosure sources.
+Writes a manifest.json recording, per source, the retrieved_at + source_url that
+transform/build stamp into provenance envelopes, and (WO-10) each source's
+**status, item count, and wall-time**.
 
 Raw is write-once per run: transform reads only from here, never the network, so
 a published fact is always reproducible from the lake (contracts §7).
+
+WO-10 — resilient · incremental · parallel:
+  * **Hydrate** dist/raw from R2 `raw/latest/…` at the start so an interrupted /
+    re-dispatched run resumes from the last-good lake instead of re-crawling.
+  * **Incremental:** a source whose hydrated snapshot is still within its
+    `config.SOURCES[key].freshness_sla_hours` is kept verbatim (carrying its
+    ORIGINAL retrieved_at — never restamped) rather than re-fetched. `full=True`
+    (the `--full` dispatch input) bypasses this and re-fetches everything.
+  * **Parallel:** congress.gov (5k/hr) and FEC (1k/hr) are separate services with
+    independent rate limits, so their loops — and the other bulk pulls — run
+    concurrently in a thread pool. Each source keeps its own in-client governor,
+    so wall-clock ≈ max(loops), not sum, without exceeding any cap.
+  * **Fail-closed preserved:** on a transient per-item failure we fall back to that
+    item's last-good hydrated snapshot (correct, slightly stale) rather than
+    dropping it. We only hard-fail when there is no prior snapshot AND absence
+    would fabricate a value (legislation counts ⇒ a false "sponsored 0"). Where
+    absence is honest (FEC ⇒ no money section), a missing item stays absent.
 """
 from __future__ import annotations
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .. import rawlake
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
@@ -31,80 +51,100 @@ def _write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, separators=(",", ":")))
 
 
-def run(raw_dir: str | Path = RAW_DIST) -> dict:
-    raw = Path(raw_dir)
-    manifest: dict = {"generated_at": _now(), "congress": CONGRESS, "sources": {}}
-
-    # --- identity crosswalk (unitedstates/congress-legislators) ---
+# ---------------------------------------------------------------------------
+# Per-source fetch functions. Each returns the manifest fragment for its source
+# key; each is self-contained (builds its own client, so its rate governor is
+# private to the calling thread) and prints its own progress. `prior` is the
+# hydrated last-good manifest; `raw` is the (already-hydrated) lake root.
+# ---------------------------------------------------------------------------
+def fetch_unitedstates_legislators(raw: Path, prior: dict) -> dict:
+    """Identity crosswalk + committee roster/memberships (bulk YAML, one source
+    family under the unitedstates_legislators envelope)."""
     legs = legislators.fetch_current()
     _write_json(raw / "unitedstates_legislators" / "legislators-current.json", legs)
-    manifest["sources"]["unitedstates_legislators"] = {
-        "retrieved_at": _now(), "source_url": LEGISLATORS_URL, "count": len(legs)}
-
-    # --- committee roster + current memberships (WO-6a): same source family, so
-    # they land under the unitedstates_legislators envelope. Landed as JSON so
-    # transform reads only from raw (contracts §7). ---
     committees = legislators.fetch_committees()
     membership = legislators.fetch_committee_membership()
     _write_json(raw / "unitedstates_legislators" / "committees-current.json", committees)
     _write_json(raw / "unitedstates_legislators" / "committee-membership-current.json", membership)
-    manifest["sources"]["unitedstates_legislators"]["committees"] = len(committees)
-    manifest["sources"]["unitedstates_legislators"]["committee_memberships"] = sum(
-        len(v or []) for v in membership.values())
+    return {
+        "retrieved_at": _now(), "source_url": LEGISLATORS_URL, "count": len(legs),
+        "committees": len(committees),
+        "committee_memberships": sum(len(v or []) for v in membership.values())}
 
-    # --- current membership (congress.gov): party, state, district, photo ---
+
+def fetch_congress_gov(raw: Path, prior: dict) -> dict:
+    """Current membership + per-member sponsored/cosponsored legislation. The long
+    pole; runs concurrently with FEC. FAIL-CLOSED: a per-member failure does NOT
+    skip — a dropped member would publish a false 'sponsored 0'. Instead we fall
+    back to that member's last-good hydrated snapshot; only when there is no prior
+    snapshot does the exception propagate and sink the run (never fabricate)."""
     client = congress_gov.CongressGovClient()
     members = list(client.current_members(CONGRESS))
     _write_json(raw / "congress.gov" / f"members-{CONGRESS}.json", members)
 
-    # --- legislative activity per member (E2): sponsored bills walked in full
-    # (exact became-law counts) + cosponsored total. The long pole of the run. ---
     leg_dir = raw / "congress.gov" / "legislation"
     bioguides = [m["bioguideId"] for m in members if m.get("bioguideId")]
+    reused = 0
     for i, bio in enumerate(bioguides, 1):
-        _write_json(leg_dir / f"{bio}.json", {
-            "bioguide": bio,
-            "sponsored": client.sponsored_legislation(bio),
-            "cosponsored_count": client.cosponsored_count(bio)})
+        rel = Path("congress.gov") / "legislation" / f"{bio}.json"
+        try:
+            _write_json(leg_dir / f"{bio}.json", {
+                "bioguide": bio,
+                "sponsored": client.sponsored_legislation(bio),
+                "cosponsored_count": client.cosponsored_count(bio)})
+        except Exception as e:
+            # Transient per-item failure. Absence here fabricates (a missing
+            # legislation file ⇒ counts 0). Fall back to the last-good snapshot if
+            # the lake has one (correct, slightly stale); otherwise fail closed.
+            snap = rawlake.last_good(raw, rel)
+            if snap is None:
+                raise
+            _write_json(leg_dir / f"{bio}.json", snap)   # keep the last-good file
+            reused += 1
+            print(f"fetch: congress.gov {bio} reused last-good snapshot ({type(e).__name__})")
         if i % 100 == 0 or i == len(bioguides):
             print(f"fetch: legislation {i}/{len(bioguides)} members")
 
-    manifest["sources"]["congress.gov"] = {
+    meta = {
         "retrieved_at": _now(),
         "source_url": f"https://www.congress.gov/members?q=%7B%22congress%22%3A{CONGRESS}%7D",
         "count": len(members), "legislation_members": len(bioguides)}
+    if reused:
+        meta["legislation_reused"] = reused
+    return meta
 
-    # --- ideology (Voteview DW-NOMINATE) ---
+
+def fetch_voteview(raw: Path, prior: dict) -> dict:
+    """DW-NOMINATE member scores + roll-call metadata + per-member vote casts
+    (static CSV bulk pulls)."""
     csv_text = voteview.member_scores_csv(CONGRESS)
     (raw / "voteview").mkdir(parents=True, exist_ok=True)
     # Explicit UTF-8: bionames carry accents; platform-default cp1252 would corrupt.
     (raw / "voteview" / f"HS{CONGRESS}_members.csv").write_text(csv_text, encoding="utf-8")
-    manifest["sources"]["voteview"] = {
-        "retrieved_at": _now(), "source_url": VOTEVIEW_URL,
-        "count": max(csv_text.count("\n") - 1, 0)}
-
-    # --- roll-call votes (WO-1): rollcalls (metadata) + votes (per-member casts).
-    # Same Voteview source envelope; landed alongside the members table so the
-    # transform reads only from raw (contracts §7). votes is the ~9 MB long pole.
     rollcalls_text = voteview.rollcalls_csv(CONGRESS)
     (raw / "voteview" / f"HS{CONGRESS}_rollcalls.csv").write_text(rollcalls_text, encoding="utf-8")
-    votes_text = voteview.votes_csv(CONGRESS)
+    votes_text = voteview.votes_csv(CONGRESS)   # the ~9 MB long pole
     (raw / "voteview" / f"HS{CONGRESS}_votes.csv").write_text(votes_text, encoding="utf-8")
-    manifest["sources"]["voteview"]["rollcalls"] = max(rollcalls_text.count("\n") - 1, 0)
-    manifest["sources"]["voteview"]["votes"] = max(votes_text.count("\n") - 1, 0)
+    return {
+        "retrieved_at": _now(), "source_url": VOTEVIEW_URL,
+        "count": max(csv_text.count("\n") - 1, 0),
+        "rollcalls": max(rollcalls_text.count("\n") - 1, 0),
+        "votes": max(votes_text.count("\n") - 1, 0)}
 
-    # --- campaign finance (FEC, E3 + WO-3): candidate cycle totals + itemized
-    # contributor rollups. Keyed via the crosswalk's fec candidate ids; per
-    # candidate, one totals lookup (E3) then a principal-committee resolve +
-    # by_employer rollup (WO-3). Contributors land per candidate so transform
-    # reads only from raw (contracts §7); a member without a committee simply
-    # gets no contributors file (absent != zero). ---
+
+def fetch_fec(raw: Path, prior: dict) -> dict:
+    """FEC candidate cycle totals + itemized contributor rollups (E3 + WO-3). The
+    run's other long pole; runs concurrently with congress.gov. A per-candidate
+    failure skips rather than sinking the federal slice — FEC absence is HONEST
+    (no money section, never a fabricated $0), so no last-good fallback is needed.
+    Progress prints every 50 so a stall is visible live (PYTHONUNBUFFERED)."""
+    # The legislators snapshot lands from its own task (which is run to completion
+    # before the pool starts) or from the hydrated lake — read it once available.
+    legs = _read_legislators(raw)
     fec_client = fec.FECClient()
     fec_dir = raw / "fec" / "totals"
     contrib_dir = raw / "fec" / "contributors"
-    # One FEC candidate id per legislator (deduped). FEC is the run's other long
-    # pole; a per-candidate failure skips rather than sinking the federal slice,
-    # and progress prints every 50 so a stall is visible live (PYTHONUNBUFFERED).
+    # One FEC candidate id per legislator (deduped).
     fec_cands: list[str] = []
     seen_cand: set[str] = set()
     for leg in legs:
@@ -131,12 +171,15 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
             print(f"fetch: fec {i}/{len(fec_cands)} candidates")
     fec_count = len(list(fec_dir.glob("*.json"))) if fec_dir.exists() else 0
     contrib_count = len(list(contrib_dir.glob("*.json"))) if contrib_dir.exists() else 0
-    manifest["sources"]["fec"] = {
+    return {
         "retrieved_at": _now(),
         "source_url": f"https://www.fec.gov/data/candidates/?cycle={FEC_CYCLE}",
         "count": fec_count, "contributors": contrib_count}
 
-    # --- state legislators (OpenStates, E4): current people, bulk CSV per state ---
+
+def fetch_openstates(raw: Path, prior: dict) -> dict:
+    """State legislators, bulk CSV per state (E4). A single state hiccup skips —
+    state coverage is honest-absent, not fabricated."""
     os_dir = raw / "openstates" / "people"
     os_count = 0
     for state in openstates.STATE_SLUGS:
@@ -145,13 +188,15 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         except Exception as e:  # a single state hiccup shouldn't sink the run
             print(f"fetch: openstates {state} skipped ({type(e).__name__})")
             continue
-        (os_dir).mkdir(parents=True, exist_ok=True)
+        os_dir.mkdir(parents=True, exist_ok=True)
         (os_dir / f"{state}.csv").write_text(csv_text, encoding="utf-8")
         os_count += max(csv_text.count("\n") - 1, 0)
-    manifest["sources"]["openstates"] = {
-        "retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
+    return {"retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
 
-    # --- STOCK Act disclosures (House Clerk Periodic Transaction Reports) ---
+
+def fetch_house_clerk(raw: Path, prior: dict) -> dict:
+    """House Clerk STOCK Act Periodic Transaction Reports (per-year index). A
+    per-year hiccup skips — disclosure absence is honest (no filings surfaced)."""
     hc_filings: list[dict] = []
     for yr in (2024, 2025, 2026):   # the current term, plus late-prior-year trades
         try:
@@ -159,46 +204,140 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
         except Exception as e:
             print(f"fetch: house_clerk {yr} skipped ({type(e).__name__})")
     _write_json(raw / "house_clerk" / "ptr.json", hc_filings)
-    manifest["sources"]["house_clerk"] = {
-        "retrieved_at": _now(), "source_url": house_clerk.DISCLOSURE_URL, "count": len(hc_filings)}
+    return {"retrieved_at": _now(), "source_url": house_clerk.DISCLOSURE_URL,
+            "count": len(hc_filings)}
 
-    # --- WO-9: WA PDC bulk disclosure (trusted extraction, Public Domain) ---
-    # Land the itemized snapshot + its companion control-total summary, plus a
-    # per-source manifest recording the exact-bytes SHA-256, the observed header
-    # (schema-drift fingerprint), and the retrieval time. Immutable: transform
-    # reads only from here, so a silent re-release with different content forces a
-    # re-review via the hash (docs/TRUSTED-EXTRACTION.md §4.1). A network hiccup
-    # skips the source for this run rather than sinking the federal slice.
-    # Gated OFF (config.WA_PDC_ENABLED) until the itemized↔summary reconciliation
-    # is fixed — no point pulling ~380k rows the transform gate will reject.
-    if WA_PDC_ENABLED:
-        try:
-            wa_items = wa_pdc.fetch_itemized()
-            wa_summary = wa_pdc.fetch_summary()
-            wa_bytes = wa_pdc.snapshot_bytes(wa_items)
-            wa_sha = wa_pdc.sha256(wa_bytes)
-            wa_retrieved = _now()
-            _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
-            _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
-            _write_json(raw / "wa_pdc" / "manifest.json", {
-                "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
-                "header": list(wa_pdc.CONTRACT.header),
-                "contract_version": wa_pdc.CONTRACT.contract_version,
-                # Explicit: this snapshot is the current-cycle window, not all-time.
-                "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
-                "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
-            manifest["sources"]["wa_pdc"] = {
-                "retrieved_at": wa_retrieved,
+
+def fetch_wa_pdc(raw: Path, prior: dict) -> dict | None:
+    """WA PDC bulk disclosure (WO-9, Tier A). Gated OFF via config.WA_PDC_ENABLED
+    until the itemized↔summary reconciliation is fixed; when off, returns None and
+    the source is absent from the manifest (unchanged behavior). A network hiccup
+    skips the source for this run rather than sinking the federal slice."""
+    if not WA_PDC_ENABLED:
+        return None
+    try:
+        wa_items = wa_pdc.fetch_itemized()
+        wa_summary = wa_pdc.fetch_summary()
+        wa_bytes = wa_pdc.snapshot_bytes(wa_items)
+        wa_sha = wa_pdc.sha256(wa_bytes)
+        wa_retrieved = _now()
+        _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
+        _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
+        _write_json(raw / "wa_pdc" / "manifest.json", {
+            "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
+            "header": list(wa_pdc.CONTRACT.header),
+            "contract_version": wa_pdc.CONTRACT.contract_version,
+            "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
+            "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
+        return {"retrieved_at": wa_retrieved,
                 "source_url": wa_pdc.CONTRACT.retrieval["itemized_json"],
                 "count": len(wa_items), "file_sha256": wa_sha}
-        except Exception as e:
-            print(f"fetch: wa_pdc skipped ({type(e).__name__})")
+    except Exception as e:
+        print(f"fetch: wa_pdc skipped ({type(e).__name__})")
+        return None
 
+
+def _read_legislators(raw: Path) -> list[dict]:
+    """The landed crosswalk, needed by the FEC task to enumerate candidate ids.
+    The lead source lands it before the pool starts and it also survives in the
+    hydrated lake, so this is normally a direct read; the short wait only guards a
+    reorder if the lead is ever moved into the pool."""
+    path = raw / "unitedstates_legislators" / "legislators-current.json"
+    for _ in range(600):                 # up to ~60s; legislators is a fast bulk pull
+        if path.exists():
+            try:
+                return json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        time.sleep(0.1)
+    raise RuntimeError("fetch: legislators snapshot never landed for FEC candidate enumeration")
+
+
+# Registry: source keys in run order. unitedstates_legislators must resolve before
+# FEC (FEC reads its snapshot), so it is the serial lead; congress.gov and FEC are
+# the long poles, fanned out in parallel with the remaining bulk pulls.
+_LEAD = "unitedstates_legislators"
+_FETCHERS = {
+    "unitedstates_legislators": fetch_unitedstates_legislators,
+    "congress.gov": fetch_congress_gov,
+    "voteview": fetch_voteview,
+    "fec": fetch_fec,
+    "openstates": fetch_openstates,
+    "house_clerk": fetch_house_clerk,
+    "wa_pdc": fetch_wa_pdc,
+}
+# Manifest source-key -> the config.SOURCES key whose SLA governs its freshness.
+# wa_pdc has no config.SOURCES entry (experimental, gated off); it is never
+# freshness-skipped and always runs its (no-op-when-disabled) fetcher.
+_SLA_KEY = {"wa_pdc": None}
+
+
+def _run_source(key: str, raw: Path, prior: dict, full: bool) -> tuple[str, dict | None, str, float]:
+    """Execute one source, returning (key, manifest_fragment|None, status, seconds).
+    Honors the freshness gate: a fresh hydrated snapshot is kept verbatim (status
+    'fresh', carrying its ORIGINAL retrieved_at) unless `full`. Never restamps
+    reused data as freshly fetched."""
+    started = time.monotonic()
+    sla_key = _SLA_KEY.get(key, key)
+    # Incremental skip: a hydrated snapshot still within its SLA is reused as-is.
+    if not full and sla_key is not None and rawlake.source_is_fresh(prior, sla_key):
+        frag = dict(rawlake.prior_source(prior, sla_key) or {})   # ORIGINAL retrieved_at
+        return key, frag, "fresh", time.monotonic() - started
+    frag = _FETCHERS[key](raw, prior)
+    status = "fetched" if frag is not None else "absent"
+    return key, frag, status, time.monotonic() - started
+
+
+def run(raw_dir: str | Path = RAW_DIST, *, full: bool = False,
+        max_workers: int = 4) -> dict:
+    """Fetch every source into `raw_dir` and write manifest.json.
+
+    full=True re-fetches everything (the `--full` / full_rebuild dispatch input),
+    bypassing hydration + freshness. Otherwise the lake is hydrated from R2
+    `raw/latest/…` and each source re-fetches only when its snapshot is stale.
+    """
+    raw = Path(raw_dir)
+    raw.mkdir(parents=True, exist_ok=True)
+
+    if full:
+        print("fetch: full rebuild — bypassing hydration + freshness")
+        prior: dict = {}
+    else:
+        rawlake.hydrate(raw)
+        prior = rawlake.hydrated_manifest(raw)
+
+    manifest: dict = {"generated_at": _now(), "congress": CONGRESS, "sources": {}}
+    timings: dict = {}
+
+    # unitedstates_legislators is a hard predecessor of FEC (FEC enumerates
+    # candidates from its snapshot). Run it to completion first so its snapshot is
+    # present, then fan the rest — including the two long poles congress.gov + FEC
+    # — out in parallel. Each source's own in-client rate governor keeps it under
+    # its cap; the pool only overlaps INDEPENDENT services, so no cap is exceeded.
+    key, frag, status, secs = _run_source(_LEAD, raw, prior, full)
+    if frag is not None:
+        manifest["sources"][key] = frag
+    timings[key] = {"status": status, "seconds": round(secs, 1)}
+
+    rest = [k for k in _FETCHERS if k != _LEAD]
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_run_source, k, raw, prior, full): k for k in rest}
+        for fut in as_completed(futures):
+            key, frag, status, secs = fut.result()
+            if frag is not None:
+                manifest["sources"][key] = frag
+            timings[key] = {"status": status, "seconds": round(secs, 1)}
+
+    manifest["fetch_timings"] = timings
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():
-        print(f"fetch: {src:28} {meta['count']:>5} records")
+        t = timings.get(src, {})
+        print(f"fetch: {src:28} {meta['count']:>7} records  "
+              f"[{t.get('status', '?'):7} {t.get('seconds', 0):>6.1f}s]")
     return manifest
 
 
 if __name__ == "__main__":
-    run()
+    import sys
+
+    run(full="--full" in sys.argv[1:])

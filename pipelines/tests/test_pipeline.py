@@ -1232,3 +1232,273 @@ def test_voteview_member_icpsr_to_bioguide_fills_crosswalk():
     )
     m = voteview.member_icpsr_to_bioguide(csv_text)
     assert m == {"20301": "R000575", "21102": "S001185"}
+
+
+# --- WO-10 resilient / incremental / parallel fetch -------------------------
+# The rawlake decisions (freshness, last-good fallback, graceful no-R2
+# degradation) and the fetch orchestrator's fail-closed policy are unit-tested
+# with fixtures/monkeypatch — the real R2 round-trip is validated in CI (no creds
+# here). No source client's network behavior is exercised; the tests stub the
+# per-source fetchers so only the resilience wiring is under test.
+from httpx import ReadTimeout as _ReadTimeout             # noqa: E402
+from beholden_etl import rawlake as _rawlake              # noqa: E402
+from beholden_etl.jobs import fetch as _fetch             # noqa: E402
+
+
+def test_rawlake_freshness_uses_config_sla():
+    """A source snapshot younger than its config.SOURCES freshness_sla_hours is
+    'fresh' (re-fetch may be skipped); older, missing, or unparseable is not."""
+    now = datetime.now(timezone.utc)
+    # congress.gov SLA is 24h. 1h old -> fresh; 48h old -> stale.
+    fresh_ts = (now - timedelta(hours=1)).isoformat(timespec="seconds")
+    stale_ts = (now - timedelta(hours=48)).isoformat(timespec="seconds")
+    assert _rawlake.is_fresh("congress.gov", fresh_ts, now=now) is True
+    assert _rawlake.is_fresh("congress.gov", stale_ts, now=now) is False
+    assert _rawlake.is_fresh("congress.gov", None, now=now) is False
+    assert _rawlake.is_fresh("congress.gov", "not-a-timestamp", now=now) is False
+    # Unknown source has no SLA -> never fresh (always fetch).
+    assert _rawlake.is_fresh("no_such_source", fresh_ts, now=now) is False
+    # A naive (tz-less) stamp is tolerated as UTC, not a crash.
+    naive = (now - timedelta(hours=2)).replace(tzinfo=None).isoformat(timespec="seconds")
+    assert _rawlake.age_hours(naive, now=now) == pytest.approx(2, abs=0.1)
+
+
+def test_rawlake_source_is_fresh_reads_prior_manifest():
+    """source_is_fresh reads a source's retrieved_at from an already-loaded prior
+    manifest and applies its SLA."""
+    now = datetime.now(timezone.utc)
+    prior = {"sources": {
+        "voteview": {"retrieved_at": (now - timedelta(hours=1)).isoformat(), "count": 5},
+        "house_clerk": {"retrieved_at": (now - timedelta(hours=48)).isoformat(), "count": 9}}}
+    # voteview SLA is 60 days -> 1h is fresh; house_clerk SLA 24h -> 48h is stale.
+    assert _rawlake.source_is_fresh(prior, "voteview", now=now) is True
+    assert _rawlake.source_is_fresh(prior, "house_clerk", now=now) is False
+    # a source absent from the prior manifest is not fresh (must fetch)
+    assert _rawlake.source_is_fresh(prior, "fec", now=now) is False
+
+
+def test_rawlake_hydrate_degrades_without_r2(tmp_path, monkeypatch):
+    """No R2 credentials -> hydration is a graceful no-op (returns 0), so local
+    runs and CI unit tests fetch everything live."""
+    for k in _rawlake.REQUIRED_ENV:
+        monkeypatch.delenv(k, raising=False)
+    assert _rawlake.r2_available() is False
+    assert _rawlake.hydrate(tmp_path / "raw") == 0
+
+
+def test_rawlake_hydrate_populates_from_mock_r2(tmp_path):
+    """With a mock R2 client, hydrate pulls every raw/latest/ object into the lake
+    at its lake-relative path (the last-good pointer -> resumable fetch)."""
+    objects = {
+        "raw/latest/manifest.json": b'{"sources":{}}',
+        "raw/latest/congress.gov/legislation/R000001.json": b'{"bioguide":"R000001"}',
+    }
+
+    class FakeBody:
+        def __init__(self, data):
+            self._data = data
+
+        def read(self):
+            return self._data
+
+    class FakePaginator:
+        def paginate(self, **_):
+            yield {"Contents": [{"Key": k} for k in objects]}
+
+    class FakeClient:
+        def get_paginator(self, _name):
+            return FakePaginator()
+
+        def get_object(self, Bucket, Key):
+            return {"Body": FakeBody(objects[Key])}
+
+    raw = tmp_path / "raw"
+    n = _rawlake.hydrate(raw, client=FakeClient())
+    assert n == 2
+    assert (raw / "manifest.json").read_bytes() == b'{"sources":{}}'
+    assert (raw / "congress.gov" / "legislation" / "R000001.json").exists()
+    # the hydrated manifest is then readable for the freshness basis
+    assert _rawlake.hydrated_manifest(raw) == {"sources": {}}
+
+
+def test_rawlake_last_good_returns_snapshot_or_none(tmp_path):
+    """last_good returns a single hydrated item, or None when it is absent — the
+    per-item fallback the fetch fail-closed policy consults."""
+    raw = tmp_path / "raw"
+    rel = Path("congress.gov") / "legislation" / "R000001.json"
+    (raw / rel).parent.mkdir(parents=True)
+    (raw / rel).write_text(json.dumps({"bioguide": "R000001", "sponsored": [1, 2]}))
+    assert _rawlake.last_good(raw, rel)["bioguide"] == "R000001"
+    assert _rawlake.has_snapshot(raw, rel) is True
+    assert _rawlake.last_good(raw, "congress.gov/legislation/NOPE.json") is None
+    assert _rawlake.has_snapshot(raw, "congress.gov/legislation/NOPE.json") is False
+
+
+def _stub_fetchers(monkeypatch, calls):
+    """Replace every per-source fetcher with a fast stub that records the call and
+    writes a marker file, so the orchestrator runs offline. `calls` is populated
+    with the source keys that actually fetched."""
+    def make(key):
+        def fn(raw, prior):
+            calls.add(key)
+            _fetch._write_json(Path(raw) / key / "stub.json", {"k": key})
+            return {"retrieved_at": _fetch._now(), "source_url": f"https://{key}", "count": 1}
+        return fn
+    stubs = {k: make(k) for k in _fetch._FETCHERS}
+    monkeypatch.setattr(_fetch, "_FETCHERS", stubs)
+
+
+def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monkeypatch):
+    """A full run fans every source out concurrently and writes a manifest with a
+    per-source status + count and a fetch_timings block (status + wall-time)."""
+    calls: set[str] = set()
+    _stub_fetchers(monkeypatch, calls)
+    manifest = _fetch.run(tmp_path / "raw", full=True)
+    # every source fetcher ran (wa_pdc's stub returns a fragment here; the real
+    # fetcher returns None when disabled — covered separately below).
+    assert calls == {"unitedstates_legislators", "congress.gov", "voteview",
+                     "fec", "openstates", "house_clerk", "wa_pdc"}
+    for meta in manifest["sources"].values():
+        assert meta["count"] == 1 and "retrieved_at" in meta
+    timings = manifest["fetch_timings"]
+    assert timings["congress.gov"]["status"] == "fetched"
+    for t in timings.values():
+        assert isinstance(t["seconds"], (int, float))
+
+
+def test_fetch_wa_pdc_absent_when_disabled(tmp_path):
+    """The real wa_pdc fetcher returns None when gated off (config.WA_PDC_ENABLED
+    is False), so the orchestrator marks it 'absent' and omits it from sources —
+    the pre-WO-10 behavior, preserved."""
+    assert _fetch.fetch_wa_pdc(tmp_path / "raw", prior={}) is None
+
+
+def test_fetch_incremental_skips_fresh_and_keeps_original_retrieved_at(tmp_path, monkeypatch):
+    """A hydrated snapshot still within its SLA is REUSED (status 'fresh') and
+    carries its ORIGINAL retrieved_at — cached data is never restamped as freshly
+    fetched. Stale/absent sources still fetch."""
+    now = datetime.now(timezone.utc)
+    fresh_ts = (now - timedelta(hours=1)).isoformat(timespec="seconds")
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "manifest.json").write_text(json.dumps({"sources": {
+        "voteview": {"retrieved_at": fresh_ts, "source_url": "https://vv", "count": 42}}}))
+    monkeypatch.setattr(_rawlake, "hydrate", lambda *a, **k: 0)   # lake already seeded
+    calls: set[str] = set()
+    _stub_fetchers(monkeypatch, calls)
+
+    manifest = _fetch.run(raw, full=False)
+    # voteview was fresh -> NOT re-fetched, and kept its original stamp + count
+    assert "voteview" not in calls
+    assert manifest["sources"]["voteview"]["retrieved_at"] == fresh_ts
+    assert manifest["sources"]["voteview"]["count"] == 42
+    assert manifest["fetch_timings"]["voteview"]["status"] == "fresh"
+    # a stale/absent source (fec) still fetched fresh
+    assert "fec" in calls
+    assert manifest["fetch_timings"]["fec"]["status"] == "fetched"
+
+
+def test_fetch_full_rebuild_ignores_fresh_snapshot(tmp_path, monkeypatch):
+    """full=True bypasses the freshness gate — even a fresh snapshot is re-fetched."""
+    now = datetime.now(timezone.utc)
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "manifest.json").write_text(json.dumps({"sources": {
+        "voteview": {"retrieved_at": now.isoformat(timespec="seconds"),
+                     "source_url": "https://vv", "count": 42}}}))
+    monkeypatch.setattr(_rawlake, "hydrate", lambda *a, **k: 0)
+    calls: set[str] = set()
+    _stub_fetchers(monkeypatch, calls)
+    _fetch.run(raw, full=True)
+    assert "voteview" in calls                          # full rebuild re-fetches it
+
+
+# --- WO-10 §4 fail-closed policy for the congress.gov legislation loop -------
+class _FlakyCongress:
+    """A congress.gov client stand-in whose per-member calls raise ReadTimeout, to
+    exercise the last-good fallback vs hard-fail decision without any network."""
+    def __init__(self, members):
+        self._members = members
+
+    def current_members(self, _congress):
+        return iter(self._members)
+
+    def sponsored_legislation(self, _bio):
+        raise _ReadTimeout("simulated slow patch")
+
+    def cosponsored_count(self, _bio):
+        raise _ReadTimeout("simulated slow patch")
+
+
+def _install_flaky_congress(monkeypatch, members):
+    monkeypatch.setattr(_fetch.congress_gov, "CongressGovClient",
+                        lambda *a, **k: _FlakyCongress(members))
+
+
+def test_congress_gov_per_item_falls_back_to_last_good_snapshot(tmp_path, monkeypatch):
+    """A transient per-member ReadTimeout WITH a prior snapshot in the lake ->
+    the run completes using the cached (slightly stale) snapshot rather than
+    dropping the member (which would fabricate a false 'sponsored 0')."""
+    raw = tmp_path / "raw"
+    members = [{"bioguideId": "R000001"}]
+    _install_flaky_congress(monkeypatch, members)
+    rel = raw / "congress.gov" / "legislation" / "R000001.json"
+    rel.parent.mkdir(parents=True)
+    cached = {"bioguide": "R000001", "sponsored": [{"x": 1}], "cosponsored_count": 7}
+    rel.write_text(json.dumps(cached))
+
+    meta = _fetch.fetch_congress_gov(raw, prior={})
+    # the failing member's file is the last-good snapshot, not dropped/zeroed
+    assert json.loads(rel.read_text()) == cached
+    assert meta["legislation_reused"] == 1
+    assert meta["count"] == 1
+
+
+def test_congress_gov_per_item_hard_fails_without_prior_snapshot(tmp_path, monkeypatch):
+    """A transient per-member failure with NO prior snapshot AND where absence
+    would fabricate (legislation counts) MUST fail closed — the exception
+    propagates rather than publish a false 'sponsored 0'."""
+    raw = tmp_path / "raw"
+    members = [{"bioguideId": "R000001"}]
+    _install_flaky_congress(monkeypatch, members)
+    with pytest.raises(_ReadTimeout):                   # no cached snapshot -> fail closed
+        _fetch.fetch_congress_gov(raw, prior={})
+
+
+def test_fec_absence_is_honest_not_fail_closed(tmp_path, monkeypatch):
+    """FEC per-candidate failure is skipped (absence is honest -> no money
+    section, never a fabricated $0). The loop completes and the source stays
+    present with an honest count, no last-good fallback needed."""
+    raw = tmp_path / "raw"
+    (raw / "unitedstates_legislators").mkdir(parents=True)
+    (raw / "unitedstates_legislators" / "legislators-current.json").write_text(
+        json.dumps([{"id": {"fec": ["H8TN06001"]}}]))
+
+    class _FlakyFEC:
+        def candidate_totals(self, *a, **k):
+            raise _ReadTimeout("boom")
+
+        def principal_committee(self, *a, **k):
+            raise _ReadTimeout("boom")
+
+        def top_contributors_by_employer(self, *a, **k):
+            return []
+    monkeypatch.setattr(_fetch.fec, "FECClient", lambda *a, **k: _FlakyFEC())
+
+    meta = _fetch.fetch_fec(raw, prior={})              # does NOT raise
+    assert meta["count"] == 0 and meta["contributors"] == 0
+
+
+def test_publish_writes_last_good_pointer_dry_run(tmp_path):
+    """publish mirrors the raw lake to raw/latest/ (the last-good pointer fetch
+    hydrates from). Keys use the stable latest/ prefix, not a dated partition."""
+    from beholden_etl.jobs import publish as _publish
+    raw = tmp_path / "raw"
+    (raw / "congress.gov").mkdir(parents=True)
+    (raw / "manifest.json").write_text('{"generated_at":"2026-07-06T00:00:00+00:00"}')
+    (raw / "congress.gov" / "members-119.json").write_text("[]")
+    latest = _publish._latest_batch(raw)
+    keys = {k for _, k in latest}
+    assert "raw/latest/manifest.json" in keys
+    assert "raw/latest/congress.gov/members-119.json" in keys
+    assert all(k.startswith("raw/latest/") for k in keys)
