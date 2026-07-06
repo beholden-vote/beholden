@@ -56,6 +56,9 @@ export interface Dossier {
       /** WO-1: the roll call's outcome, and the bill it decided (null for
        *  procedural votes with no bill). bill_url links the bill page when known. */
       result?: string; bill_id?: string | null; bill_url?: string | null;
+      /** WO-12 (pipeline, in flight): the decided bill's display title. Optional
+       *  and absent-safe — feeds without it render the row unchanged. */
+      bill_title?: string | null;
       /** WO-8: congress.gov's own policy-area taxonomy for the decided bill, if
        *  any — a descriptive chip, never our inference. Absent for procedural
        *  votes or bills with no classified policy area. */

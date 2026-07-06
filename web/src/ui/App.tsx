@@ -16,7 +16,7 @@ import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
 import {
   parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
   parseMethodologyHash, methodologyHash,
-  type Route,
+  type Route, type DossierTab,
 } from "../router";
 
 const LEVEL_TITLES: Record<string, string> = {
@@ -81,7 +81,7 @@ type PanelState =
   | { kind: "closed" }
   | { kind: "stack"; entries: StackEntry[] }
   | { kind: "ballot"; entries: StackEntry[] }
-  | { kind: "dossier"; dossier: Dossier; from?: StackEntry[] };
+  | { kind: "dossier"; dossier: Dossier; tab: DossierTab; from?: StackEntry[] };
 
 // The pin-index feed a division's ocd_id belongs to (its map layer). Used to
 // resolve a #/d/{ocd_id} deep-link to the pins under that division.
@@ -189,16 +189,26 @@ export function App({ mapRef, handleRef }: {
 
   // Open a dossier by id. `byPin`/`from` are optional context: a map/stack open
   // carries the pin (for the back-target) — a #/p/ deep-link has neither and
-  // fetches straight from the id. Writes the permalink hash (replaceState).
-  const openDossier = useCallback(async (personId: string, from?: StackEntry[]) => {
+  // fetches straight from the id. Writes the permalink hash (replaceState),
+  // including the tab segment when opening on a non-default tab (WO-11).
+  const openDossier = useCallback(async (personId: string, from?: StackEntry[], tab: DossierTab = "overview") => {
     setBusy(true);
     const dossier = await loadDossier(personId);
     setBusy(false);
     if (dossier) {
-      setPanel({ kind: "dossier", dossier, from });
-      replaceHash(personHash(personId));
+      setPanel({ kind: "dossier", dossier, tab, from });
+      replaceHash(personHash(personId, tab));
     }
   }, []);
+
+  // Flip the open dossier's tab (WO-11). Mirrors into the hash via replaceState
+  // ONLY — replaceState fires no hashchange (the file's no-loop invariant) and
+  // tab flips must not stack history.
+  const setDossierTab = useCallback((tab: DossierTab) => {
+    if (panel.kind !== "dossier") return;
+    replaceHash(personHash(panel.dossier.person_id, tab));
+    setPanel({ ...panel, tab });
+  }, [panel]);
 
   const entriesFromHits = useCallback((hits: RawStackHit[]): StackEntry[] =>
     hits
@@ -235,9 +245,19 @@ export function App({ mapRef, handleRef }: {
   // there's no restore loop. We only ACT on route hashes — a plain "#" from
   // closing an overlay leaves whatever panel is open untouched.
   const applyRoute = useCallback((route: Route) => {
-    if (route.kind === "person") void openDossier(route.personId);
-    else if (route.kind === "division") openDivision(route.ocdId);
-  }, [openDossier, openDivision]);
+    if (route.kind === "person") {
+      const tab: DossierTab = route.tab ?? "overview";
+      // Same-person guard (WO-11, load-bearing): if the panel already shows this
+      // person, ONLY the tab updates — no refetch/remount. Without it, a hand-
+      // edited tab segment would reload the dossier and blow away the open
+      // Connections state for a mere tab flip.
+      if (panel.kind === "dossier" && panel.dossier.person_id === route.personId) {
+        setPanel({ ...panel, tab });
+        return;
+      }
+      void openDossier(route.personId, undefined, tab);
+    } else if (route.kind === "division") openDivision(route.ocdId);
+  }, [panel, openDossier, openDivision]);
 
   const routedOnLoad = useRef(false);
   useEffect(() => {
@@ -503,6 +523,9 @@ export function App({ mapRef, handleRef }: {
           {panel.kind === "dossier" && (
             <DossierView
               dossier={panel.dossier}
+              tab={panel.tab}
+              onSelectTab={setDossierTab}
+              onOpenPerson={(id) => void openDossier(id)}
               onBack={panel.from ? () => {
                 setPanel({ kind: "stack", entries: panel.from! });
                 clearRouteHash();   // leaving a dossier drops its #/p/ permalink

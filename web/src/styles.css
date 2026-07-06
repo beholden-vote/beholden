@@ -222,6 +222,41 @@
   border: 2px solid var(--line-2); flex: none;
 }
 
+/* ---------- dossier tabs (WO-11) ---------- */
+/* Sticky full-bleed rail under the masthead (negative side margins match the
+   panel padding). Chrome is amber/ink/mut ONLY — party hues never appear here
+   (Rule 0). Micro-label voice (DESIGN §3): Space Grotesk, not mono. The bottom
+   2px rule is an inset shadow rather than a border so the active tab's 3px
+   amber underline can sit on top of it without the scrollable bar clipping a
+   negative-margin overlap. Hard edges, no transitions (light brutalist). */
+.dtab-bar {
+  position: sticky; top: 0; z-index: 2;
+  display: flex;
+  margin: 0 -20px;
+  padding: 0 20px;
+  background: var(--surf);
+  border-top: 2px solid var(--line);
+  box-shadow: inset 0 -2px 0 var(--line);   /* the 2px bottom rule */
+  overflow-x: auto;
+  scrollbar-width: none;                    /* never wrap, never show a bar */
+  white-space: nowrap;
+}
+.dtab-bar::-webkit-scrollbar { display: none; }
+.dtab {
+  flex: none;
+  background: none; border: none; border-radius: 0; cursor: pointer;
+  padding: 10px 12px 8px;
+  font-family: var(--font-display); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--mut);
+  border-bottom: 3px solid transparent;     /* → amber when selected */
+}
+.dtab:hover { color: var(--ink); }
+.dtab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--sig); }
+.dtab:focus-visible { outline: 2px solid var(--sig); outline-offset: -2px; }
+/* Each tab entry begins under the sticky bar when the view scrolls to it. */
+.dossier-tabpanel { scroll-margin-top: 44px; }
+
 /* section shell + provenance stamp */
 .panel-section { border-top: 2px solid var(--line); padding: 15px 0 8px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 11px; }
@@ -252,14 +287,30 @@
 .stat span { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
 .plain-list { margin: 6px 0; padding-left: 18px; font-size: 13px; }
 .plain-list li { margin-bottom: 3px; }
-.vote-list { list-style: none; margin: 6px 0; padding: 0; font-size: 13px; }
-.vote-list li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--line); }
 .vote { font-family: var(--font-mono); font-weight: 600; text-transform: uppercase; font-size: 10px; }
 .vote-yea { color: var(--good); }
 .vote-nay { color: var(--bad); }
 .vote-q { flex: 1; }
 .vote-date { color: var(--dim); font-family: var(--font-mono); font-size: 11px; }
 h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: 0.09em; font-weight: 700; }
+
+/* Key-vote rows on the Record tab (WO-11): surface the published depth —
+   result, the official roll-call record link, the decided bill's link/title,
+   and congress.gov's policy-area chips (reuses the WO-8 .mv-policy-chip). */
+.kv-vote-list { list-style: none; margin: 6px 0; padding: 0; font-size: 13px; }
+.kv-vote { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.kv-vote-top { display: flex; gap: 10px; align-items: baseline; }
+.kv-bill-title { margin: 3px 0 0; font-size: 12px; color: var(--mut); }
+.kv-vote-meta { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+.kv-result {
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--mut);
+}
+.kv-link { color: var(--sig); text-decoration: none; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
+.kv-link:hover { text-decoration: underline; }
+/* Recent bills / filings inside plain lists link to the official record. */
+.plain-list a { color: var(--sig); text-decoration: none; }
+.plain-list a:hover { text-decoration: underline; }
 
 .money-band { font-family: var(--font-mono); font-size: 19px; font-weight: 500; margin: 0 0 6px; }
 .trade-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }

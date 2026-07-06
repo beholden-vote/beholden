@@ -50,6 +50,14 @@ export const STRINGS = {
   // /methodology anchor. Reused across ideology, key votes, and party agreement.
   methodologyLink: "How is this computed?",
 
+  // Dossier tab labels (WO-11) — the same five tabs, in the same order, for
+  // every official; tabs without published data hide identically for everyone.
+  tabOverview: "Overview",
+  tabRecord: "Record",
+  tabCommittees: "Committees",
+  tabMoney: "Money",
+  tabConnections: "Connections",
+
   // Connections (entity graph, WO-4) — descriptive, symmetric copy only.
   connectionsTitle: "Connections",
   connectionsLoading: "Loading connections…",

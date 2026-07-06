@@ -1,8 +1,9 @@
 /** Zero-server permalink routing (WO-5). Shareable deep-links live entirely in
  *  the URL hash so a static SPA restores state on load with no backend:
  *
- *    #/p/{person_id}   open that official's dossier
- *    #/d/{ocd_id}      select that division — its full representation stack + ballot
+ *    #/p/{person_id}         open that official's dossier
+ *    #/p/{person_id}/{tab}   …opened on a specific dossier tab (WO-11)
+ *    #/d/{ocd_id}            select that division — its full representation stack + ballot
  *
  *  These coexist with the flat info hashes (#about / #privacy / #sources), which
  *  predate routing. Only `#/`-prefixed hashes are routes; anything else (a bare
@@ -10,11 +11,18 @@
  *  the user navigates use replaceState so opening dossiers doesn't spam history.
  */
 
+/** The dossier tabs (WO-11), in display order. The hash's optional tab segment is
+ *  whitelisted against this — an unknown segment degrades to the default tab, it
+ *  never breaks the person link. */
+export const DOSSIER_TABS = ["overview", "record", "committees", "money", "connections"] as const;
+export type DossierTab = (typeof DOSSIER_TABS)[number];
+
 /** A parsed deep-link. `home` means no route hash is active (info hashes and the
- *  empty hash both fall here — the caller keeps owning those). */
+ *  empty hash both fall here — the caller keeps owning those). A person route's
+ *  `tab` is null when the hash names none (or names junk) — the caller defaults. */
 export type Route =
   | { kind: "home" }
-  | { kind: "person"; personId: string }
+  | { kind: "person"; personId: string; tab: DossierTab | null }
   | { kind: "division"; ocdId: string };
 
 /** Parse the CURRENT location.hash into a route. Non-route hashes → home so the
@@ -22,8 +30,16 @@ export type Route =
 export function parseHash(hash: string = location.hash): Route {
   const h = hash.replace(/^#/, "");
   if (h.startsWith("/p/")) {
-    const personId = decodeURIComponent(h.slice(3));
-    return personId ? { kind: "person", personId } : { kind: "home" };
+    // Split BEFORE decoding: ids are written via encodeURIComponent, so a literal
+    // "/" inside an id is %2F — the segment boundary is unambiguous. Segment 2 is
+    // a tab only if whitelisted (junk like #/p/X/banana degrades to the default
+    // tab, never breaks the person link); extra segments are ignored.
+    const segs = h.slice(3).split("/");
+    const personId = decodeURIComponent(segs[0]);
+    const tab = segs.length > 1 && (DOSSIER_TABS as readonly string[]).includes(segs[1])
+      ? (segs[1] as DossierTab)
+      : null;
+    return personId ? { kind: "person", personId, tab } : { kind: "home" };
   }
   if (h.startsWith("/d/")) {
     const ocdId = decodeURIComponent(h.slice(3));
@@ -38,8 +54,11 @@ export function isRouteHash(hash: string = location.hash): boolean {
   return /^#\/(p|d)\//.test(hash);
 }
 
-export function personHash(personId: string): string {
-  return `#/p/${encodeURIComponent(personId)}`;
+/** Person permalink. The tab segment is appended only when it's a non-default
+ *  tab — old links stay bit-identical and copy-links stay short/canonical. */
+export function personHash(personId: string, tab?: DossierTab): string {
+  const base = `#/p/${encodeURIComponent(personId)}`;
+  return tab && tab !== "overview" ? `${base}/${tab}` : base;
 }
 export function divisionHash(ocdId: string): string {
   return `#/d/${encodeURIComponent(ocdId)}`;
