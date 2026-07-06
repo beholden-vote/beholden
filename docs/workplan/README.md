@@ -75,9 +75,17 @@ sequentially — the WOs touch the same files.
 | 12 | Cited drill-down data (bill titles on votes, dates, committee links, tallies) | P | open |
 | 13 | Interactive connections graph (d3-force) | F (after 11) | open |
 | 14 | Map fills by level (Senate delegation stylefeed) | P+map (after 12) | open |
+| 15 | Contact · social · previous-roles · state-bio data | P (after 12) | open |
+| 16 | Header action row + Overview bio + Social tab | F (after 11, 15) | open |
 
-**WO-1…10 merged (2026-07-06).** WO-11…14 are the depth round: dossier tabs, cited
-drill-downs, an interactive connections graph, and per-level map fills.
+**WO-1…10 merged (2026-07-06).** WO-11…16 are the depth round: dossier tabs, cited
+drill-downs, an interactive connections graph, per-level map fills, and the
+contact/social/biography layer. Sources verified 2026-07-06: `legislators-current`
+contact fields (phone 536/537, website 536, contact_form 89 — Congress publishes no
+direct email), `legislators-social-media.json` (X 506 · FB 490 · IG 407 · YT 255),
+OpenStates CSV contact/social/biography columns, own warehoused term history for
+previous roles. Federal education deferred: Bioguide is bot-walled and Wikidata is
+crowd-edited (provenance below our bar).
 
 Other open follow-ons (not WOs yet): WA PDC itemized↔summary reconciliation fix (the two
 feeds use different filer_id formats — blocks re-enabling `WA_PDC_ENABLED`); surface WA
