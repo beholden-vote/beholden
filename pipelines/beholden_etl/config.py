@@ -37,6 +37,15 @@ CONGRESS = 119
 TILE_VINTAGE = "2025"  # Census cartographic-boundary release (GENZ2025); bump on new vintage
 FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congress
 
+# WO-9 WA PDC pilot readiness. OFF: the itemized↔summary control-total gate does
+# not reconcile on real current-cycle data — the two Socrata feeds use different
+# filer_id formats (itemized "EWINS 258" vs summary "EWINS2 258") and the summary
+# has coverage gaps, so the (correct) fail-closed gate rejects dozens of groups.
+# This is a readiness switch for a not-yet-surfaced experimental source, NOT a gate
+# bypass: when enabled the gate still runs and still halts on any mismatch. Re-enable
+# once the itemized↔summary join is fixed (WO-9 reconciliation follow-up).
+WA_PDC_ENABLED = False
+
 
 def pipeline_version() -> str:
     """git tag of the ETL release, stamped into every provenance envelope.

@@ -14,7 +14,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, FEC_CYCLE, RAW_DIST
+from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 
@@ -169,27 +169,30 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     # reads only from here, so a silent re-release with different content forces a
     # re-review via the hash (docs/TRUSTED-EXTRACTION.md §4.1). A network hiccup
     # skips the source for this run rather than sinking the federal slice.
-    try:
-        wa_items = wa_pdc.fetch_itemized()
-        wa_summary = wa_pdc.fetch_summary()
-        wa_bytes = wa_pdc.snapshot_bytes(wa_items)
-        wa_sha = wa_pdc.sha256(wa_bytes)
-        wa_retrieved = _now()
-        _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
-        _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
-        _write_json(raw / "wa_pdc" / "manifest.json", {
-            "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
-            "header": list(wa_pdc.CONTRACT.header),
-            "contract_version": wa_pdc.CONTRACT.contract_version,
-            # Explicit: this snapshot is the current-cycle window, not all-time.
-            "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
-            "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
-        manifest["sources"]["wa_pdc"] = {
-            "retrieved_at": wa_retrieved,
-            "source_url": wa_pdc.CONTRACT.retrieval["itemized_json"],
-            "count": len(wa_items), "file_sha256": wa_sha}
-    except Exception as e:
-        print(f"fetch: wa_pdc skipped ({type(e).__name__})")
+    # Gated OFF (config.WA_PDC_ENABLED) until the itemized↔summary reconciliation
+    # is fixed — no point pulling ~380k rows the transform gate will reject.
+    if WA_PDC_ENABLED:
+        try:
+            wa_items = wa_pdc.fetch_itemized()
+            wa_summary = wa_pdc.fetch_summary()
+            wa_bytes = wa_pdc.snapshot_bytes(wa_items)
+            wa_sha = wa_pdc.sha256(wa_bytes)
+            wa_retrieved = _now()
+            _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
+            _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
+            _write_json(raw / "wa_pdc" / "manifest.json", {
+                "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
+                "header": list(wa_pdc.CONTRACT.header),
+                "contract_version": wa_pdc.CONTRACT.contract_version,
+                # Explicit: this snapshot is the current-cycle window, not all-time.
+                "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
+                "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
+            manifest["sources"]["wa_pdc"] = {
+                "retrieved_at": wa_retrieved,
+                "source_url": wa_pdc.CONTRACT.retrieval["itemized_json"],
+                "count": len(wa_items), "file_sha256": wa_sha}
+        except Exception as e:
+            print(f"fetch: wa_pdc skipped ({type(e).__name__})")
 
     _write_json(raw / "manifest.json", manifest)
     for src, meta in manifest["sources"].items():

@@ -14,7 +14,7 @@ import json
 import uuid
 from pathlib import Path
 
-from ..config import CONGRESS, RAW_DIST, SPINE_RESOLUTION_MIN
+from ..config import CONGRESS, RAW_DIST, SPINE_RESOLUTION_MIN, WA_PDC_ENABLED
 from ..sources import congress_gov
 from ..sources import fec
 from ..sources import legislators as L
@@ -384,7 +384,7 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     # schema-drift, control-total, and no-silent-drop gates and raises rather than
     # publish anything unreconciled. Not surfaced in dossiers (explicit follow-on).
     wa_dir = raw / "wa_pdc"
-    if (wa_dir / "itemized.json").exists() and (wa_dir / "manifest.json").exists():
+    if WA_PDC_ENABLED and (wa_dir / "itemized.json").exists() and (wa_dir / "manifest.json").exists():
         wa_meta = json.loads((wa_dir / "manifest.json").read_text(encoding="utf-8"))
         itemized = json.loads((wa_dir / "itemized.json").read_text(encoding="utf-8"))
         summary = json.loads((wa_dir / "summary.json").read_text(encoding="utf-8"))
