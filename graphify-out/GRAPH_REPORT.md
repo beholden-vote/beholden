@@ -1,16 +1,16 @@
 # Graph Report - beholden  (2026-07-06)
 
 ## Corpus Check
-- 89 files · ~67,680 words
+- 90 files · ~73,313 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1070 nodes · 1341 edges · 165 communities (65 shown, 100 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 21 edges (avg confidence: 0.62)
+- 1134 nodes · 1451 edges · 166 communities (63 shown, 103 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 22 edges (avg confidence: 0.63)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8e61cb74`
+- Built from commit: `d024c1c8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -176,12 +176,13 @@
 - [[_COMMUNITY_Beholden|Beholden]]
 - [[_COMMUNITY_Political Microscope Built on Provenance|Political Microscope Built on Provenance]]
 - [[_COMMUNITY_Zero-Server Architecture|Zero-Server Architecture]]
+- [[_COMMUNITY_test_graph_empty_input_yields_no_edges_but_valid_docs|test_graph_empty_input_yields_no_edges_but_valid_docs]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `run()` - 22 edges
-2. `compilerOptions` - 18 edges
-3. `compilerOptions` - 16 edges
-4. `_dossier_named()` - 15 edges
+1. `run()` - 25 edges
+2. `_dossier_named()` - 18 edges
+3. `compilerOptions` - 18 edges
+4. `compilerOptions` - 16 edges
 5. `Beholden — Product Requirements Document` - 15 edges
 6. `Trusted extraction — turning bulk public records into cited facts without hallucinating` - 13 edges
 7. `SourceContract` - 11 edges
@@ -194,12 +195,12 @@
   .github/workflows/etl-nightly.yml → docs/ARCHITECTURE.md
 - `Intra-day Freshness Cron (G2 SLA)` --references--> `Source Registry Enum`  [INFERRED]
   .github/workflows/etl-nightly.yml → docs/DATA-CONTRACTS.md
+- `EvidenceRow()` --calls--> `formatMoneyCents()`  [EXTRACTED]
+  web/src/ui/Connections.tsx → web/src/lib/data.ts
 - `deploy-web Workflow` --implements--> `Cloudflare Pages Published Data`  [EXTRACTED]
   .github/workflows/deploy-web.yml → docs/ARCHITECTURE.md
 - `deploy-web Workflow` --references--> `web/ Frontend (Vite + React SPA)`  [EXTRACTED]
   .github/workflows/deploy-web.yml → web/README.md
-- `tiles-build Workflow` --implements--> `PMTiles Map Tile Archives`  [EXTRACTED]
-  .github/workflows/tiles-build.yml → docs/ARCHITECTURE.md
 
 ## Import Cycles
 - None detected.
@@ -212,7 +213,7 @@
 - **Three Rules Governance Across Agent Docs** — agents_three_rules, contributing_no_provenance_no_publish, contributing_fail_closed, contributing_symmetric_by_construction, claude_claude_md [EXTRACTED 1.00]
 - **Provenance and Freshness Violation Findings** — docs_production_review_plan_missing_pipeline_version, docs_production_review_plan_fabricated_retrieved_at, docs_production_review_plan_wrong_computed_as_of, docs_production_review_plan_raw_lake_never_landed [EXTRACTED 1.00]
 
-## Communities (165 total, 100 thin omitted)
+## Communities (166 total, 103 thin omitted)
 
 ### Community 0 - "Nightly ETL Orchestration & Provenance Rules"
 Cohesion: 0.15
@@ -223,32 +224,32 @@ Cohesion: 0.67
 Nodes (3): Dossier JSON Contract, Entity Graph Contract, E5 — Transform & Serving
 
 ### Community 2 - "Web Dependencies (package.json)"
-Cohesion: 0.08
-Nodes (24): dependencies, deck.gl, @deck.gl/mapbox, @fontsource/ibm-plex-mono, @fontsource/space-grotesk, maplibre-gl, minisearch, pmtiles (+16 more)
+Cohesion: 0.07
+Nodes (26): dependencies, d3-force, deck.gl, @deck.gl/mapbox, @fontsource/ibm-plex-mono, @fontsource/space-grotesk, maplibre-gl, minisearch (+18 more)
 
 ### Community 3 - "Free-Tier Hosting & Map Delivery"
 Cohesion: 0.40
 Nodes (5): tiles-build Workflow, PMTiles Map Tile Archives, Census TIGER/Line Geometry, E6 — Geometry & Tiles, tippecanoe PMTiles Builder
 
 ### Community 4 - "Fetch Job & Source Registry"
-Cohesion: 0.09
-Nodes (36): Source registry + SLAs. Mirrors data-contracts v1 §6 — adding a source here requ, Source, fetch_congress_gov(), fetch_fec(), fetch_house_clerk(), fetch_openstates(), fetch_unitedstates_legislators(), fetch_voteview() (+28 more)
+Cohesion: 0.12
+Nodes (29): fetch_congress_gov(), fetch_fec(), fetch_house_clerk(), fetch_openstates(), fetch_unitedstates_legislators(), fetch_voteview(), fetch_wa_pdc(), _now() (+21 more)
 
 ### Community 5 - "TS App Compiler Config"
 Cohesion: 0.10
 Nodes (19): compilerOptions, allowImportingTsExtensions, jsx, lib, module, moduleDetection, moduleResolution, noEmit (+11 more)
 
 ### Community 6 - "ETL Test Suite"
-Cohesion: 0.06
-Nodes (23): Offline regression suite for the federal ETL slice. Runs with no network, no AP, When party_agreement_pct IS published (>= MIN_AGREEMENT_VOTES), the votes     e, FEC per-candidate failure is skipped (absence is honest -> no money     section, cast_code families map to positions; Voteview bill tokens normalize to the, Both official-record URL patterns (verified live 2026-07-05). House keys on, Salience = closeness + recency_bonus, top-N, deterministic. RC2 (11v10) is, Titles map to the DDL role enum (member|chair|ranking|vice_chair);     unknown/, membership_rows emits a row only when both the committee (FK) and the     membe (+15 more)
+Cohesion: 0.05
+Nodes (29): Offline regression suite for the federal ETL slice. Runs with no network, no AP, A filer/year present in the itemized data with NO control total is itself a, A source snapshot younger than its config.SOURCES freshness_sla_hours is     'f, No R2 credentials -> hydration is a graceful no-op (returns 0), so local     ru, With a mock R2 client, hydrate pulls every raw/latest/ object into the lake, last_good returns a single hydrated item, or None when it is absent — the     p, publish mirrors the raw lake to raw/latest/ (the last-good pointer fetch     hy, to_roll_call_rows persists the CSV's yea/nay tallies verbatim (migration     00 (+21 more)
 
 ### Community 7 - "TS Node Compiler Config"
 Cohesion: 0.11
 Nodes (17): compilerOptions, allowImportingTsExtensions, lib, module, moduleDetection, moduleResolution, noEmit, noFallthroughCasesInSwitch (+9 more)
 
 ### Community 8 - "Dossier Builder"
-Cohesion: 0.08
-Nodes (42): pipeline_version(), git tag of the ETL release, stamped into every provenance envelope.     CI sets, _all_sponsorships(), _bill_policy_areas(), _build_graph(), _campaign_finance(), _committee_ids(), _committees() (+34 more)
+Cohesion: 0.05
+Nodes (57): pipeline_version(), Source registry + SLAs. Mirrors data-contracts v1 §6 — adding a source here requ, git tag of the ETL release, stamped into every provenance envelope.     CI sets, Source, _all_sponsorships(), _bill_policy_areas(), _bill_titles(), _build_graph() (+49 more)
 
 ### Community 9 - "Transform & OCD Divisions"
 Cohesion: 0.08
@@ -259,8 +260,8 @@ Cohesion: 0.20
 Nodes (14): cd_number(), county_slug(), feature_props(), _get(), main(), Map raw Census attributes -> tile-contract properties, or None to drop     the, Transform a GeoJSONSeq stream. Returns count of features written., Case-insensitive first-hit lookup; Census attribute casing varies. (+6 more)
 
 ### Community 11 - "Web Map Frontend"
-Cohesion: 0.05
-Nodes (31): handleRef, mapRef, Window, applyFeed(), ARCHIVE_FILE, ArchiveId, BeholdenMap, DEFAULT_VISIBLE (+23 more)
+Cohesion: 0.11
+Nodes (14): applyFeed(), ARCHIVE_FILE, ArchiveId, DEFAULT_VISIBLE, FadeExpr, FILL_IDS, fillFor(), LayerDef (+6 more)
 
 ### Community 12 - "DuckDB Store"
 Cohesion: 0.24
@@ -271,8 +272,8 @@ Cohesion: 0.10
 Nodes (19): committee_role(), committee_rows(), current_term(), fetch_committee_membership(), fetch_committees(), fetch_current(), membership_rows(), person_uuid() (+11 more)
 
 ### Community 14 - "Publish Job (R2 + Raw Lake)"
-Cohesion: 0.29
-Nodes (11): _client(), _content_type(), _ensure_cors(), _latest_batch(), Path, Stage 4 — push serving artifacts (dist/data) + raw lake (dist/raw) to R2.  The, Set the bucket CORS policy so the SPA can read cross-origin. Non-fatal:     the, (file, bucket_key) pairs landing the raw lake at raw/{date}/{source}/…     (imm (+3 more)
+Cohesion: 0.14
+Nodes (9): LayerId, PARTY_COLORS, Footer(), InfoOverlay(), LAYER_LABELS, LayerControl(), LEGEND_PARTIES, LEVEL_GROUPS (+1 more)
 
 ### Community 15 - "Congress.gov API Client"
 Cohesion: 0.06
@@ -287,40 +288,40 @@ Cohesion: 0.40
 Nodes (4): AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY, publish_tiles.sh script
 
 ### Community 20 - "Address Lookup Stack"
-Cohesion: 0.13
-Nodes (21): geocode(), geolocate(), Place, suggest(), clearRouteHash(), divisionHash(), isRouteHash(), parseHash() (+13 more)
+Cohesion: 0.05
+Nodes (64): buildPeopleIndex(), dossierCache, fetchJSON(), formatDate(), formatMoneyCents(), legislativeIsStub(), loadDossier(), loadPeopleIndex() (+56 more)
 
 ### Community 24 - "Sources Package Init"
 Cohesion: 0.08
-Nodes (29): Source adapters — one module per registered source (contracts §6). Each fetches, congress_end_date(), member_icpsr_to_bioguide(), member_scores_csv(), members_url(), normalize_bill_id(), Voteview loaders: DW-NOMINATE members (ticket E2-6) + roll-call votes (WO-1). A, Retrying: the votes table is ~9 MB, still a single static GET. (+21 more)
+Nodes (33): Source adapters — one module per registered source (contracts §6). Each fetches, congress_end_date(), member_icpsr_to_bioguide(), member_scores_csv(), members_url(), normalize_bill_id(), question_and_description(), Voteview loaders: DW-NOMINATE members (ticket E2-6) + roll-call votes (WO-1). A (+25 more)
 
 ### Community 27 - "Operational Privacy"
 Cohesion: 0.40
 Nodes (5): Contributing to Beholden, Operational privacy, Style, The three rules that outrank everything, Workflow
 
 ### Community 36 - "_dossier_named"
-Cohesion: 0.07
-Nodes (29): _dossier_named(), A key vote whose decided bill has a congress.gov policy area carries it     ver, WO-8: every provenance envelope over a Beholden-computed metric carries the, The juxtaposition module renders only when BOTH sides exist. Jane carries     t, Sponsored + became-law + recent bills come from the bills spine; the     cospon, money publishes for members with FEC data; absent for those without, so     the, Jane's money.campaign_finance carries top_contributors[0..9] (capped at 10), A member with campaign_finance but no contributors file has no     top_contribu (+21 more)
+Cohesion: 0.06
+Nodes (35): _dossier_named(), A key vote whose decided bill has a congress.gov policy area carries it     ver, WO-8: every provenance envelope over a Beholden-computed metric carries the, The juxtaposition module renders only when BOTH sides exist. Jane carries     t, Each key vote publishes the drill-down facts (WO-12): the decided bill's     wa, recent_bills publishes introduced_on / latest_action_on (WO-12) — the     wareh, Committee items publish the deterministic committee_id plus the official     ur, Sponsored + became-law + recent bills come from the bills spine; the     cospon (+27 more)
 
 ### Community 37 - "Beholden — Product Requirements Document"
 Cohesion: 0.08
 Nodes (26): 10. Requirements, 11. Success Metrics, 12. Timeline & Phasing, 13. Open Questions, 14. Risks, 1. Problem Statement, 2. Product Principles, 3. Goals (+18 more)
 
 ### Community 38 - "rawlake.py"
-Cohesion: 0.13
-Nodes (24): datetime, age_hours(), _client(), has_snapshot(), hydrate(), hydrated_manifest(), is_fresh(), last_good() (+16 more)
+Cohesion: 0.09
+Nodes (35): datetime, _client(), _content_type(), _ensure_cors(), _latest_batch(), Path, Stage 4 — push serving artifacts (dist/data) + raw lake (dist/raw) to R2.  The, Set the bucket CORS policy so the SPA can read cross-origin. Non-fatal:     the (+27 more)
 
 ### Community 39 - "Beholden — Expansion Plan: Deeper Data, Lower Levels, One Navigation Model"
 Cohesion: 0.11
 Nodes (17): 0. Where we are (shipped), 1. Deepen the data (federal first — sources verified), 1a. Individual voting records — THE next vertical, 1b. Itemized donors — the transparent money layer, 1c. The entity graph — materialize §4, 1d. Donor ↔ vote juxtaposition — last, and carefully, 1e. Federal rounding-out (cheap, high-value), 2. Expand down: state → county → city (+9 more)
 
 ### Community 40 - "DossierView.tsx"
-Cohesion: 0.21
-Nodes (15): formatDate(), formatMoneyCents(), legislativeIsStub(), methodologyHash(), Section(), EvidenceRow(), COMMITTEE_ROLE_LABEL, Connections (+7 more)
+Cohesion: 0.25
+Nodes (8): A senate holder row as build.run feeds the delegation rule: the senator's     d, Both seated senators the same party -> that party code, not vacant.     Asserte, A split delegation publishes the dedicated SPLIT code — never one of the     tw, One seat vacant (marker row) or simply absent from the warehouse -> the     sea, _sen(), test_senate_delegation_same_party_colors_the_state(), test_senate_delegation_split_is_split_either_order(), test_senate_delegation_vacancy_handling()
 
 ### Community 41 - "Connections.tsx"
-Cohesion: 0.20
-Nodes (13): cache, EdgeType, Evidence, GraphEdge, GraphNode, loadNeighborhood(), Neighborhood, otherEnd() (+5 more)
+Cohesion: 0.11
+Nodes (27): cache, edgeKey(), edgeLabel(), EdgeType, Evidence, GraphEdge, GraphNode, loadNeighborhood() (+19 more)
 
 ### Community 42 - "fec.py"
 Cohesion: 0.18
@@ -342,10 +343,6 @@ Nodes (13): 1. What was verified (observations, 2026-07-05), 1a. Bulk session-CS
 Cohesion: 0.14
 Nodes (14): 10. Repo layout, 11. Non-goals, 12. Contract notes — the first real SourceContract, 1. The one principle, 2. What is eligible (tiering), 3. The Source Contract (pinned, versioned), 4. Pipeline stages, 5. Fail-closed gates (the reconciliation stage) (+6 more)
 
-### Community 47 - "data.ts"
-Cohesion: 0.18
-Nodes (10): buildPeopleIndex(), dossierCache, fetchJSON(), loadDossier(), loadPeopleIndex(), loadPins(), PeopleIndex, PersonSearchRow (+2 more)
-
 ### Community 48 - "6a — Committee memberships (Lane P, AFTER WO-3 merges)"
 Cohesion: 0.17
 Nodes (11): 6a — Committee memberships (Lane P, AFTER WO-3 merges), 6b — County tile layer (Lane T, independent), Acceptance, Acceptance, Files, Files, Objective, Objective (+3 more)
@@ -360,15 +357,15 @@ Nodes (7): _FlakyCongress, _install_flaky_congress(), A congress.gov client stan
 
 ### Community 51 - "README.md"
 Cohesion: 0.18
-Nodes (10): 🧭 Coverage & what’s next, Data sources — all public record, 📚 Docs, 🔧 For developers, 💡 The clever part: there is no server, 🗺️ The map itself, ▶️ Try it in 10 seconds, 🇺🇸 What is this, in one breath? (+2 more)
+Nodes (10): 🧭 Coverage & what’s next, Data sources — all public record, 📚 Docs, 🔧 For developers, 💡 The clever part: there is no server, 🗺️ The map itself, ▶️ Try it in 10 seconds, 🏛️ What is this, in one breath? (+2 more)
 
 ### Community 52 - "Beholden — "Public Record" DESIGN.md"
 Cohesion: 0.18
 Nodes (10): 1. Visual theme & atmosphere, 2. Color palette & roles, 3. Typography, 4. Components, 5. Layout, 6. Depth, edges & motion — *light brutalist*, 7. Do / Don't, 8. Responsive (+2 more)
 
 ### Community 53 - "Ballot.tsx"
-Cohesion: 0.24
-Nodes (9): ocdShortLabel(), Pin, StackEntry, Ballot(), LEVEL_ORDER, LEVEL_TITLES, smallestDivision(), Avatar() (+1 more)
+Cohesion: 0.40
+Nodes (5): handleRef, mapRef, initMap(), RawStackHit, AppHandle
 
 ### Community 55 - "Beholden — Setup (zero to running pipeline)"
 Cohesion: 0.22
@@ -446,10 +443,6 @@ Nodes (4): deploy-web Workflow, Cloudflare Pages Published Data, web/index.html 
 Cohesion: 0.50
 Nodes (4): _load_stamper(), County slugs must mirror ocd-division-ids' make_id EXACTLY, and the     divisio, test_stamp_county_slug_rule(), test_stamp_ocd_ids_conventions()
 
-### Community 74 - "Ideology.tsx"
-Cohesion: 0.67
-Nodes (3): Dossier, IdeologyScale(), pct()
-
 ### Community 75 - "E1 — Identity Spine"
 Cohesion: 0.67
 Nodes (3): Person Identifier Crosswalk, Warehouse Identity Spine, E1 — Identity Spine
@@ -459,24 +452,24 @@ Cohesion: 0.67
 Nodes (3): Congress.gov API v3, Voteview DW-NOMINATE, E2 — Federal Ingestion
 
 ## Knowledge Gaps
-- **348 isolated node(s):** `Source`, `beholden-etl`, `fetch_tiger.sh script`, `publish_tiles.sh script`, `AWS_ACCESS_KEY_ID` (+343 more)
+- **356 isolated node(s):** `Source`, `beholden-etl`, `fetch_tiger.sh script`, `publish_tiles.sh script`, `AWS_ACCESS_KEY_ID` (+351 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **100 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **103 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Beholden — Product Requirements Document` connect `Beholden — Product Requirements Document` to `AGENTS.md`?**
-  _High betweenness centrality (0.009) - this node is a cross-community bridge._
 - **What connects `Beholden ETL. Contracts live in /docs; this package enforces them.`, `Trusted-extraction framework for Tier-A bulk disclosure sources.  Implements d`, `SourceContract — the pinned, versioned trust boundary for a Tier-A source (docs` to the rest of the system?**
-  _576 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _601 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Web Dependencies (package.json)` be split into smaller, more focused modules?**
-  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07407407407407407 - nodes in this community are weakly interconnected._
 - **Should `Fetch Job & Source Registry` be split into smaller, more focused modules?**
-  _Cohesion score 0.08536585365853659 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12258064516129032 - nodes in this community are weakly interconnected._
 - **Should `TS App Compiler Config` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
 - **Should `ETL Test Suite` be split into smaller, more focused modules?**
-  _Cohesion score 0.06451612903225806 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05405405405405406 - nodes in this community are weakly interconnected._
 - **Should `TS Node Compiler Config` be split into smaller, more focused modules?**
   _Cohesion score 0.1111111111111111 - nodes in this community are weakly interconnected._
+- **Should `Dossier Builder` be split into smaller, more focused modules?**
+  _Cohesion score 0.053551912568306013 - nodes in this community are weakly interconnected._

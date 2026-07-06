@@ -8,6 +8,8 @@
   <img src="https://img.shields.io/badge/every_fact-cited-56b98a?style=for-the-badge&labelColor=06131d" alt="Every fact cited">
   &nbsp;
   <img src="https://img.shields.io/badge/non--partisan-by_construction-8ba3b4?style=for-the-badge&labelColor=06131d" alt="Non-partisan by construction">
+  &nbsp;
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0e2536?style=for-the-badge&labelColor=06131d" alt="MIT License"></a>
 </p>
 
 <p align="center">
