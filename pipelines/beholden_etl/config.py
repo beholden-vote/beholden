@@ -9,15 +9,20 @@ class Source:
     freshness_sla_hours: int # alert threshold, mirrors PRD G2
     requires_api_key: bool = False
 
+# freshness_sla_hours is BOTH the coverage-dashboard alert threshold AND (WO-10) the
+# incremental re-fetch threshold: a hydrated snapshot younger than its SLA is reused
+# rather than re-fetched. With a ~24h nightly cadence, an SLA of X hours re-fetches
+# that source roughly every ceil(X/24) nights — so fast movers stay ≤24-48h fresh
+# while the parallel + resume-on-failure win comes without starving refreshes.
 SOURCES: dict[str, Source] = {
-    "congress.gov": Source("congress.gov", "https://api.congress.gov/v3", 24, True),
+    "congress.gov": Source("congress.gov", "https://api.congress.gov/v3", 24, True),   # bills/sponsors daily
     "unitedstates_legislators": Source(
         "unitedstates_legislators",
-        "https://raw.githubusercontent.com/unitedstates/congress-legislators/main", 168),
-    "voteview": Source("voteview", "https://voteview.com/static/data/out", 24 * 60),
-    "openstates": Source("openstates", "https://data.openstates.org", 24 * 7, True),
-    "fec": Source("fec", "https://api.open.fec.gov/v1", 24 * 7, True),
-    "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24),
+        "https://raw.githubusercontent.com/unitedstates/congress-legislators/main", 36),  # roster/committees rarely change
+    "voteview": Source("voteview", "https://voteview.com/static/data/out", 36),   # votes/ideology: every other night, not 60 days
+    "openstates": Source("openstates", "https://data.openstates.org", 72, True),  # state legislators change slowly
+    "fec": Source("fec", "https://api.open.fec.gov/v1", 72, True),   # donor filings post periodically
+    "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24),   # new trades daily
     "senate_efd": Source("senate_efd", "https://efdsearch.senate.gov", 24),
     "census_tiger": Source("census_tiger", "https://www2.census.gov/geo/tiger", 24 * 365),
 }
