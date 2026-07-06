@@ -99,7 +99,7 @@
 /* ---------- side dock ---------- */
 .panel {
   position: fixed; top: 0; right: 0; bottom: 0; z-index: 30;
-  width: min(436px, 100vw);
+  width: min(480px, 100vw);
   background: var(--surf);
   border-left: 3px solid var(--sig);
   box-shadow: -14px 0 30px rgba(0, 0, 0, 0.36);
@@ -479,8 +479,17 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .layer-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); padding: 3px 0; cursor: pointer; }
 .layer-row input { accent-color: var(--sig); width: 15px; height: 15px; cursor: pointer; }
 .layer-ctl-hint { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--dim); margin-top: 8px; }
-.layer-group { margin-bottom: 6px; }
+/* Federal/State/Local read as a MENU via accent-bar weight, not new hues
+   (Rule 0: amber is the only chrome color — see web/DESIGN.md + docs/BRAND.md).
+   Fixed render order (chrome.tsx LEVEL_GROUPS) -> nth-of-type is reliable
+   without touching the component. Intensity steps DOWN federal->local, the
+   same "how much government is this" hierarchy the level order itself implies. */
+.layer-group { margin-bottom: 6px; padding-left: 8px; border-left: 3px solid var(--sig); }
+.layer-group:nth-of-type(2) { border-left-color: var(--mut); opacity: 0.92; }
+.layer-group:nth-of-type(3) { border-left-color: var(--dim); opacity: 0.85; }
 .layer-group-label { display: block; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sig); margin: 7px 0 3px; }
+.layer-group:nth-of-type(2) .layer-group-label { color: var(--mut); }
+.layer-group:nth-of-type(3) .layer-group-label { color: var(--dim); }
 .layer-soon { display: block; font-size: 11px; color: var(--dim); font-style: italic; padding: 2px 0; }
 
 /* "you are here" marker (DOM marker; approx = coarse IP, exact = geolocation) */
