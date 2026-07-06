@@ -17,7 +17,7 @@
 
 ---
 
-## 🇺🇸 What is this, in one breath?
+## 🏛️ What is this, in one breath?
 
 Most people can't name their state senator, let alone say how they voted last month. Beholden fixes that.
 **Point at where you live and it shows you every official who represents that spot** — from the U.S. Senate down to
@@ -58,7 +58,7 @@ page spelling out every formula in plain sight — and a **“how is this comput
 
 ## 🗺️ The map itself
 
-- **Federal, state, and local, on one canvas.** U.S. House & Senate, both chambers of the state legislature, with county lines rolling out for orientation. Layers **fade in as you zoom** so it never turns into spaghetti — or flip them on and off yourself.
+- **Federal, state, and local, on one canvas.** U.S. House & Senate, both chambers of the state legislature, and county lines for orientation. Layers **fade in as you zoom** so it never turns into spaghetti — or flip them on and off yourself.
 - **Find anyone by name.** Search jumps you straight to a profile.
 - **“Your ballot,” shareable.** A clean list of everyone who represents a spot — copy the link and send it to a friend.
 - **You, gently located.** A faint marker shows roughly where you are for bearings — computed at the edge, never stored. Your precise location only leaves your device if *you* tap the button.
@@ -104,10 +104,11 @@ domain name. *(Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).)*
 | | Now on the map |
 |---|---|
 | 🏛️ **Federal** | Every sitting member of the U.S. House & Senate — full profiles: votes, committees, money, donors, disclosures, connections |
-| 🏫 **State** | State legislators nationwide (both chambers) with profiles and ideology |
+| 🏫 **State** | State legislators nationwide (both chambers) with cited profiles |
 | 🗺️ **Local** | County boundaries for orientation |
 
-**🔜 Coming next** — richer profile drill-downs (tabs, cited vote details, an interactive connections graph) · state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county & city officials · a public API.
+**🔜 Landing now** — an interactive connections graph · party colors for every map level · contact buttons, social profiles, and biographies.
+**🧭 Coming next** — state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county & city officials · a public API.
 
 We only expand where we can stay honest. When a data source has restrictive licensing or can’t be verified, we
 **say so and wait** rather than ship something we can’t stand behind — see the
