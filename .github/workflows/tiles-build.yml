@@ -5,6 +5,10 @@ jobs:
   tiles:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # Least-privilege GITHUB_TOKEN: this job only reads the repo and uploads via
+    # its own scoped R2 keys — it never touches git contents.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Install tippecanoe + GDAL

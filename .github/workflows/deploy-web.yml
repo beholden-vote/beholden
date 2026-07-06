@@ -7,6 +7,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Least-privilege GITHUB_TOKEN: this job only reads the repo and deploys via
+    # its own scoped Cloudflare API token — it never touches git contents.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
