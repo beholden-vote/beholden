@@ -102,23 +102,33 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
     fec_client = fec.FECClient()
     fec_dir = raw / "fec" / "totals"
     contrib_dir = raw / "fec" / "contributors"
+    # One FEC candidate id per legislator (deduped). FEC is the run's other long
+    # pole; a per-candidate failure skips rather than sinking the federal slice,
+    # and progress prints every 50 so a stall is visible live (PYTHONUNBUFFERED).
+    fec_cands: list[str] = []
     seen_cand: set[str] = set()
     for leg in legs:
         fec_ids = (leg.get("id") or {}).get("fec") or []
         cand = fec_ids[0] if fec_ids else None
-        if not cand or cand in seen_cand:
-            continue
-        seen_cand.add(cand)
-        totals = fec_client.candidate_totals(cand, FEC_CYCLE)
-        if totals:
-            _write_json(fec_dir / f"{cand}.json",
-                        {"candidate_id": cand, "cycle": FEC_CYCLE, "totals": totals})
-        committee_id = fec_client.principal_committee(cand, FEC_CYCLE)
-        if committee_id:
-            by_employer = fec_client.top_contributors_by_employer(committee_id, FEC_CYCLE)
-            _write_json(contrib_dir / f"{cand}.json",
-                        {"candidate_id": cand, "cycle": FEC_CYCLE,
-                         "committee_id": committee_id, "by_employer": by_employer})
+        if cand and cand not in seen_cand:
+            seen_cand.add(cand)
+            fec_cands.append(cand)
+    for i, cand in enumerate(fec_cands, 1):
+        try:
+            totals = fec_client.candidate_totals(cand, FEC_CYCLE)
+            if totals:
+                _write_json(fec_dir / f"{cand}.json",
+                            {"candidate_id": cand, "cycle": FEC_CYCLE, "totals": totals})
+            committee_id = fec_client.principal_committee(cand, FEC_CYCLE)
+            if committee_id:
+                by_employer = fec_client.top_contributors_by_employer(committee_id, FEC_CYCLE)
+                _write_json(contrib_dir / f"{cand}.json",
+                            {"candidate_id": cand, "cycle": FEC_CYCLE,
+                             "committee_id": committee_id, "by_employer": by_employer})
+        except Exception as e:                     # one candidate must not sink the run
+            print(f"fetch: fec {cand} skipped ({type(e).__name__})")
+        if i % 50 == 0 or i == len(fec_cands):
+            print(f"fetch: fec {i}/{len(fec_cands)} candidates")
     fec_count = len(list(fec_dir.glob("*.json"))) if fec_dir.exists() else 0
     contrib_count = len(list(contrib_dir.glob("*.json"))) if contrib_dir.exists() else 0
     manifest["sources"]["fec"] = {

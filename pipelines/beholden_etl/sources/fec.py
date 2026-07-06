@@ -17,9 +17,11 @@ from ..config import SOURCES
 
 BASE = SOURCES["fec"].base_url
 # ~537 totals + ~537×2 contributor calls (committee resolve + by_employer) per
-# run, still well under 1,000/hr; a 0.5s gap keeps us polite and leaves headroom
-# for retries without ever approaching the cap.
-MIN_INTERVAL_S = 0.5
+# run — ~1,600 total against the default 1,000 req/hr key cap. 0.5s spacing
+# (7,200/hr) exhausts the hourly budget in minutes and triggers a 429 storm
+# (Retry-After stalls + retry churn that ran the fetch ~2h and OOM-killed it).
+# Pace to sit just under the cap so calls succeed first try.
+MIN_INTERVAL_S = 3.7    # ~973 req/hr, just under the 1,000/hr FEC key cap
 _RETRYABLE = (httpx.HTTPStatusError, httpx.TransportError)
 
 
