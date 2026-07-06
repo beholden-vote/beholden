@@ -116,33 +116,51 @@ def _get_json(url: str, **params) -> list[dict]:
     return r.json()
 
 
-def fetch_itemized(page_size: int = 50000, max_pages: int | None = None) -> list[dict]:
-    """Page the itemized feed via $limit/$offset, ordered by the native id so paging
-    is stable across the run. Returns the raw records verbatim (no transformation)."""
+# The itemized feed is ~6.3M rows of ALL-TIME WA contributions — loading it whole
+# OOM-kills the runner (~30 GB). This Tier-A pilot ingests the CURRENT CYCLE only
+# (election_year >= PILOT_MIN_ELECTION_YEAR, ~380k rows), a bounded, memory-safe
+# window that still exercises the full contract + reconciliation gates end to end.
+# The window is recorded in the snapshot manifest so the slice is explicit, never
+# passed off as all-time. Widening it is a WO-9 follow-on (stream to disk instead
+# of accumulating in memory, so the SHA-256 doesn't need the whole set resident).
+PILOT_MIN_ELECTION_YEAR = 2025
+
+
+def fetch_itemized(page_size: int = 50000, max_pages: int = 20,
+                   min_election_year: int = PILOT_MIN_ELECTION_YEAR) -> list[dict]:
+    """Page the CURRENT-CYCLE itemized feed via $limit/$offset, ordered by native id
+    so paging is stable. Bounded to election_year >= min_election_year (the all-time
+    feed is ~6.3M rows). max_pages is a hard safety cap so an unbounded fetch can
+    never recur. Returns the raw records verbatim (no transformation)."""
     url = CONTRACT.retrieval["itemized_json"]
+    where = f"election_year >= {int(min_election_year)}"
     rows: list[dict] = []
     offset, page = 0, 0
     while True:
-        batch = _get_json(url, **{"$limit": page_size, "$offset": offset, "$order": "id"})
+        batch = _get_json(url, **{"$limit": page_size, "$offset": offset,
+                                  "$order": "id", "$where": where})
         if not batch:
             break
         rows.extend(batch)
         offset += page_size
         page += 1
-        if max_pages is not None and page >= max_pages:
+        if page >= max_pages:                 # hard safety net (~1M-row ceiling)
             break
     return rows
 
 
-def fetch_summary() -> list[dict]:
-    """The companion control-total feed (3h9x-7bvm), fetched whole. Small: one row
-    per (filer, election_year). Returns raw records verbatim."""
+def fetch_summary(min_election_year: int = PILOT_MIN_ELECTION_YEAR) -> list[dict]:
+    """The companion control-total feed (3h9x-7bvm), same current-cycle window as the
+    itemized feed so reconciliation groups line up. One row per (filer, election_year).
+    Returns raw records verbatim."""
     url = CONTRACT.retrieval["summary_json"]
+    where = f"election_year >= {int(min_election_year)}"
     rows: list[dict] = []
     offset = 0
     while True:
         batch = _get_json(url, **{"$limit": 50000, "$offset": offset, "$order": "id",
-                                  "$select": "filer_id,election_year,contributions_amount"})
+                                  "$select": "filer_id,election_year,contributions_amount",
+                                  "$where": where})
         if not batch:
             break
         rows.extend(batch)

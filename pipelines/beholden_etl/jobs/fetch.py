@@ -181,6 +181,8 @@ def run(raw_dir: str | Path = RAW_DIST) -> dict:
             "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
             "header": list(wa_pdc.CONTRACT.header),
             "contract_version": wa_pdc.CONTRACT.contract_version,
+            # Explicit: this snapshot is the current-cycle window, not all-time.
+            "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
             "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
         manifest["sources"]["wa_pdc"] = {
             "retrieved_at": wa_retrieved,
