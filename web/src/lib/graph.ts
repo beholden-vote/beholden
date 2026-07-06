@@ -75,3 +75,29 @@ export async function loadNeighborhood(personId: string): Promise<Neighborhood |
 export function otherEnd(edge: GraphEdge, center: string): string {
   return edge.a === center ? edge.b : edge.a;
 }
+
+/** Canonical identity for an edge, shared by the list rows and the WO-13 graph:
+ *  a graph click addresses its list row by this exact string. */
+export function edgeKey(e: GraphEdge): string {
+  return `${e.type}:${e.a}:${e.b}`;
+}
+
+/** Descriptive label per edge type (moved from Connections.tsx for WO-13: the
+ *  list chips and the graph tooltip share one wording). Symmetric by
+ *  construction: the same phrasing for every official regardless of party —
+ *  a count or a percentage, never a value judgement. */
+export function edgeLabel(edge: GraphEdge): string {
+  const n = edge.evidence_total;
+  switch (edge.type) {
+    case "cosponsorship":
+      return `cosponsored ${n} bill${n === 1 ? "" : "s"}`;
+    case "co_voting":
+      return `votes together ${edge.weight}%`;
+    case "shared_donor":
+      return `${n} shared top contributor${n === 1 ? "" : "s"}`;
+    case "committee":
+      return `${n} shared committee${n === 1 ? "" : "s"}`;
+    default:
+      return `${n}`;
+  }
+}

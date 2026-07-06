@@ -284,24 +284,25 @@ function MoneyTab({ dossier }: { dossier: Dossier }) {
 
 /** Connections: the WO-4 entity-graph neighborhood, lazy as before. Living in
  *  a tab means its code + fetch now naturally defer to first activation. */
-function ConnectionsTab({ personId }: { personId: string }) {
+function ConnectionsTab({ personId, onOpenPerson }: {
+  personId: string; onOpenPerson?: (personId: string) => void;
+}) {
   return (
     <section className="panel-section">
       <div className="section-head"><h3>{STRINGS.connectionsTitle}</h3></div>
       <Suspense fallback={<EmptyNote>{STRINGS.connectionsLoading}</EmptyNote>}>
-        <Connections personId={personId} />
+        <Connections personId={personId} onOpenPerson={onOpenPerson} />
       </Suspense>
     </section>
   );
 }
 
-export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson: _onOpenPerson }: {
+export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }: {
   dossier: Dossier;
   tab: DossierTab;
   onSelectTab: (tab: DossierTab) => void;
   onBack?: () => void;
-  /** Wired now for WO-13 (the interactive connections graph will open a
-   *  neighbor's dossier through it); intentionally unconsumed in this WO. */
+  /** WO-13: the Connections graph + list open a neighbor's dossier through this. */
   onOpenPerson?: (personId: string) => void;
 }) {
   const { identity, legislative } = dossier;
@@ -361,7 +362,7 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson: _
         {active === "record" && legislative && <RecordTab dossier={dossier} />}
         {active === "committees" && legislative && <CommitteesTab dossier={dossier} />}
         {active === "money" && <MoneyTab dossier={dossier} />}
-        {active === "connections" && <ConnectionsTab personId={dossier.person_id} />}
+        {active === "connections" && <ConnectionsTab personId={dossier.person_id} onOpenPerson={onOpenPerson} />}
       </div>
 
       <footer className="dossier-foot">

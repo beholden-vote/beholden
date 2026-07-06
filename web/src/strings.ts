@@ -66,6 +66,11 @@ export const STRINGS = {
   connectionsNote:
     "Each connection is computed from public records and links to its source. A shared connection describes overlap only — it implies no coordination.",
   connectionsEvidenceMore: "+{n} more, in the full record",
+  // WO-13 interactive graph — the SVG is a decorative spatial lens; this note
+  // tells assistive tech where the equivalent (cited) content lives.
+  connectionsGraphNote:
+    "Interactive connection chart. The list below contains the same {n} connections with evidence.",
+  connectionsOpenDossier: "Open dossier →",
 
   // Provenance
   sourceLabel: "Source",
