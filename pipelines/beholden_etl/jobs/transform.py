@@ -178,9 +178,55 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     if rate < SPINE_RESOLUTION_MIN:
         raise RuntimeError(f"current-term resolution {rate:.4f} < {SPINE_RESOLUTION_MIN}")
 
+    # --- WO-15: PAST terms -> the same `terms` table, end_date populated ---
+    # identity.previous_roles reads this table directly (WHERE end_date IS NOT
+    # NULL). Every term but the last (the current one, already inserted above)
+    # is a past term; mapped through the SAME _office_and_division helper so a
+    # since-redistricted seat or a since-vacated office still resolves to a
+    # real division/office row. A term with no state (never a federal House/
+    # Senate seat, e.g. a stray non-voting-delegate quirk) is skipped — never
+    # invented. Deduped on the terms PK (person_id, office_id, start) so a
+    # redundant/malformed re-election entry can't double-insert.
+    past_terms: list[dict] = []
+    for leg in legs:
+        bio = (leg.get("id") or {}).get("bioguide")
+        all_terms = leg.get("terms") or []
+        if not bio or len(all_terms) < 2:
+            continue
+        pid = L.person_uuid(bio)
+        for term in all_terms[:-1]:                       # every term except the current one
+            mapped = _office_and_division(term)
+            if not mapped:
+                continue
+            division, parent, office, _seat = mapped
+            divisions.setdefault(division["ocd_id"], division)
+            if parent:
+                divisions.setdefault(parent["ocd_id"], parent)
+            offices.setdefault(office["office_id"], office)
+            start = term.get("start") or _CONGRESS_START
+            end = term.get("end")
+            if not end:
+                continue                                   # an open-ended "past" term is honest-unknown, not published
+            past_terms.append({
+                "term_id": _term_id(pid, office["office_id"], start),
+                "person_id": pid, "office_id": office["office_id"],
+                "party": L.party_code(term.get("party")),
+                "start_date": start, "end_date": end, "is_vacant_marker": False,
+                "meta": None,
+            })
+
     store.insert(con, "divisions", list(divisions.values()))
     store.insert(con, "offices", list(offices.values()))
     store.insert(con, "terms", terms)
+    if past_terms:
+        seen_term_ids = {t["term_id"] for t in terms}
+        uniq_past, seen_past = [], set()
+        for t in past_terms:
+            if t["term_id"] in seen_term_ids or t["term_id"] in seen_past:
+                continue                                    # PK dedupe (current term wins if start collides)
+            seen_past.add(t["term_id"])
+            uniq_past.append(t)
+        store.insert(con, "terms", uniq_past)
 
     # --- ICPSR crosswalk: congress-legislators id.icpsr, AUGMENTED from Voteview ---
     # The congress-legislators YAML lags on ICPSR for freshmen (~217 of 537 members
@@ -389,7 +435,13 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
                     "term_id": _term_id(pid, office_id, session_start),
                     "person_id": pid, "office_id": office_id, "party": L.party_code(r["party"]),
                     "start_date": session_start, "end_date": None, "is_vacant_marker": False,
-                    "meta": {"image": r["image"], "source_url": r["source_url"]}})
+                    # WO-15: contact/social ride in meta (like image/source_url
+                    # above) since they're per-term CSV columns, not a separate
+                    # source — build.py reads them back out for identity.contact
+                    # / identity.social. Empty dicts collapse to absent keys
+                    # there, never a fabricated empty object.
+                    "meta": {"image": r["image"], "source_url": r["source_url"],
+                             "contact": r["contact"] or None, "social": r["social"] or None}})
         store.insert(con, "persons", os_persons)
         store.insert(con, "person_identifiers", os_idents)
         store.insert(con, "divisions", list(os_divs.values()))

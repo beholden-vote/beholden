@@ -37,6 +37,7 @@ from .. import rawlake
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
+from ..sources import wikidata                                   # WO-15 (education)
 
 LEGISLATORS_URL = legislators.URL
 VOTEVIEW_URL = voteview.members_url(CONGRESS)
@@ -59,32 +60,47 @@ def _write_json(path: Path, obj) -> None:
 # ---------------------------------------------------------------------------
 def fetch_unitedstates_legislators(raw: Path, prior: dict) -> dict:
     """Identity crosswalk + committee roster/memberships (bulk YAML, one source
-    family under the unitedstates_legislators envelope)."""
+    family under the unitedstates_legislators envelope). WO-15 adds district
+    offices + social-media handles — same repo, same GitHub Pages mirror, so
+    both land under this one envelope rather than a new source key."""
     legs = legislators.fetch_current()
     _write_json(raw / "unitedstates_legislators" / "legislators-current.json", legs)
     committees = legislators.fetch_committees()
     membership = legislators.fetch_committee_membership()
     _write_json(raw / "unitedstates_legislators" / "committees-current.json", committees)
     _write_json(raw / "unitedstates_legislators" / "committee-membership-current.json", membership)
+    district_offices = legislators.fetch_district_offices()
+    _write_json(raw / "unitedstates_legislators" / "legislators-district-offices.json", district_offices)
+    social_media = legislators.fetch_social_media()
+    _write_json(raw / "unitedstates_legislators" / "legislators-social-media.json", social_media)
     return {
         "retrieved_at": _now(), "source_url": LEGISLATORS_URL, "count": len(legs),
         "committees": len(committees),
-        "committee_memberships": sum(len(v or []) for v in membership.values())}
+        "committee_memberships": sum(len(v or []) for v in membership.values()),
+        "district_offices": sum(len(r.get("offices") or []) for r in district_offices),
+        "social_media": len(social_media)}
 
 
 def fetch_congress_gov(raw: Path, prior: dict) -> dict:
-    """Current membership + per-member sponsored/cosponsored legislation. The long
-    pole; runs concurrently with FEC. FAIL-CLOSED: a per-member failure does NOT
-    skip — a dropped member would publish a false 'sponsored 0'. Instead we fall
-    back to that member's last-good hydrated snapshot; only when there is no prior
-    snapshot does the exception propagate and sink the run (never fabricate)."""
+    """Current membership + per-member sponsored/cosponsored legislation, PLUS
+    (WO-15) member-detail (birthYear/partyHistory/leadership/DC office) — one
+    extra call per member on the SAME client/rate governor. The long pole;
+    runs concurrently with FEC. FAIL-CLOSED for legislation: a per-member
+    failure does NOT skip — a dropped member would publish a false 'sponsored
+    0'. Instead we fall back to that member's last-good hydrated snapshot; only
+    when there is no prior snapshot does the exception propagate and sink the
+    run (never fabricate). Member-detail is HONEST-ABSENT instead: a failure
+    there costs only contact/bio extras, never a fabricated legislative count,
+    so it degrades to the last-good snapshot or simply stays absent."""
     client = congress_gov.CongressGovClient()
     members = list(client.current_members(CONGRESS))
     _write_json(raw / "congress.gov" / f"members-{CONGRESS}.json", members)
 
     leg_dir = raw / "congress.gov" / "legislation"
+    detail_dir = raw / "congress.gov" / "member-detail"
     bioguides = [m["bioguideId"] for m in members if m.get("bioguideId")]
     reused = 0
+    detail_count = 0
     for i, bio in enumerate(bioguides, 1):
         rel = Path("congress.gov") / "legislation" / f"{bio}.json"
         try:
@@ -102,13 +118,28 @@ def fetch_congress_gov(raw: Path, prior: dict) -> dict:
             _write_json(leg_dir / f"{bio}.json", snap)   # keep the last-good file
             reused += 1
             print(f"fetch: congress.gov {bio} reused last-good snapshot ({type(e).__name__})")
+        detail_rel = Path("congress.gov") / "member-detail" / f"{bio}.json"
+        try:
+            _write_json(detail_dir / f"{bio}.json", client.member_detail(bio))
+            detail_count += 1
+        except Exception as e:
+            # Honest-absent: contact/bio extras only, never a fabricated
+            # legislative count. Fall back to a last-good snapshot if one
+            # exists; otherwise the member simply has no member-detail file
+            # this run (build.py treats that as honest absence).
+            snap = rawlake.last_good(raw, detail_rel)
+            if snap is not None:
+                _write_json(detail_dir / f"{bio}.json", snap)
+                detail_count += 1
+            print(f"fetch: congress.gov member-detail {bio} skipped ({type(e).__name__})")
         if i % 100 == 0 or i == len(bioguides):
             print(f"fetch: legislation {i}/{len(bioguides)} members")
 
     meta = {
         "retrieved_at": _now(),
         "source_url": f"https://www.congress.gov/members?q=%7B%22congress%22%3A{CONGRESS}%7D",
-        "count": len(members), "legislation_members": len(bioguides)}
+        "count": len(members), "legislation_members": len(bioguides),
+        "member_detail": detail_count}
     if reused:
         meta["legislation_reused"] = reused
     return meta
@@ -237,6 +268,46 @@ def fetch_wa_pdc(raw: Path, prior: dict) -> dict | None:
         return None
 
 
+def fetch_wikidata(raw: Path, prior: dict) -> dict:
+    """Education (P69 + P512/P582 qualifiers) for every person with a stored
+    `wikidata_qid` (WO-15). A per-person entity-fetch failure skips that person
+    (education absence is honest — never sinks the federal slice); label
+    resolution is batched across every referenced item id in as few
+    wbgetentities calls as possible."""
+    legs = _read_legislators(raw)
+    qids = sorted({q for leg in legs if (q := (leg.get("id") or {}).get("wikidata"))})
+
+    claims_dir = raw / "wikidata" / "claims"
+    ok, skipped = 0, 0
+    all_item_ids: set[str] = set()
+    per_person_claims: dict[str, list[dict]] = {}
+    for i, qid in enumerate(qids, 1):
+        try:
+            entity = wikidata.fetch_entity(qid)
+            claims = wikidata.educated_at_claims(entity, qid)
+        except Exception as e:   # a single person's entity fetch must not sink the run
+            print(f"fetch: wikidata {qid} skipped ({type(e).__name__})")
+            skipped += 1
+            continue
+        per_person_claims[qid] = claims
+        for c in claims:
+            all_item_ids.add(c["institution_qid"])
+            if c.get("degree_qid"):
+                all_item_ids.add(c["degree_qid"])
+        ok += 1
+        if i % 100 == 0 or i == len(qids):
+            print(f"fetch: wikidata {i}/{len(qids)} persons")
+    _write_json(claims_dir / "educated_at.json", per_person_claims)
+
+    # Batch every referenced institution/degree id across ALL persons into as
+    # few wbgetentities calls as possible (chunked at Wikidata's documented cap).
+    labels = wikidata.resolve_labels(all_item_ids)
+    _write_json(raw / "wikidata" / "labels.json", labels)
+
+    return {"retrieved_at": _now(), "source_url": f"{wikidata.BASE}/wiki/Wikidata:Main_Page",
+            "count": ok, "skipped": skipped, "labels": len(labels)}
+
+
 def _read_legislators(raw: Path) -> list[dict]:
     """The landed crosswalk, needed by the FEC task to enumerate candidate ids.
     The lead source lands it before the pool starts and it also survives in the
@@ -265,6 +336,7 @@ _FETCHERS = {
     "openstates": fetch_openstates,
     "house_clerk": fetch_house_clerk,
     "wa_pdc": fetch_wa_pdc,
+    "wikidata": fetch_wikidata,      # WO-15: education, needs the legislators snapshot
 }
 # Manifest source-key -> the config.SOURCES key whose SLA governs its freshness.
 # wa_pdc has no config.SOURCES entry (experimental, gated off); it is never

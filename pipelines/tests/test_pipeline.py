@@ -94,16 +94,59 @@ def test_schema_loads_with_generated_column():
 
 
 # --- transform + build vertical slice ---------------------------------------
+# Jane carries a PAST term (2023-2025, a prior AK-at-large stint before TN-06 —
+# unrealistic geographically but exercises previous_roles without new fixture
+# plumbing) plus a wikidata id, so she is the WO-15 happy path: contact,
+# district offices, social, previous_roles, birth_year, education all present.
+# Al and Sam carry NO wikidata id and Jane's current term carries no phone/
+# contact_form — the honest-absence paths (WO-15 test coverage).
 LEGS = [
-    {"id": {"bioguide": "R000001", "icpsr": "11", "fec": ["H8TN06001"]},
+    {"id": {"bioguide": "R000001", "icpsr": "11", "fec": ["H8TN06001"], "wikidata": "Q123456"},
      "name": {"first": "Jane", "last": "Rep", "official_full": "Jane Rep"},
      "bio": {"birthday": "1970-05-01"},
-     "terms": [{"type": "rep", "start": "2025-01-03", "end": "2027-01-03", "state": "TN", "district": 6, "party": "Republican"}]},
+     "terms": [
+         {"type": "rep", "start": "2023-01-03", "end": "2025-01-03", "state": "AK", "district": 0, "party": "Democrat"},
+         {"type": "rep", "start": "2025-01-03", "end": "2027-01-03", "state": "TN", "district": 6, "party": "Republican",
+          "phone": "202-225-0001", "url": "https://rep.house.gov", "contact_form": "https://rep.house.gov/contact",
+          "address": "1234 Longworth House Office Building Washington DC 20515"}]},
     {"id": {"bioguide": "A000002", "icpsr": "22"}, "name": {"official_full": "Al Large"},
      "terms": [{"type": "rep", "start": "2025-01-03", "end": "2027-01-03", "state": "AK", "district": 0, "party": "Democrat"}]},
-    {"id": {"bioguide": "S000003", "icpsr": "33"}, "name": {"official_full": "Sam Sen"},
+    # Sam DOES have a wikidata_qid but the fixture's claims file gives him a
+    # blank P69 (below) -> education must be an ABSENT key on his dossier, not
+    # a fabricated empty array (WO-15 fail-closed/honest-absence coverage).
+    {"id": {"bioguide": "S000003", "icpsr": "33", "wikidata": "Q999999"}, "name": {"official_full": "Sam Sen"},
      "terms": [{"type": "sen", "start": "2021-01-03", "end": "2027-01-03", "state": "TN", "party": "Republican", "class": 1}]},
 ]
+
+# --- WO-15: district offices + social media (federal, keyed by bioguide) ---
+DISTRICT_OFFICES = [
+    {"id": {"bioguide": "R000001"}, "offices": [
+        {"id": "R000001-x", "address": "100 Main St", "city": "Nashville", "state": "TN",
+         "zip": "37201", "phone": "615-555-0100", "latitude": 36.16, "longitude": -86.78}]},
+]
+SOCIAL_MEDIA = [
+    {"id": {"bioguide": "R000001"}, "social": {"twitter": "JaneRep", "mastodon": "@janerep@mastodon.social"}},
+]
+
+# --- WO-15: congress.gov member-detail (bioguide -> record) -----------------
+MEMBER_DETAIL = {
+    "R000001": {
+        "birthYear": "1970",
+        "leadership": [{"type": "Chair", "congress": 119}],
+        "partyHistory": [{"partyName": "Republican", "startYear": 2025, "endYear": None}],
+        "addressInformation": {"officeAddress": "1234 Longworth HOB", "city": "Washington",
+                                "zipCode": "20515", "phoneNumber": "202-225-0001"},
+    },
+    # Al: honest-absence path — no member-detail file at all this run.
+}
+
+# --- WO-15: Wikidata education (claims by qid + batched labels) -------------
+WIKIDATA_CLAIMS = {
+    "Q123456": [{"institution_qid": "Q1", "degree_qid": "Q2", "end_year": 1992},
+                {"institution_qid": "Q3"}],   # no degree/year -> both omitted
+    "Q999999": [],   # Sam: a qid resolved, but a blank P69 -> empty claims list
+}
+WIKIDATA_LABELS = {"Q1": "Test University", "Q2": "Bachelor of Arts", "Q3": "Night School"}
 # Mirrors real Voteview columns: no congress_end_date exists in HSxxx_members.csv,
 # so computed_as_of must come from the fetch manifest (or the congress boundary).
 VOTEVIEW = ("congress,chamber,icpsr,nominate_dim1,nominate_number_of_votes\n"
@@ -121,6 +164,7 @@ MANIFEST = {"generated_at": RETRIEVED_AT, "congress": 119, "sources": {
     "fec": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
     "openstates": {"retrieved_at": RETRIEVED_AT, "source_url": "https://openstates.org/", "count": 2},
     "house_clerk": {"retrieved_at": RETRIEVED_AT, "source_url": "https://x", "count": 1},
+    "wikidata": {"retrieved_at": RETRIEVED_AT, "source_url": "https://www.wikidata.org", "count": 1},
 }}
 
 # A House PTR filing that name-matches Jane Rep (family "Rep", first "Jane").
@@ -128,10 +172,17 @@ HOUSE_PTR = [{"last": "Rep", "first": "Jane", "suffix": "", "state_dst": "TN06",
               "filed_on": "2025-05-01", "doc_id": "20099999", "year": 2025}]
 
 # Two TN state legislators — one per chamber — to light up sldu/sldl (E4).
+# Pat carries contact + social columns (WO-15 happy path); Dana carries NEITHER
+# (honest-absence path for a state legislator: identity.contact/social simply
+# omitted, never a fabricated empty object).
 OPENSTATES_TN_CSV = (
-    "id,name,current_party,current_district,current_chamber,given_name,family_name,image,birth_date,sources\n"
-    "ocd-person/aaaa1111-1111-1111-1111-111111111111,Pat Upper,Republican,5,upper,Pat,Upper,https://img/pat.jpg,1975-03-02,https://capitol.tn.gov/pat\n"
-    "ocd-person/bbbb2222-2222-2222-2222-222222222222,Dana Lower,Democratic,10,lower,Dana,Lower,,1982-07-11,https://capitol.tn.gov/dana\n"
+    "id,name,current_party,current_district,current_chamber,given_name,family_name,image,birth_date,sources,"
+    "email,capitol_address,capitol_voice,capitol_fax,district_address,district_voice,district_fax,"
+    "twitter,youtube,instagram,facebook\n"
+    "ocd-person/aaaa1111-1111-1111-1111-111111111111,Pat Upper,Republican,5,upper,Pat,Upper,https://img/pat.jpg,1975-03-02,https://capitol.tn.gov/pat,"
+    "pat.upper@leg.tn.gov,301 Capitol,615-555-0001,,88 District Rd,615-555-0002,,patupper,,patupper_ig,patupper.fb\n"
+    "ocd-person/bbbb2222-2222-2222-2222-222222222222,Dana Lower,Democratic,10,lower,Dana,Lower,,1982-07-11,https://capitol.tn.gov/dana,"
+    ",,,,,,,,,,\n"
 )
 
 # Jane's FEC candidate totals (dollars, as the API returns them -> stored cents).
@@ -273,6 +324,20 @@ def slice_dirs(tmp_path):
     (raw / "openstates" / "people" / "tn.csv").write_text(OPENSTATES_TN_CSV)
     (raw / "house_clerk").mkdir(parents=True)
     (raw / "house_clerk" / "ptr.json").write_text(json.dumps(HOUSE_PTR))
+    # WO-15: district offices + social media (federal, unitedstates_legislators
+    # family), congress.gov member-detail (one file per bioguide — Al
+    # deliberately has none, the honest-absence path), and Wikidata claims +
+    # batched labels (Jane only — Al/Sam have no wikidata_qid).
+    (raw / "unitedstates_legislators" / "legislators-district-offices.json").write_text(
+        json.dumps(DISTRICT_OFFICES))
+    (raw / "unitedstates_legislators" / "legislators-social-media.json").write_text(
+        json.dumps(SOCIAL_MEDIA))
+    (raw / "congress.gov" / "member-detail").mkdir(parents=True)
+    for bio, rec in MEMBER_DETAIL.items():
+        (raw / "congress.gov" / "member-detail" / f"{bio}.json").write_text(json.dumps(rec))
+    (raw / "wikidata" / "claims").mkdir(parents=True)
+    (raw / "wikidata" / "claims" / "educated_at.json").write_text(json.dumps(WIKIDATA_CLAIMS))
+    (raw / "wikidata" / "labels.json").write_text(json.dumps(WIKIDATA_LABELS))
     (raw / "manifest.json").write_text(json.dumps(MANIFEST))   # fetch always writes one
     db = str(tmp_path / "wh.duckdb")
     transform.run(raw_dir=raw, db_path=db)
@@ -1372,7 +1437,7 @@ def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monke
     # every source fetcher ran (wa_pdc's stub returns a fragment here; the real
     # fetcher returns None when disabled — covered separately below).
     assert calls == {"unitedstates_legislators", "congress.gov", "voteview",
-                     "fec", "openstates", "house_clerk", "wa_pdc"}
+                     "fec", "openstates", "house_clerk", "wa_pdc", "wikidata"}
     for meta in manifest["sources"].values():
         assert meta["count"] == 1 and "retrieved_at" in meta
     timings = manifest["fetch_timings"]
@@ -1693,3 +1758,268 @@ def test_states_stylefeed_emitted_keyed_by_state_ocd(slice_dirs):
                     {"party": "R", "ideology_dim1": None, "vacant": True}}
     cov = json.loads((slice_dirs / "data" / "coverage.json").read_text())
     assert cov["counts"]["states_stylefeed"] == 1
+
+
+# --- WO-15: contact · social · previous-roles · bio · education ------------
+def test_legislators_contact_from_term_omits_absent_fields():
+    """contact_from_term publishes only the keys the term actually carries —
+    never a null placeholder — and prefers `address` over the short `office`
+    form when both are present."""
+    from beholden_etl.sources import legislators as L
+    full = {"phone": "202-225-0001", "url": "https://x.house.gov",
+            "contact_form": "https://x.house.gov/contact", "address": "123 Main St"}
+    assert L.contact_from_term(full) == {
+        "phone": "202-225-0001", "website": "https://x.house.gov",
+        "contact_form": "https://x.house.gov/contact", "dc_office_address": "123 Main St"}
+    assert L.contact_from_term({}) == {}          # no term data -> empty, never fabricated
+    assert L.contact_from_term(None) == {}         # no current term at all
+    # `office` (short form) used only when `address` is absent.
+    assert L.contact_from_term({"office": "511 Hart SOB"}) == {"dc_office_address": "511 Hart SOB"}
+
+
+def test_legislators_district_offices_by_bioguide_keeps_only_populated_fields():
+    from beholden_etl.sources import legislators as L
+    records = [
+        {"id": {"bioguide": "X000001"}, "offices": [
+            {"id": "o1", "address": "1 St", "city": "Town", "state": "TN",
+             "zip": "37000", "phone": "615-555-0000", "latitude": 1.0, "longitude": -2.0,
+             "id_field_not_in_allowlist": "ignored"},
+            {"id": "o2"},                          # no useful fields -> dropped entirely
+        ]},
+        {"offices": [{"id": "o3", "address": "no bioguide"}]},   # no bioguide -> skipped
+    ]
+    out = L.district_offices_by_bioguide(records)
+    assert list(out.keys()) == ["X000001"]
+    assert out["X000001"] == [{"address": "1 St", "city": "Town", "state": "TN",
+                                "zip": "37000", "phone": "615-555-0000",
+                                "latitude": 1.0, "longitude": -2.0}]
+
+
+def test_legislators_social_media_by_bioguide_verbatim_handles_only():
+    from beholden_etl.sources import legislators as L
+    records = [
+        {"id": {"bioguide": "X000001"}, "social": {
+            "twitter": "xrep", "twitter_id": "999", "mastodon": "@xrep@mastodon.social"}},
+        {"id": {"bioguide": "Y000002"}, "social": {}},   # empty social -> absent, not published
+    ]
+    out = L.social_media_by_bioguide(records)
+    assert out == {"X000001": {"twitter": "xrep", "mastodon": "@xrep@mastodon.social"}}
+    assert "twitter_id" not in out["X000001"]      # only the allow-listed handle fields publish
+    assert "Y000002" not in out
+
+
+def test_openstates_contact_and_social_from_row_are_column_verbatim():
+    from beholden_etl.sources import openstates
+    row = {"email": "a@leg.state.gov", "capitol_address": "1 Capitol",
+           "capitol_voice": "555-0001", "district_address": "", "district_voice": "",
+           "twitter": "stateleg", "youtube": "", "instagram": "", "facebook": ""}
+    assert openstates.contact_from_row(row) == {
+        "email": "a@leg.state.gov", "capitol_address": "1 Capitol", "capitol_voice": "555-0001"}
+    assert openstates.social_from_row(row) == {"twitter": "stateleg"}
+    assert openstates.contact_from_row({}) == {}
+    assert openstates.social_from_row({}) == {}
+
+
+def test_congress_gov_member_detail_normalizers():
+    from beholden_etl.sources import congress_gov as C
+    detail = {"birthYear": "1965",
+              "leadership": [{"type": "Chair", "congress": 119}, {"congress": 118}],
+              "partyHistory": [{"partyName": "Democratic", "startYear": 2019, "endYear": None}],
+              "addressInformation": {"officeAddress": "100 X St", "city": "Washington",
+                                     "zipCode": "20515", "phoneNumber": "202-225-9999"}}
+    assert C.birth_year(detail) == 1965
+    assert C.birth_year({}) is None
+    assert C.birth_year({"birthYear": "not-a-year"}) is None
+    assert C.leadership_roles(detail) == [{"role": "Chair", "congress": 119}]   # no-role entry dropped
+    assert C.party_history(detail) == [{"party": "Democratic", "start_year": 2019, "end_year": None}]
+    assert C.dc_office_from_detail(detail) == {
+        "dc_office_address": "100 X St, Washington, 20515", "phone": "202-225-9999"}
+    assert C.dc_office_from_detail({}) == {}
+
+
+def test_wikidata_educated_at_claims_and_time_year_parsing():
+    from beholden_etl.sources import wikidata as W
+    entity = {"entities": {"Q1": {"claims": {"P69": [
+        {"mainsnak": {"datavalue": {"value": {"id": "Q10"}}},
+         "qualifiers": {"P512": [{"datavalue": {"value": {"id": "Q20"}}}],
+                        "P582": [{"datavalue": {"value": {"time": "+1990-00-00T00:00:00Z"}}}]}},
+        {"mainsnak": {"datavalue": {"value": {"id": "Q30"}}}},   # no qualifiers at all
+    ]}}}}
+    claims = W.educated_at_claims(entity, "Q1")
+    assert claims == [
+        {"institution_qid": "Q10", "degree_qid": "Q20", "end_year": 1990},
+        {"institution_qid": "Q30"},
+    ]
+    assert W.educated_at_claims({"entities": {}}, "Q1") == []   # unknown qid -> empty, never crashes
+    # A real entity with no P69 statement at all (most Wikidata people items) ->
+    # an empty list, never an error or a fabricated entry.
+    no_p69 = {"entities": {"Q9": {"claims": {"P106": [{"mainsnak": {}}]}}}}
+    assert W.educated_at_claims(no_p69, "Q9") == []
+
+
+def test_wikidata_chunking_respects_the_documented_cap():
+    from beholden_etl.sources import wikidata as W
+    ids = [f"Q{i}" for i in range(120)]
+    chunks = W.chunk_ids(ids)
+    assert len(chunks) == 3 and all(len(c) <= W.WBGETENTITIES_MAX_IDS for c in chunks)
+    assert sum(len(c) for c in chunks) == 120
+
+
+def test_wikidata_education_rows_drops_unlabeled_institution_never_invents():
+    from beholden_etl.sources import wikidata as W
+    claims = [{"institution_qid": "Q1", "degree_qid": "Q2", "end_year": 1999},
+              {"institution_qid": "Q3"},                 # no label for Q3 -> dropped entirely
+              {"institution_qid": "Q4", "degree_qid": "Q5"}]   # no label for Q5 -> degree omitted
+    labels = {"Q1": "Acme University", "Q2": "PhD", "Q4": "Beta College"}
+    rows = W.education_rows(claims, labels)
+    assert rows == [
+        {"institution": "Acme University", "degree": "PhD", "year": 1999},
+        {"institution": "Beta College"},
+    ]
+
+
+def test_dossier_contact_district_offices_social_previous_roles_education(slice_dirs):
+    """The WO-15 happy path, all six groups on one federal officeholder (Jane):
+    contact (federal term fields), district_offices (verbatim per-office dicts),
+    social (unitedstates handles), previous_roles (our own warehoused past
+    term), birth_year (congress.gov member-detail), and education (Wikidata,
+    with its OWN provenance envelope + the verbatim crowd-sourced caveat)."""
+    ident = _dossier_named(slice_dirs, "Jane Rep")["identity"]
+
+    assert ident["contact"] == {
+        "phone": "202-225-0001", "website": "https://rep.house.gov",
+        "contact_form": "https://rep.house.gov/contact",
+        "dc_office_address": "1234 Longworth House Office Building Washington DC 20515"}
+
+    assert ident["district_offices"] == [
+        {"address": "100 Main St", "city": "Nashville", "state": "TN", "zip": "37201",
+         "phone": "615-555-0100", "latitude": 36.16, "longitude": -86.78}]
+
+    assert ident["social"] == {"twitter": "JaneRep", "mastodon": "@janerep@mastodon.social"}
+
+    assert ident["previous_roles"] == [
+        {"role": "representative", "chamber": "house",
+         "start_date": "2023-01-03", "end_date": "2025-01-03", "party": "D"}]
+
+    assert ident["birth_year"] == 1970   # congress.gov member-detail's own field
+
+    edu = ident["education"]
+    assert edu["items"] == [{"institution": "Test University", "degree": "Bachelor of Arts", "year": 1992},
+                            {"institution": "Night School"}]
+    assert edu["credibility_note"] == (
+        "Sourced from Wikidata, a publicly edited encyclopedia — verify against "
+        "the member's official biography.")
+    assert edu["provenance"]["source"] == "wikidata"          # its OWN envelope, never identity's
+    assert edu["provenance"]["retrieved_at"]                  # no provenance, no publish
+
+
+def test_dossier_honest_absence_no_phone_no_wikidata_no_district_offices(slice_dirs):
+    """Al: no wikidata_qid (education key entirely absent — never an empty
+    array), no member-detail file (birth_year falls back to the warehoused
+    unitedstates value), no district-offices entry, no social entry, no
+    previous term (previous_roles key entirely absent), and no contact fields
+    on his single current term (contact key entirely absent)."""
+    ident = _dossier_named(slice_dirs, "Al Large")["identity"]
+    assert "education" not in ident
+    assert "district_offices" not in ident
+    assert "social" not in ident
+    assert "previous_roles" not in ident
+    assert "contact" not in ident
+    assert "birth_year" not in ident   # Al's fixture carries no bio.birthday either
+
+
+def test_dossier_education_absent_when_wikidata_qid_resolves_to_blank_p69(slice_dirs):
+    """Sam DOES carry a wikidata_qid (unlike Al), but his claims fixture is a
+    blank P69 (empty list) — the dossier must publish NO education key at all,
+    never an empty {"items": []} block (fail-closed: a resolved-but-empty
+    claim is not a fact to publish)."""
+    ident = _dossier_named(slice_dirs, "Sam Sen")["identity"]
+    assert "education" not in ident
+
+
+def test_dossier_state_legislator_gets_state_shaped_contact_and_social(slice_dirs):
+    """Pat (TN state senator) publishes OpenStates' own contact/social columns —
+    a DIFFERENT shape than the federal contact block (email + capitol/district
+    address+voice, vs. phone/website/contact_form/dc_office_address) — never
+    federal-shaped fields on a state dossier. Dana (same chamber, blank
+    columns) proves the honest-absence path for state too."""
+    docs = [json.loads(f.read_text()) for f in (slice_dirs / "data" / "dossiers").glob("*.json")]
+    pat = next(d for d in docs if d["identity"]["full_name"] == "Pat Upper")["identity"]
+    assert pat["contact"] == {
+        "email": "pat.upper@leg.tn.gov", "capitol_address": "301 Capitol",
+        "capitol_voice": "615-555-0001", "district_address": "88 District Rd",
+        "district_voice": "615-555-0002"}
+    assert pat["social"] == {"twitter": "patupper", "instagram": "patupper_ig", "facebook": "patupper.fb"}
+    assert "phone" not in pat["contact"] and "website" not in pat["contact"]   # never federal-shaped
+    assert "district_offices" not in pat and "education" not in pat   # federal-only groups, state omits
+
+    dana = next(d for d in docs if d["identity"]["full_name"] == "Dana Lower")["identity"]
+    assert "contact" not in dana        # blank CSV columns -> honest absence, not a fabricated {}
+    assert "social" not in dana
+
+
+def test_previous_roles_reads_from_our_own_warehoused_terms(slice_dirs):
+    """previous_roles is sourced from the SAME `terms` table transform.py
+    warehouses for current terms — not re-derived from raw at build time —
+    ordered most-recent-first (only one past term in the fixture, but the
+    ordering contract is asserted directly against _previous_roles)."""
+    from beholden_etl import store
+    from beholden_etl.jobs.build import _previous_roles
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    try:
+        by_person = _previous_roles(con)
+    finally:
+        con.close()
+    # Jane's person_id is deterministic from her bioguide.
+    from beholden_etl.sources import legislators as L
+    jane_id = L.person_uuid("R000001")
+    assert by_person[jane_id] == [{"role": "representative", "chamber": "house",
+                                   "start_date": "2023-01-03", "end_date": "2025-01-03",
+                                   "party": "D"}]
+    # No past terms for Al/Sam -> no key at all (never an empty list published
+    # as if it were a checked-and-empty fact).
+    al_id = L.person_uuid("A000002")
+    assert al_id not in by_person
+
+
+def test_fetch_wikidata_batches_labels_and_skips_persons_without_entity(tmp_path, monkeypatch):
+    """fetch_wikidata reads the landed legislators snapshot for wikidata qids,
+    fetches one entity per qid, and batches EVERY referenced item id (across
+    every person) into resolve_labels in as few calls as possible — a
+    per-person entity failure is skipped (education absence is honest), never
+    sinking the run."""
+    from beholden_etl.jobs import fetch as _fetch
+    from beholden_etl.sources import wikidata as W
+
+    raw = tmp_path / "raw"
+    (raw / "unitedstates_legislators").mkdir(parents=True)
+    legs = [{"id": {"bioguide": "R000001", "wikidata": "Q1"}},
+            {"id": {"bioguide": "R000002", "wikidata": "Q2"}},
+            {"id": {"bioguide": "R000003"}}]                 # no wikidata id -> excluded from qids
+    (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(legs))
+
+    def fake_fetch_entity(qid):
+        if qid == "Q2":
+            raise RuntimeError("simulated transient failure")
+        return {"entities": {"Q1": {"claims": {"P69": [
+            {"mainsnak": {"datavalue": {"value": {"id": "Q100"}}}}]}}}}
+
+    resolve_calls = []
+
+    def fake_resolve_labels(ids):
+        resolve_calls.append(set(ids))
+        return {"Q100": "Acme U"}
+
+    monkeypatch.setattr(W, "fetch_entity", fake_fetch_entity)
+    monkeypatch.setattr(W, "resolve_labels", fake_resolve_labels)
+
+    meta = _fetch.fetch_wikidata(raw, prior={})
+    assert meta["count"] == 1 and meta["skipped"] == 1     # Q1 ok, Q2 skipped
+    assert meta["labels"] == 1
+    assert resolve_calls == [{"Q100"}]                     # ONE batched call, not one per person
+
+    claims = json.loads((raw / "wikidata" / "claims" / "educated_at.json").read_text())
+    assert claims == {"Q1": [{"institution_qid": "Q100"}]}
+    assert "Q2" not in claims                              # failed entity -> no claims entry
+    labels = json.loads((raw / "wikidata" / "labels.json").read_text())
+    assert labels == {"Q100": "Acme U"}

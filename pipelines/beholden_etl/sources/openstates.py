@@ -58,4 +58,29 @@ def to_person_rows(csv_text: str):
             "image": row.get("image") or None,
             "birth_date": row.get("birth_date") or None,
             "source_url": srcs[0] if srcs else None,
+            # WO-15: contact + social straight from the CSV's own columns —
+            # verbatim, present only when the row itself has a value (never a
+            # fabricated blank). Kept as nested dicts so build.py can drop them
+            # into identity.contact / identity.social unchanged.
+            "contact": contact_from_row(row),
+            "social": social_from_row(row),
         }
+
+
+# WO-15: OpenStates' own contact columns (verified live against
+# data.openstates.org/people/current/{state}.csv). Congress has no per-member
+# email; state legislators DO carry one here, so it publishes for state only.
+_CONTACT_COLUMNS = {
+    "email": "email", "capitol_address": "capitol_address",
+    "capitol_voice": "capitol_voice", "district_address": "district_address",
+    "district_voice": "district_voice",
+}
+_SOCIAL_COLUMNS = ("twitter", "youtube", "instagram", "facebook")
+
+
+def contact_from_row(row: dict) -> dict:
+    return {out_key: row[col] for col, out_key in _CONTACT_COLUMNS.items() if row.get(col)}
+
+
+def social_from_row(row: dict) -> dict:
+    return {col: row[col] for col in _SOCIAL_COLUMNS if row.get(col)}

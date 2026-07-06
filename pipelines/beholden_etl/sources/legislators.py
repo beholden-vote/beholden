@@ -15,6 +15,11 @@ URL = f"{SOURCES['unitedstates_legislators'].base_url}/legislators-current.yaml"
 COMMITTEES_URL = f"{SOURCES['unitedstates_legislators'].base_url}/committees-current.yaml"
 COMMITTEE_MEMBERSHIP_URL = (
     f"{SOURCES['unitedstates_legislators'].base_url}/committee-membership-current.yaml")
+# WO-15: district offices + social handles. Published on GitHub Pages (not raw.
+# githubusercontent like the YAML above), but the SAME source family/repo, so
+# both land under the one unitedstates_legislators envelope — no new source key.
+DISTRICT_OFFICES_URL = "https://unitedstates.github.io/congress-legislators/legislators-district-offices.json"
+SOCIAL_MEDIA_URL = "https://unitedstates.github.io/congress-legislators/legislators-social-media.json"
 
 SCHEMES = {"bioguide": "bioguide", "fec": "fec", "icpsr": "icpsr", "wikidata": "wikidata"}
 
@@ -69,6 +74,94 @@ def fetch_current() -> list[dict]:
     r = httpx.get(URL, timeout=60, follow_redirects=True)
     r.raise_for_status()
     return yaml.safe_load(r.text)
+
+
+# --- WO-15: contact (from the current term already fetched above) ----------
+def contact_from_term(term: dict | None) -> dict:
+    """{phone, website, contact_form, dc_office_address} verbatim from a
+    congress-legislators term dict (address/office = DC office; url = website).
+    Every key is omitted, never null/empty, when the source lacks it — honest
+    absence over a fabricated placeholder. `office` is the AOC-style short form
+    ("511 Hart Senate Office Building"); `address` is the full one-line mailing
+    address — prefer `address` (matches district_offices' shape) falling back
+    to `office` for older terms that only carry the short form."""
+    term = term or {}
+    out = {}
+    if term.get("phone"):
+        out["phone"] = term["phone"]
+    if term.get("url"):
+        out["website"] = term["url"]
+    if term.get("contact_form"):
+        out["contact_form"] = term["contact_form"]
+    addr = term.get("address") or term.get("office")
+    if addr:
+        out["dc_office_address"] = addr
+    return out
+
+
+# --- WO-15: district offices (federal only) ---------------------------------
+@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, max=60))
+def fetch_district_offices() -> list[dict]:
+    """legislators-district-offices.json: per-bioguide list of local offices
+    (address/city/state/zip/phone/lat/lng). Same trusted family as the roster
+    above (GitHub Pages mirror of the same repo) -> unitedstates_legislators
+    envelope. Retrying like the other bulk pulls (nightly runs unattended)."""
+    r = httpx.get(DISTRICT_OFFICES_URL, timeout=60, follow_redirects=True)
+    r.raise_for_status()
+    return r.json()
+
+
+_OFFICE_FIELDS = ("address", "city", "state", "zip", "phone", "latitude", "longitude")
+
+
+def district_offices_by_bioguide(records: list[dict]) -> dict[str, list[dict]]:
+    """bioguide -> [{address, city, state, zip, phone, latitude, longitude}],
+    each dict carrying only the keys the source itself populated for that
+    office — never a fabricated field. A record with no bioguide is skipped
+    (can't key to the spine)."""
+    out: dict[str, list[dict]] = {}
+    for rec in records or []:
+        bio = (rec.get("id") or {}).get("bioguide")
+        if not bio:
+            continue
+        offices = []
+        for o in rec.get("offices") or []:
+            entry = {k: o[k] for k in _OFFICE_FIELDS if o.get(k) is not None}
+            if entry:
+                offices.append(entry)
+        if offices:
+            out[bio] = offices
+    return out
+
+
+# --- WO-15: social media handles ---------------------------------------------
+@retry(stop=stop_after_attempt(4), wait=wait_exponential(multiplier=2, max=60))
+def fetch_social_media() -> list[dict]:
+    """legislators-social-media.json: per-bioguide handles (twitter/facebook/
+    instagram/youtube/mastodon). Same trusted family as the roster -> the
+    unitedstates_legislators envelope. Retrying like the other bulk pulls."""
+    r = httpx.get(SOCIAL_MEDIA_URL, timeout=60, follow_redirects=True)
+    r.raise_for_status()
+    return r.json()
+
+
+_SOCIAL_FIELDS = ("twitter", "facebook", "instagram", "youtube", "mastodon")
+
+
+def social_media_by_bioguide(records: list[dict]) -> dict[str, dict]:
+    """bioguide -> {twitter?, facebook?, instagram?, youtube?, mastodon?},
+    verbatim handles only — never a guessed/derived handle, and a field the
+    source omits is simply absent from the dict (not published as null)."""
+    out: dict[str, dict] = {}
+    for rec in records or []:
+        bio = (rec.get("id") or {}).get("bioguide")
+        social = rec.get("social") or {}
+        if not bio or not social:
+            continue
+        entry = {k: social[k] for k in _SOCIAL_FIELDS if social.get(k)}
+        if entry:
+            out[bio] = entry
+    return out
 
 
 def to_spine_rows(legislators: list[dict]):

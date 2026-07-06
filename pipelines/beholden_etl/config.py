@@ -25,6 +25,12 @@ SOURCES: dict[str, Source] = {
     "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24),   # new trades daily
     "senate_efd": Source("senate_efd", "https://efdsearch.senate.gov", 24),
     "census_tiger": Source("census_tiger", "https://www2.census.gov/geo/tiger", 24 * 365),
+    # WO-15: crowd-edited encyclopedia, used ONLY for identity.education (P69
+    # educated-at + P512/P582 qualifiers). Every education fact's provenance
+    # envelope points at THIS source key (never unitedstates_legislators), and
+    # the dossier carries a verbatim caveat alongside it — labeled trust, not
+    # silent equivalence with official sources. Rarely changes -> a 30-day SLA.
+    "wikidata": Source("wikidata", "https://www.wikidata.org", 24 * 30),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)

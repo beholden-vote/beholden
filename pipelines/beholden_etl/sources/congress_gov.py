@@ -80,6 +80,15 @@ class CongressGovClient:
         data = self.get(f"member/{bioguide}/cosponsored-legislation", limit=1, offset=0)
         return int((data.get("pagination") or {}).get("count") or 0)
 
+    def member_detail(self, bioguide: str) -> dict:
+        """GET /member/{bioguide} (WO-15): the one extra call per member beyond
+        current_members — carries birthYear, partyHistory[] (party-switch
+        history), leadership[] (role + congress), and addressInformation (DC
+        office/phone) that the roster-list endpoint omits. Uses the SAME
+        throttled `get()` as every other call, so this ~537-call addition is
+        governed by the one existing rate governor (no second limiter)."""
+        return self.get(f"member/{bioguide}").get("member") or {}
+
 
 # --- bill normalization (pure; unit-tested) --------------------------------
 # congress.gov bill `type` -> the slug used in our bill_id 'us/{congress}/{slug}/{num}'.
@@ -138,3 +147,63 @@ def bill_row(item: dict) -> dict:
         "latest_action_on": (item.get("latestAction") or {}).get("actionDate") or None,
         "policy_areas": [pa] if pa else None,
     }
+
+
+# --- WO-15: member-detail normalization (pure; unit-tested) -----------------
+def birth_year(detail: dict) -> int | None:
+    """member_detail's own `birthYear` (a string in the v3 schema), or None —
+    this REPLACES any need for Wikidata on this one fact; absent -> absent,
+    never a guessed/derived year."""
+    y = detail.get("birthYear")
+    try:
+        return int(y) if y not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def leadership_roles(detail: dict) -> list[dict]:
+    """member_detail's `leadership[]` -> [{role, congress}], verbatim, dropping
+    only entries missing the role name (never invented)."""
+    out = []
+    for item in detail.get("leadership") or []:
+        role = item.get("type")
+        if not role:
+            continue
+        out.append({"role": role, "congress": item.get("congress")})
+    return out
+
+
+def party_history(detail: dict) -> list[dict]:
+    """member_detail's `partyHistory[]` -> [{party, start_year, end_year}],
+    verbatim (party switches over a member's whole career) — dropping only
+    entries with neither a party name nor code (never invented)."""
+    out = []
+    for item in detail.get("partyHistory") or []:
+        party = item.get("partyName") or item.get("partyAbbreviation")
+        if not party:
+            continue
+        out.append({"party": party, "start_year": item.get("startYear"),
+                    "end_year": item.get("endYear")})
+    return out
+
+
+def dc_office_from_detail(detail: dict) -> dict:
+    """member_detail's `addressInformation` -> {dc_office_address, phone},
+    verbatim, each key present only when the source populated it. A distinct
+    (fresher) source of the same two facts as the congress-legislators term —
+    the transform prefers whichever is present, never fabricating either."""
+    addr = detail.get("addressInformation") or {}
+    out = {}
+    office = addr.get("officeAddress")
+    city = addr.get("city")
+    zip_code = addr.get("zipCode")
+    if office:
+        parts = [office]
+        if city:
+            parts.append(city)
+        if zip_code:
+            parts.append(str(zip_code))
+        out["dc_office_address"] = ", ".join(parts)
+    if addr.get("phoneNumber"):
+        out["phone"] = addr["phoneNumber"]
+    return out

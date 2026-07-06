@@ -21,7 +21,8 @@ from pathlib import Path
 
 from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
-from ..sources import congress_gov, house_clerk, voteview
+from ..sources import congress_gov, house_clerk, voteview, wikidata
+from ..sources import legislators as L
 from .transform import DEFAULT_DB
 from .. import store
 
@@ -51,6 +52,74 @@ def _photo_map(raw_dir: Path) -> dict[str, str]:
         if bio and url:
             out[bio] = url
     return out
+
+
+def _federal_contact_map(raw_dir: Path) -> dict[str, dict]:
+    """bioguide -> {phone?, website?, contact_form?, dc_office_address?} from
+    the current term of the landed legislators-current.json (WO-15). Reads the
+    same file _photo_map's sibling sources already load; kept separate here so
+    a caller that only needs contact doesn't have to re-derive current_term."""
+    f = raw_dir / "unitedstates_legislators" / "legislators-current.json"
+    if not f.exists():
+        return {}
+    out = {}
+    for leg in json.loads(f.read_text(encoding="utf-8")):
+        bio = (leg.get("id") or {}).get("bioguide")
+        term = L.current_term(leg)
+        if not bio or not term:
+            continue
+        contact = L.contact_from_term(term)
+        if contact:
+            out[bio] = contact
+    return out
+
+
+def _district_offices_map(raw_dir: Path) -> dict[str, list[dict]]:
+    """bioguide -> [{address, city, state, zip, phone, latitude, longitude}]
+    from the landed legislators-district-offices.json (WO-15, federal only)."""
+    f = raw_dir / "unitedstates_legislators" / "legislators-district-offices.json"
+    if not f.exists():
+        return {}
+    return L.district_offices_by_bioguide(json.loads(f.read_text(encoding="utf-8")))
+
+
+def _social_media_map(raw_dir: Path) -> dict[str, dict]:
+    """bioguide -> {twitter?, facebook?, instagram?, youtube?, mastodon?} from
+    the landed legislators-social-media.json (WO-15, federal only)."""
+    f = raw_dir / "unitedstates_legislators" / "legislators-social-media.json"
+    if not f.exists():
+        return {}
+    return L.social_media_by_bioguide(json.loads(f.read_text(encoding="utf-8")))
+
+
+def _member_detail_map(raw_dir: Path) -> dict[str, dict]:
+    """bioguide -> the landed congress.gov member-detail record (WO-15): source
+    for birth_year, previous_roles' leadership/partyHistory augmentation, and a
+    second (fresher) DC office/phone. Absent for a member the fetch skipped —
+    honest absence, same as every other optional dossier fact."""
+    d = raw_dir / "congress.gov" / "member-detail"
+    if not d.exists():
+        return {}
+    out = {}
+    for f in d.glob("*.json"):
+        out[f.stem] = json.loads(f.read_text(encoding="utf-8"))
+    return out
+
+
+def _education_map(raw_dir: Path) -> dict[str, list[dict]]:
+    """wikidata_qid -> [{institution, degree?, year?}] (WO-15, federal only).
+    Reads the landed per-person P69 claims + the batched label resolution and
+    joins them at build time (claims carry item ids; labels are the id->label
+    map) so a person with claims but an unresolved label never publishes a
+    blank institution (education_rows already drops those)."""
+    claims_f = raw_dir / "wikidata" / "claims" / "educated_at.json"
+    labels_f = raw_dir / "wikidata" / "labels.json"
+    if not claims_f.exists() or not labels_f.exists():
+        return {}
+    claims_by_qid = json.loads(claims_f.read_text(encoding="utf-8"))
+    labels = json.loads(labels_f.read_text(encoding="utf-8"))
+    return {qid: wikidata.education_rows(claims, labels)
+            for qid, claims in claims_by_qid.items() if claims}
 
 
 def _provenance(source: str, source_url: str, manifest: dict,
@@ -110,12 +179,15 @@ def _current_holders(con) -> list[dict]:
     cur = con.execute(
         """
         SELECT p.person_id, p.full_name, p.given_name, p.family_name,
+               p.wikidata_qid, p.birth_year,
                o.role, o.chamber, d.ocd_id,
                t.party, t.is_vacant_marker,
                t.meta->>'term_ends'        AS term_ends,
                t.meta->>'first_took_office' AS first_took_office,
                t.meta->>'image'            AS image_url,
                t.meta->>'source_url'       AS source_url,
+               t.meta->>'contact'          AS state_contact_json,
+               t.meta->>'social'           AS state_social_json,
                i.score  AS ideology_score,
                i.status AS ideology_status,
                (SELECT id_value FROM person_identifiers pi
@@ -135,6 +207,11 @@ def _current_holders(con) -> list[dict]:
         r["person_id"] = str(r["person_id"])          # DuckDB UUID -> str for JSON
         if r["ideology_score"] is not None:
             r["ideology_score"] = float(r["ideology_score"])   # Decimal -> float
+        # WO-15: state contact/social ride in terms.meta as a JSON string
+        # (DuckDB's ->> stringifies nested objects); parse back to a dict, or
+        # {} when the state legislator's CSV row had none (honest absence).
+        r["state_contact"] = json.loads(r.pop("state_contact_json") or "null") or {}
+        r["state_social"] = json.loads(r.pop("state_social_json") or "null") or {}
         out.append(r)
     return out
 
@@ -152,6 +229,26 @@ def _medians(holders: list[dict]) -> dict:
         by_chamber.setdefault(h["chamber"], []).append(h["ideology_score"])
     return {"party": {k: med(v) for k, v in by_party.items()},
             "chamber": {k: med(v) for k, v in by_chamber.items()}}
+
+
+def _previous_roles(con) -> dict[str, list[dict]]:
+    """person_id -> [{role, chamber, start_date, end_date, party}] of a
+    person's PAST terms (WO-15), most-recent-first, straight from OUR OWN
+    warehoused `terms` table (transform.py now persists every historical term,
+    not just the current one). end_date IS NOT NULL is exactly "past" here —
+    the current term (end_date IS NULL) is excluded, it already publishes via
+    identity.tenure/office."""
+    out: dict[str, list[dict]] = {}
+    for pid, role, chamber, start_date, end_date, party in con.execute(
+        """SELECT t.person_id, o.role, o.chamber,
+                  t.start_date::VARCHAR, t.end_date::VARCHAR, t.party
+           FROM terms t JOIN offices o USING(office_id)
+           WHERE t.end_date IS NOT NULL
+           ORDER BY t.person_id, t.end_date DESC, t.start_date DESC""").fetchall():
+        out.setdefault(str(pid), []).append({
+            "role": role, "chamber": chamber,
+            "start_date": start_date, "end_date": end_date, "party": party})
+    return out
 
 
 def _legislative_stats(con) -> dict[str, dict]:
@@ -426,11 +523,14 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              disclosures: dict, vote_records: dict, rc_meta: dict,
              party_majority: dict, committees: dict,
              policy_areas: dict[str, list[str]], bill_titles: dict[str, str],
-             rc_tallies: dict[str, tuple]) -> dict:
+             rc_tallies: dict[str, tuple], district_offices: dict, social_media: dict,
+             member_detail: dict, education: dict, previous_roles: dict,
+             federal_contact: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     vacant = bool(h["is_vacant_marker"])
     photo_url = h.get("image_url") or photo.get(bio)   # OpenStates image or congress.gov headshot
+    detail = member_detail.get(bio) if bio else None
 
     if federal:
         identity_prov = _provenance(
@@ -457,6 +557,58 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         "official_links": links,
         "provenance": identity_prov,
     }
+
+    # --- WO-15: contact (federal: congress-legislators current-term fields,
+    # via federal_contact keyed by bioguide; state: OpenStates CSV columns,
+    # already folded into h by _current_holders). Congress publishes no direct
+    # member email — contact_form/website is the closest federal equivalent
+    # (never fabricated). Absent entirely -> key omitted, never null. ---
+    if federal:
+        contact = dict(federal_contact.get(bio) or {}) if bio else {}
+        # congress.gov member-detail's own DC office/phone as a second (often
+        # fresher) source when the legislators-YAML term lacked them.
+        if detail:
+            for k, v in congress_gov.dc_office_from_detail(detail).items():
+                contact.setdefault(k, v)
+    else:
+        contact = dict(h.get("state_contact") or {})
+    if contact:
+        identity["contact"] = contact
+
+    if federal and bio and district_offices.get(bio):
+        identity["district_offices"] = district_offices[bio]
+
+    social = social_media.get(bio, {}) if federal and bio else (h.get("state_social") or {})
+    if social:
+        identity["social"] = social
+
+    roles = previous_roles.get(h["person_id"])
+    if roles:
+        identity["previous_roles"] = roles
+
+    # birth_year: congress.gov member-detail's own field REPLACES the need for
+    # Wikidata on this one fact (WO-15); falls back to the warehoused value
+    # (unitedstates-legislators bio.birthday, already on `persons`) when
+    # member-detail is absent for this run. Published only when present.
+    by = congress_gov.birth_year(detail) if detail else None
+    if by is None:
+        by = h.get("birth_year")
+    if by is not None:
+        identity["birth_year"] = int(by)
+
+    # education (federal only, Wikidata): a DEDICATED envelope + the verbatim
+    # crowd-sourced caveat, published ONLY alongside the array itself — never
+    # under identity.provenance, and never presented with the same unqualified
+    # trust as the official sources above (docs/workplan/README.md WO-15).
+    edu = education.get(h.get("wikidata_qid")) if federal and h.get("wikidata_qid") else None
+    if edu:
+        identity["education"] = {
+            "items": edu,
+            "credibility_note": wikidata.CREDIBILITY_NOTE,
+            "provenance": _provenance(
+                "wikidata", wikidata.entity_url(h["wikidata_qid"]), manifest),
+        }
+
     sections = {"identity": identity, "graph_ref": f"/graph/neighborhood/{h['person_id']}"}
 
     # Ideology + legislative record are federal-only for now; state dossiers
@@ -634,11 +786,17 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     policy_areas = _bill_policy_areas(con)        # WO-8: bill_id -> policy-area chips
     bill_titles = _bill_titles(con)               # WO-12: key-vote bill_title join
     rc_tallies = _roll_call_tallies(con)          # WO-12: persisted yea/nay tallies
+    previous_roles = _previous_roles(con)         # WO-15: past terms (our own warehouse)
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
     disclosures = _disclosures(raw_dir, holders)
     rc_meta = _rollcall_meta(raw_dir)
+    federal_contact = _federal_contact_map(raw_dir)     # WO-15
+    district_offices = _district_offices_map(raw_dir)   # WO-15
+    social_media = _social_media_map(raw_dir)           # WO-15
+    member_detail = _member_detail_map(raw_dir)         # WO-15
+    education = _education_map(raw_dir)                 # WO-15
 
     # Party-majority position per (roll_call, party), from every decided vote —
     # the reference each member's agreement is scored against (symmetric: same
@@ -649,7 +807,9 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     # --- dossiers (all members) ---
     docs = [_dossier(h, photo, manifest, medians, leg_spine, cospon, campaign,
                      contributors, disclosures, vote_records, rc_meta, party_majority,
-                     committees, policy_areas, bill_titles, rc_tallies)
+                     committees, policy_areas, bill_titles, rc_tallies,
+                     district_offices, social_media, member_detail, education,
+                     previous_roles, federal_contact)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

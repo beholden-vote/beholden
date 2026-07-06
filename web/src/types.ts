@@ -35,6 +35,46 @@ export interface Dossier {
     status: "incumbent" | "vacant";
     official_links: { type: string; url: string }[];
     provenance: Provenance;
+    /** WO-15: federal = congress-legislators current-term fields (Congress
+     *  publishes no direct member email — contact_form/website is the closest
+     *  federal equivalent); state = OpenStates' own CSV columns. Different
+     *  shapes by design; every key is present only when the source had it. */
+    contact?: {
+      phone?: string; website?: string; contact_form?: string; dc_office_address?: string;
+      email?: string; capitol_address?: string; capitol_voice?: string;
+      district_address?: string; district_voice?: string;
+    };
+    /** WO-15: federal-only, verbatim per-office rows from
+     *  legislators-district-offices.json; a field is present only when the
+     *  source populated it for that office. */
+    district_offices?: {
+      address?: string; city?: string; state?: string; zip?: string;
+      phone?: string; latitude?: number; longitude?: number;
+    }[];
+    /** WO-15: verbatim handles, never a guessed/derived one. Federal keys from
+     *  legislators-social-media.json; state keys from the OpenStates CSV. */
+    social?: {
+      twitter?: string; facebook?: string; instagram?: string;
+      youtube?: string; mastodon?: string;
+    };
+    /** WO-15: past terms from our own warehoused `terms` table, most-recent-
+     *  first; absent when the member has no prior term on file. */
+    previous_roles?: {
+      role: string; chamber: string;
+      start_date: string; end_date: string; party: string;
+    }[];
+    /** WO-15: congress.gov member-detail's own field (replaces any need for
+     *  Wikidata on this fact); present only when the source had it. */
+    birth_year?: number;
+    /** WO-15: federal-only, Wikidata P69/P512/P582 — a crowd-edited source, so
+     *  it carries its OWN provenance envelope (never identity.provenance) plus
+     *  a verbatim credibility caveat rendered wherever education appears. Any
+     *  item field may be absent; never invented. */
+    education?: {
+      items: { institution: string; degree?: string; year?: number }[];
+      credibility_note: string;
+      provenance: Provenance;
+    };
   };
   /** Federal-only for now; a state legislator's dossier omits it (E4). */
   ideology?: {
