@@ -1,7 +1,9 @@
 """Stage 3 — DuckDB spine -> serving artifacts in dist/data (contracts §3/§5).
 
 Emits, for the current federal legislature:
-  stylefeeds/cd.json      ocd_id -> {party, ideology_dim1, vacant}   (colors the CD layer)
+  stylefeeds/{cd,states,sldu,sldl}.json
+                          ocd_id -> {party, ideology_dim1, vacant}   (colors each layer;
+                          states = Senate-delegation rule, WO-14)
   pins/{cd,states}.json   ocd_id -> office-holder (dossier discovery on tap)
   dossiers/{person_id}.json   identity + ideology + legislative, each provenanced
   coverage.json           per-source freshness vs SLA + artifact counts
@@ -669,11 +671,16 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
               "score": None if h["ideology_score"] is None else float(h["ideology_score"]),
               "is_vacant_marker": bool(h["is_vacant_marker"])} for h in rows])
 
-    # Colored polygon layers: House + both state chambers. (A U.S. senator isn't
-    # a single polygon, so the states layer stays a discovery-only pin layer.)
+    # Colored polygon layers: House, both state chambers, AND states (WO-14). A
+    # U.S. senator isn't a single polygon, so the states layer encodes the
+    # two-seat Senate DELEGATION per state — one fixed, party-symmetric rule; see
+    # stylefeeds.build_senate_delegation_feed (mirrored on /methodology).
     house, senate = by_layer["cd"], by_layer["states"]
     cd_feed = feed(house)
-    stylefeeds.publish({"cd": cd_feed, "states": {},
+    states_feed = stylefeeds.build_senate_delegation_feed(
+        [{"ocd_id": h["ocd_id"], "party": h["party"],
+          "is_vacant_marker": bool(h["is_vacant_marker"])} for h in senate])
+    stylefeeds.publish({"cd": cd_feed, "states": states_feed,
                         "sldu": feed(by_layer["sldu"]), "sldl": feed(by_layer["sldl"])},
                        out / "stylefeeds")
 
@@ -718,7 +725,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     coverage = {
         "generated_at": _now(), "pipeline_version": pipeline_version(),
         "counts": {"dossiers": len(docs), "graph_neighborhoods": graph_docs,
-                   "cd_stylefeed": len(cd_feed),
+                   "cd_stylefeed": len(cd_feed), "states_stylefeed": len(states_feed),
                    "house": len(house), "senate": len(senate),
                    "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"])},
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},

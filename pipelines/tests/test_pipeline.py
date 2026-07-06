@@ -1631,3 +1631,65 @@ def test_committee_urls_helper_reads_source_roster_only(slice_dirs):
     urls = _committee_urls(slice_dirs / "raw")
     assert urls == {"HSAG": "https://agriculture.house.gov/"}
     assert _committee_urls(slice_dirs / "nonexistent") == {}
+
+
+# --- WO-14 Senate delegation stylefeed (states.json) --------------------------
+def _sen(state: str, party: str, vacant: bool = False) -> dict:
+    """A senate holder row as build.run feeds the delegation rule: the senator's
+    division IS the state division (both seats share one ocd_id)."""
+    return {"ocd_id": f"ocd-division/country:us/state:{state}", "party": party,
+            "is_vacant_marker": vacant}
+
+
+def test_senate_delegation_same_party_colors_the_state():
+    """Both seated senators the same party -> that party code, not vacant.
+    Asserted for BOTH major parties with the identical rule (rule #3)."""
+    from beholden_etl.build import stylefeeds
+    feed = stylefeeds.build_senate_delegation_feed(
+        [_sen("tn", "R"), _sen("tn", "R"), _sen("vt", "D"), _sen("vt", "D")])
+    assert feed["ocd-division/country:us/state:tn"] == \
+        {"party": "R", "ideology_dim1": None, "vacant": False}
+    assert feed["ocd-division/country:us/state:vt"] == \
+        {"party": "D", "ideology_dim1": None, "vacant": False}
+
+
+def test_senate_delegation_split_is_split_either_order():
+    """A split delegation publishes the dedicated SPLIT code — never one of the
+    two parties — and the outcome is identical whichever senator comes first
+    (symmetric by construction). Third-party pairings split the same way."""
+    from beholden_etl.build import stylefeeds
+    for pair in (("D", "R"), ("R", "D"), ("I", "R"), ("D", "I")):
+        feed = stylefeeds.build_senate_delegation_feed(
+            [_sen("pa", pair[0]), _sen("pa", pair[1])])
+        assert feed["ocd-division/country:us/state:pa"] == \
+            {"party": "SPLIT", "ideology_dim1": None, "vacant": False}, pair
+
+
+def test_senate_delegation_vacancy_handling():
+    """One seat vacant (marker row) or simply absent from the warehouse -> the
+    seated senator's party with vacant=true (color what we know, flag what we
+    don't — the second seat is never invented); both seats vacant -> NP+vacant."""
+    from beholden_etl.build import stylefeeds
+    feed = stylefeeds.build_senate_delegation_feed([
+        _sen("oh", "D"), _sen("oh", "NP", vacant=True),   # explicit vacant marker
+        _sen("wy", "R"),                                  # lone row, no marker
+        _sen("ak", "NP", vacant=True), _sen("ak", "NP", vacant=True),
+    ])
+    assert feed["ocd-division/country:us/state:oh"] == \
+        {"party": "D", "ideology_dim1": None, "vacant": True}
+    assert feed["ocd-division/country:us/state:wy"] == \
+        {"party": "R", "ideology_dim1": None, "vacant": True}
+    assert feed["ocd-division/country:us/state:ak"] == \
+        {"party": "NP", "ideology_dim1": None, "vacant": True}
+
+
+def test_states_stylefeed_emitted_keyed_by_state_ocd(slice_dirs):
+    """build.run now publishes a REAL stylefeeds/states.json (it shipped empty
+    before WO-14): keyed by the state's ocd_id, StyleRow-shaped, ideology always
+    null (a delegation has no single score). The fixture warehouse knows one TN
+    senator (R), so TN colors R with the honest vacancy flag."""
+    feed = json.loads((slice_dirs / "data" / "stylefeeds" / "states.json").read_text())
+    assert feed == {"ocd-division/country:us/state:tn":
+                    {"party": "R", "ideology_dim1": None, "vacant": True}}
+    cov = json.loads((slice_dirs / "data" / "coverage.json").read_text())
+    assert cov["counts"]["states_stylefeed"] == 1
