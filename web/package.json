@@ -9,11 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@deck.gl/mapbox": "^9.1.0",
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@fontsource/space-grotesk": "^5.2.10",
     "d3-force": "^3.0.0",
-    "deck.gl": "^9.1.0",
     "maplibre-gl": "^5.0.0",
     "minisearch": "^7.0.0",
     "pmtiles": "^4.0.0",
