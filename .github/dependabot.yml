@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Keeps the SHA-pinned actions in .github/workflows/*.yml current — Dependabot
+  # resolves the pinned commit's tag, checks for newer releases, and opens a PR
+  # updating the pin (with the version comment) when one exists.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

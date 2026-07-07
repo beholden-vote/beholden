@@ -4,16 +4,23 @@ on:
     branches: [main]
     paths: ["web/**"]
   workflow_dispatch:
+# Only the latest commit's build should ever be live: if a newer push starts
+# before an older one finishes deploying, cancel the older one rather than
+# risk it completing second and overwriting the newer, correct deploy.
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Least-privilege GITHUB_TOKEN: this job only reads the repo and deploys via
     # its own scoped Cloudflare API token — it never touches git contents.
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with: {node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json}
       - run: cd web && npm ci && npm run build
       - name: Ensure Pages project exists
@@ -25,7 +32,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@3 pages project create beholden --production-branch=main || true
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
