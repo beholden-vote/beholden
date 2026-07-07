@@ -15,10 +15,16 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import PAGES_DIST, R2_BUCKET, RAW_DIST
+
+# Independent per-file PUTs (and, for the latest/ mirror, server-side copies) —
+# a thread pool trades wall-clock for nothing but connection count, and R2/S3
+# handles far more than this concurrently.
+_UPLOAD_WORKERS = 16
 
 # Daily-refreshed JSON: cache briefly at the edge; the client always sees today's.
 CACHE_CONTROL = "public, max-age=300, s-maxage=300"
@@ -101,6 +107,50 @@ def _latest_batch(raw_dir: Path) -> list[tuple[Path, str]]:
             for p in sorted(raw_dir.rglob("*")) if p.is_file()]
 
 
+def _put_batch(client, batch: list[tuple[Path, str]], cache_control: str) -> None:
+    """Upload one batch concurrently — every file is an independent PUT to its
+    own key, so a thread pool is a direct win over one-at-a-time. Fail closed:
+    the first exception (from any file, in completion order) propagates rather
+    than being swallowed, same as the old serial loop's unguarded put_object."""
+    if not batch:
+        return
+
+    def _put_one(p: Path, key: str) -> None:
+        client.put_object(
+            Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
+            ContentType=_content_type(p), CacheControl=cache_control)
+
+    with ThreadPoolExecutor(max_workers=_UPLOAD_WORKERS) as pool:
+        futures = [pool.submit(_put_one, p, key) for p, key in batch]
+        for fut in as_completed(futures):
+            fut.result()
+
+
+def _copy_batch_to_latest(client, raw_batch: list[tuple[Path, str]],
+                           latest_batch: list[tuple[Path, str]]) -> None:
+    """WO-10 last-good pointer: mirror the just-uploaded raw/{date}/… objects to
+    raw/latest/… via a server-side R2 CopyObject instead of re-uploading the same
+    bytes from the runner a second time (raw_batch and latest_batch are built by
+    walking dist/raw in the same sorted order, so they line up 1:1 by position).
+    MetadataDirective='REPLACE' is required: without it CopyObject inherits the
+    SOURCE object's immutable, 1-year CacheControl, which would leave the
+    incrementally-hydrated pointer cached instead of always-fresh."""
+    if not raw_batch:
+        return
+
+    def _copy_one(p: Path, raw_key: str, latest_key: str) -> None:
+        client.copy_object(
+            Bucket=R2_BUCKET, CopySource={"Bucket": R2_BUCKET, "Key": raw_key},
+            Key=latest_key, ContentType=_content_type(p),
+            CacheControl=LATEST_CACHE_CONTROL, MetadataDirective="REPLACE")
+
+    with ThreadPoolExecutor(max_workers=_UPLOAD_WORKERS) as pool:
+        futures = [pool.submit(_copy_one, p, raw_key, latest_key)
+                   for (p, raw_key), (_, latest_key) in zip(raw_batch, latest_batch)]
+        for fut in as_completed(futures):
+            fut.result()
+
+
 def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         dry_run: bool | None = None) -> int:
     data_dir = Path(data_dir)
@@ -113,34 +163,28 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
     latest = _latest_batch(Path(raw_dir))                  # WO-10 last-good pointer
     if dry_run:
         total = 0
-        for p, key in serving + raw + latest:
+        for p, key in serving + raw:
             total += p.stat().st_size
             print(f"publish[dry-run] {key:52} {p.stat().st_size:>8} B  {_content_type(p)}")
+        for _, key in latest:
+            print(f"publish[dry-run] {key:52} (server-side copy, no re-upload)")
         print(f"publish[dry-run]: {len(serving)} serving + {len(raw)} raw "
-              f"+ {len(latest)} latest-pointer files, {total} B "
+              f"+ {len(latest)} latest-pointer (server-side copy) files, {total} B "
               f"(set {'/'.join(REQUIRED_ENV)} to upload to r2://{R2_BUCKET})")
         return len(serving) + len(raw)
 
     client = _client()
     _ensure_cors(client)
-    for p, key in serving:
-        client.put_object(
-            Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
-            ContentType=_content_type(p), CacheControl=CACHE_CONTROL)
-    for p, key in raw:                                    # immutable lake partition
-        client.put_object(
-            Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
-            ContentType=_content_type(p), CacheControl=RAW_CACHE_CONTROL)
+    _put_batch(client, serving, CACHE_CONTROL)
+    _put_batch(client, raw, RAW_CACHE_CONTROL)              # immutable lake partition
     # --- WO-10: write the last-good pointer AFTER the run's raw lake is uploaded.
-    # A mirror of dist/raw at raw/latest/…, overwritten each successful run; the
-    # next fetch hydrates from it to resume incrementally instead of re-crawling.
-    # Written last so the pointer only ever names a fully-landed lake.
-    for p, key in latest:
-        client.put_object(
-            Bucket=R2_BUCKET, Key=key, Body=p.read_bytes(),
-            ContentType=_content_type(p), CacheControl=LATEST_CACHE_CONTROL)
+    # A server-side copy of the just-uploaded raw/{date}/… objects to raw/latest/…
+    # (overwritten each successful run) — the next fetch hydrates from it to
+    # resume incrementally. Run last so the pointer only ever names a
+    # fully-landed lake; a copy (not a re-upload) since R2 already has the bytes.
+    _copy_batch_to_latest(client, raw, latest)
     print(f"publish: {len(serving)} serving + {len(raw)} raw "
-          f"+ {len(latest)} latest-pointer -> r2://{R2_BUCKET}/")
+          f"+ {len(latest)} latest-pointer (server-side copy) -> r2://{R2_BUCKET}/")
     return len(serving) + len(raw)
 
 
