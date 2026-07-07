@@ -19,6 +19,10 @@ WO-10 — resilient · incremental · parallel:
     independent rate limits, so their loops — and the other bulk pulls — run
     concurrently in a thread pool. Each source keeps its own in-client governor,
     so wall-clock ≈ max(loops), not sum, without exceeding any cap.
+  * **Parallel, nested:** within `fetch_openstates`, the 52 state/territory CSV
+    pulls are themselves independent, unauthenticated GETs against a static host
+    with no documented rate limit, so they fan out across their own small thread
+    pool rather than one source-level thread walking 52 states serially.
   * **Fail-closed preserved:** on a transient per-item failure we fall back to that
     item's last-good hydrated snapshot (correct, slightly stale) rather than
     dropping it. We only hard-fail when there is no prior snapshot AND absence
@@ -208,20 +212,32 @@ def fetch_fec(raw: Path, prior: dict) -> dict:
         "count": fec_count, "contributors": contrib_count}
 
 
+_OPENSTATES_WORKERS = 10
+
+
+def _fetch_one_state(state: str) -> tuple[str, str | None]:
+    try:
+        return state, openstates.fetch_people_csv(state)
+    except Exception as e:  # a single state hiccup shouldn't sink the run
+        print(f"fetch: openstates {state} skipped ({type(e).__name__})")
+        return state, None
+
+
 def fetch_openstates(raw: Path, prior: dict) -> dict:
-    """State legislators, bulk CSV per state (E4). A single state hiccup skips —
-    state coverage is honest-absent, not fabricated."""
+    """State legislators, bulk CSV per state (E4). The 52 states/territories are
+    independent, unauthenticated GETs against a static host with no documented
+    rate limit (openstates.py), so they fan out across a small thread pool —
+    wall time is bounded by the slowest state, not the sum of all 52. A single
+    state hiccup skips — state coverage is honest-absent, not fabricated."""
     os_dir = raw / "openstates" / "people"
     os_count = 0
-    for state in openstates.STATE_SLUGS:
-        try:
-            csv_text = openstates.fetch_people_csv(state)
-        except Exception as e:  # a single state hiccup shouldn't sink the run
-            print(f"fetch: openstates {state} skipped ({type(e).__name__})")
-            continue
-        os_dir.mkdir(parents=True, exist_ok=True)
-        (os_dir / f"{state}.csv").write_text(csv_text, encoding="utf-8")
-        os_count += max(csv_text.count("\n") - 1, 0)
+    with ThreadPoolExecutor(max_workers=_OPENSTATES_WORKERS) as pool:
+        for state, csv_text in pool.map(_fetch_one_state, openstates.STATE_SLUGS):
+            if csv_text is None:
+                continue
+            os_dir.mkdir(parents=True, exist_ok=True)
+            (os_dir / f"{state}.csv").write_text(csv_text, encoding="utf-8")
+            os_count += max(csv_text.count("\n") - 1, 0)
     return {"retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
 
 
