@@ -109,7 +109,7 @@ domain name. *(Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).)*
 | 🏫 **State** | State legislators nationwide (both chambers) with cited profiles |
 | 🗺️ **Local** | County boundaries for orientation |
 
-**🔜 Landing now** — an interactive connections graph · party colors for every map level · contact buttons, social profiles, and biographies.
+**✅ Shipped** — a tabbed dossier with cited drill-downs on every vote, committee, and funding connection · an interactive connections graph · party colors for every map level · contact buttons, social profiles, and biographies.
 **🧭 Coming next** — state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county & city officials · a public API.
 
 We only expand where we can stay honest. When a data source has restrictive licensing or can’t be verified, we
