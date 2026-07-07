@@ -22,6 +22,7 @@ from ..sources import openstates
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
 from ..sources import voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
+from ..bulk import crosswalk as bulk_crosswalk                  # WO-19 (filer<->person)
 from ..bulk import reconcile as bulk_reconcile                  # WO-9 (fail-closed gates)
 from .. import divisions as D
 from .. import store
@@ -73,29 +74,49 @@ def _office_and_division(term: dict):
 # Parse -> value-domain quarantine -> fail-closed reconciliation -> insert. The
 # whole path is copy-only (no model). All three run-ending gates live here:
 # schema-drift (observed header vs pinned contract), control-total (Σ itemized ==
-# summary contributions_amount per filer/year), and the no-silent-drop invariant
-# (input == inserted + quarantined). A value-domain miss quarantines one row with a
-# reason; it does not end the run, but is still accounted for by the invariant.
+# summary contributions_amount per fund_id — WO-19, PDC's documented cross-dataset
+# key), and the no-silent-drop invariant (input == inserted + quarantined). A
+# value-domain miss quarantines one row with a reason; it does not end the run,
+# but is still accounted for by the invariant.
 def ingest_wa_pdc(con, itemized_records, summary_records, observed_header,
-                  file_sha256, retrieved_at) -> dict:
+                  file_sha256, retrieved_at, history_records=None) -> dict:
     """Ingest one WA PDC snapshot into disclosure_contributions/_quarantine under
-    the fail-closed gates. Returns {input, inserted, quarantined}. Raises a
-    bulk_reconcile.GateError (schema-drift / control-total / no-silent-drop) rather
-    than publish anything unreconciled."""
+    the fail-closed gates. Returns {input, inserted, quarantined, deferred_funds}.
+    Raises a bulk_reconcile.GateError (schema-drift / control-total /
+    no-silent-drop) rather than publish anything unreconciled.
+
+    history_records (WO-19) is the Reporting History slice for the funds in the
+    snapshot. When provided, a fund whose freshly filed contribution report is
+    not yet materialized in the itemized mirror is deferred — quarantined whole,
+    with the missing report numbers recorded — because its control total already
+    counts line items this snapshot cannot carry (see
+    wa_pdc.deferred_funds_missing_reports). When None (strict default), nothing
+    defers and every fund must reconcile."""
     # Gate 1 — schema-drift: header must match the pinned contract exactly.
     bulk_reconcile.schema_drift_gate(wa_pdc.CONTRACT, observed_header)
+
+    # WO-19: unmirrored-report deferral set (empty when no history given).
+    deferred = (wa_pdc.deferred_funds_missing_reports(history_records, itemized_records)
+                if history_records else {})
 
     # Copy-only parse: every input row -> a contribution OR a quarantine (with reason).
     contributions, quarantined = [], []
     for rec in itemized_records:
+        fund = rec.get("fund_id")
+        if fund is not None and str(fund) in deferred:
+            quarantined.append(wa_pdc.quarantine_record(
+                rec, f"itemized mirror missing filed contribution report(s) "
+                     f"{deferred[str(fund)]}; fund {fund} deferred to a "
+                     f"consistent snapshot pair", file_sha256=file_sha256))
+            continue
         row, q = wa_pdc.map_row(rec, file_sha256=file_sha256, retrieved_at=retrieved_at)
         if row is not None:
             contributions.append(row)
         else:
             quarantined.append(q)
 
-    # Gate 2 — control-total: Σ(inserted amount_cents) per (filer_id, election_year)
-    # must equal the summary feed's contributions_amount for that group (epsilon 0).
+    # Gate 2 — control-total: Σ(inserted amount_cents) per fund_id must equal the
+    # summary feed's contributions_amount for that fund (epsilon 0; WO-19).
     sums: dict = {}
     for row in contributions:
         key = wa_pdc.itemized_group_key(row)
@@ -111,7 +132,126 @@ def ingest_wa_pdc(con, itemized_records, summary_records, observed_header,
     store.insert(con, "disclosure_contributions", contributions)
     store.insert(con, "disclosure_quarantine", quarantined)
     return {"input": len(itemized_records),
-            "inserted": len(contributions), "quarantined": len(quarantined)}
+            "inserted": len(contributions), "quarantined": len(quarantined),
+            "deferred_funds": len(deferred)}
+
+
+# ==== WO-19: deterministic filer<->person crosswalk (WA PDC) =================
+# Runs AFTER ingest_wa_pdc has passed every gate. Published links come ONLY from
+# the committed human-reviewed allowlist joined on PDC's exact person_id
+# (TRUSTED-EXTRACTION §9: publish on deterministic keys only); every name-shaped
+# observation lands in disclosure_link_candidates — a quarantine table the build
+# stage never reads — for human review and possible allowlist promotion.
+def crosswalk_wa_pdc(con, summary_records, summary_sha256, retrieved_at,
+                     allowlist_path=None) -> dict:
+    """Populate disclosure_filer_links (allowlist exact-id joins, published) and
+    disclosure_link_candidates (scored review rows, quarantined). Returns
+    {links, candidates, unresolved_allowlist}. Raises AllowlistError on a
+    malformed allowlist (config error -> halt)."""
+    allowlist = bulk_crosswalk.load_allowlist(
+        allowlist_path or bulk_crosswalk.DEFAULT_ALLOWLIST)
+    funds = bulk_crosswalk.candidate_funds(summary_records)
+
+    def resolve_ocd_person(ocd_person: str):
+        row = con.execute(
+            "SELECT person_id FROM person_identifiers "
+            "WHERE id_scheme='openstates' AND id_value=?", [ocd_person]).fetchone()
+        return str(row[0]) if row else None
+
+    links, unresolved = bulk_crosswalk.links_from_allowlist(
+        allowlist, funds, resolve_ocd_person)
+
+    # Publish a link ONLY for funds that were ingested AND gate-reconciled in
+    # THIS run — a fund outside the reconciled slice (older campaign, or one
+    # deferred by the stale-control rule) carries a summary total nothing
+    # verified, so it waits; visible below, never silent.
+    reconciled_funds = {r[0] for r in con.execute(
+        "SELECT DISTINCT fund_id FROM disclosure_contributions").fetchall()}
+
+    link_rows = []
+    for ln in links:
+        if ln["fund_id"] not in reconciled_funds:
+            unresolved.append({"entry": {"wa_pdc_person_id": ln["wa_pdc_person_id"]},
+                               "reason": f"fund {ln['fund_id']} not in the "
+                                         f"gate-reconciled slice this run"})
+            continue
+        try:
+            year = int(ln["election_year"])
+        except (TypeError, ValueError):
+            unresolved.append({"entry": {"wa_pdc_person_id": ln["wa_pdc_person_id"]},
+                               "reason": f"summary election_year not an integer: "
+                                         f"{ln['election_year']!r} (fund {ln['fund_id']})"})
+            continue
+        contributions_cents = wa_pdc.to_cents(ln["contributions_amount"])
+        if contributions_cents is None or not ln["url"]:
+            # A linked fund with no verbatim total or no per-record official link
+            # publishes nothing (no provenance / no reconciled figure -> no row);
+            # recorded as unresolved so absence is visible, never silent.
+            unresolved.append({"entry": {"wa_pdc_person_id": ln["wa_pdc_person_id"]},
+                               "reason": f"fund {ln['fund_id']} has no "
+                                         f"{'summary total' if contributions_cents is None else 'source url'}"})
+            continue
+        link_rows.append({
+            "fund_id": ln["fund_id"], "person_id": ln["person_id"],
+            "wa_pdc_person_id": ln["wa_pdc_person_id"], "filer_id": ln["filer_id"],
+            "committee_id": ln["committee_id"], "election_year": year,
+            "filer_name": ln["filer_name"],
+            "contributions_amount_cents": contributions_cents,
+            "expenditures_amount_cents": wa_pdc.to_cents(ln["expenditures_amount"]),
+            "summary_updated_at": ln["updated_at"], "evidence_url": ln["evidence_url"],
+            "source_id": wa_pdc.CONTRACT.source_id,
+            "contract_version": wa_pdc.CONTRACT.contract_version,
+            "file_sha256": summary_sha256, "retrieved_at": retrieved_at,
+            "source_record_url": ln["url"],
+        })
+    store.insert(con, "disclosure_filer_links", link_rows)
+
+    # Candidacies observed in the ingested slice: distinct state-legislative
+    # (fund, filer, office, district) tuples, verbatim from the itemized rows.
+    # election_year deliberately excluded (a fund's rows can carry mixed year
+    # labels); the summary registry supplies the campaign's year.
+    placeholders = ",".join("?" * len(bulk_crosswalk.OFFICE_CHAMBER))
+    candidacies = [
+        {"fund_id": f, "filer_id": fid, "filer_name": fname, "office": office,
+         "legislative_district": district}
+        for f, fid, fname, office, district in con.execute(
+            f"""SELECT DISTINCT fund_id, filer_id, filer_name, office,
+                       legislative_district
+                FROM disclosure_contributions WHERE office IN ({placeholders})""",
+            list(bulk_crosswalk.OFFICE_CHAMBER)).fetchall()]
+
+    # Current WA state-legislative seat holders: (chamber, district) -> holder.
+    seat_index = {}
+    for pid, ocd_person, full_name, chamber, ocd_id in con.execute(
+        """SELECT p.person_id, pi.id_value, p.full_name, o.chamber, o.ocd_id
+           FROM terms t
+           JOIN persons p USING(person_id)
+           JOIN offices o USING(office_id)
+           JOIN person_identifiers pi ON pi.person_id = p.person_id
+                                     AND pi.id_scheme = 'openstates'
+           WHERE t.end_date IS NULL AND o.chamber IN ('upper','lower')
+             AND o.ocd_id LIKE 'ocd-division/country:us/state:wa/%'""").fetchall():
+        district = ocd_id.rsplit(":", 1)[-1]
+        seat_index[(chamber, district)] = {
+            "person_id": str(pid), "ocd_person": ocd_person, "full_name": full_name}
+
+    cand_rows = bulk_crosswalk.score_candidates(
+        candidacies, seat_index, {f["fund_id"]: f for f in funds})
+    for u in unresolved:                       # stale allowlist entries stay visible
+        cand_rows.append({
+            "wa_pdc_person_id": str(u["entry"].get("wa_pdc_person_id") or ""),
+            "filer_id": None, "fund_id": None, "election_year": None,
+            "filer_name": None, "office": None, "legislative_district": None,
+            "matched_person_id": None,
+            "matched_ocd_person": u["entry"].get("ocd_person"), "matched_name": None,
+            "match_basis": f"allowlist_unresolved: {u['reason']}"})
+    envelope = {"source_id": wa_pdc.CONTRACT.source_id,
+                "contract_version": wa_pdc.CONTRACT.contract_version,
+                "file_sha256": summary_sha256}
+    store.insert(con, "disclosure_link_candidates",
+                 [{**envelope, **r} for r in cand_rows])
+    return {"links": len(link_rows), "candidates": len(cand_rows),
+            "unresolved_allowlist": len(unresolved)}
 
 
 def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
@@ -537,14 +677,20 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
     # --- WO-9: WA PDC bulk disclosure (trusted extraction, fail-closed gates) ---
     # Reads the landed snapshot only (never the network); ingest_wa_pdc runs the
     # schema-drift, control-total, and no-silent-drop gates and raises rather than
-    # publish anything unreconciled. Not surfaced in dossiers (explicit follow-on).
+    # publish anything unreconciled. WO-19: after the gates pass, the deterministic
+    # crosswalk populates disclosure_filer_links (allowlist exact-id joins — the
+    # only rows build.py surfaces) and disclosure_link_candidates (quarantine).
     wa_dir = raw / "wa_pdc"
     if WA_PDC_ENABLED and (wa_dir / "itemized.json").exists() and (wa_dir / "manifest.json").exists():
         wa_meta = json.loads((wa_dir / "manifest.json").read_text(encoding="utf-8"))
         itemized = json.loads((wa_dir / "itemized.json").read_text(encoding="utf-8"))
         summary = json.loads((wa_dir / "summary.json").read_text(encoding="utf-8"))
+        history = json.loads((wa_dir / "history.json").read_text(encoding="utf-8"))
         ingest_wa_pdc(con, itemized, summary, wa_meta["header"],
-                      wa_meta["file_sha256"], wa_meta["retrieved_at"])
+                      wa_meta["file_sha256"], wa_meta["retrieved_at"],
+                      history_records=history)
+        crosswalk_wa_pdc(con, summary, wa_meta["summary_sha256"],
+                         wa_meta["retrieved_at"])
 
     counts = {t: con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
               for t in ("persons", "divisions", "offices", "terms",

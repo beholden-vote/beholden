@@ -223,6 +223,7 @@ function Sources() {
     ["unitedstates/congress-legislators", "The identity crosswalk linking every ID scheme."],
     ["Voteview (DW-NOMINATE)", "Ideology scores from recorded roll-call votes."],
     ["Federal Election Commission", "Campaign finance: money raised, spent, on hand."],
+    ["Washington Public Disclosure Commission", "Washington state campaign finance: contributions and expenditures, reconciled against the PDC's own summary totals."],
     ["U.S. Census Bureau", "District boundaries (TIGER) and address geocoding."],
   ];
   return (

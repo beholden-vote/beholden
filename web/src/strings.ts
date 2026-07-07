@@ -13,6 +13,10 @@ export const STRINGS = {
     "The STOCK Act requires disclosure within 45 days of a transaction.",
   campaignFinanceTitle: "Campaign finance",
   campaignFinanceNote: "Itemized totals as reported to the FEC.",
+  // WO-19: shown when the section's provenance source is wa_pdc — the state
+  // counterpart of campaignFinanceNote, same section, same rendering rules.
+  campaignFinanceNoteWaPdc:
+    "Totals as reported to the Washington State Public Disclosure Commission. Top contributors are rollups of itemized contributions by reported employer.",
   disclosuresTitle: "Stock-trade disclosures",
   disclosuresNote:
     "Periodic Transaction Reports filed with the House Clerk. Each links to the official filing — the itemized trades are inside the document.",

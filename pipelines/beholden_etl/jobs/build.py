@@ -154,6 +154,7 @@ METHODOLOGY_IDEOLOGY = "dw-nominate"       # DW-NOMINATE ideology score (votevie
 METHODOLOGY_KEY_VOTES = "key-votes"        # key-vote selection formula (key_votes.py)
 METHODOLOGY_AGREEMENT = "co-voting"        # party_agreement_pct (key_votes.py)
 METHODOLOGY_DONORS = "donor-rollups"       # FEC by_employer top contributors (fec.py)
+METHODOLOGY_DONORS_STATE = "state-donor-rollups"  # WO-19: WA PDC employer rollups (below)
 
 
 def _office_display(chamber: str, ocd_id: str) -> str:
@@ -446,6 +447,55 @@ def _campaign_finance(con) -> dict[str, dict]:
     return out
 
 
+# ==== WO-19: WA PDC state campaign finance (deterministic crosswalk only) ====
+# Both helpers read disclosure_filer_links — rows that exist ONLY for the
+# human-reviewed exact-id allowlist (TRUSTED-EXTRACTION §9). The quarantined
+# disclosure_link_candidates table is NEVER read here: no name match publishes.
+def _wa_campaign_finance(con) -> dict[str, dict]:
+    """person_id -> {cycles[], source_url} from disclosure_filer_links. One cycle
+    row per linked PDC fund (a candidate can run two campaigns in one election
+    year — both publish, verbatim). Totals are the summary feed's own reconciled
+    figures (the same cells the control-total gate verified against the itemized
+    rows); as_of is PDC's own updated_at stamp, falling back to the snapshot's
+    retrieved_at. source_url is the fund's official C1 registration link."""
+    out: dict[str, dict] = {}
+    for pid, year, raised, spent, updated_at, retrieved_at, url in con.execute(
+        """SELECT person_id, election_year, contributions_amount_cents,
+                  expenditures_amount_cents, summary_updated_at, retrieved_at,
+                  source_record_url
+           FROM disclosure_filer_links
+           ORDER BY election_year DESC, fund_id""").fetchall():
+        entry = out.setdefault(str(pid), {"cycles": [], "source_url": url})
+        entry["cycles"].append({
+            "cycle": year, "total_raised_cents": raised, "total_spent_cents": spent,
+            "cash_on_hand_cents": None,           # PDC's summary has no such figure
+            "as_of": str(updated_at or retrieved_at), "source_url": url})
+    return out
+
+
+def _wa_top_contributors(con) -> dict[str, list[dict]]:
+    """person_id -> [{name, total_cents, rank}] employer rollups of the linked
+    funds' itemized contributions (WO-19). Fixed, symmetric rule applied
+    identically regardless of party (§9): group the gate-reconciled rows by the
+    contributor's verbatim reported employer, sum, order by total descending
+    (name as the deterministic tiebreak), keep the top 25. Rows with no reported
+    employer are simply not part of the employer rollup — never invented."""
+    out: dict[str, list[dict]] = {}
+    for pid, name, total in con.execute(
+        """SELECT l.person_id, c.contributor_employer_name,
+                  SUM(c.amount_cents) AS total
+           FROM disclosure_filer_links l
+           JOIN disclosure_contributions c USING (fund_id)
+           WHERE c.contributor_employer_name IS NOT NULL
+             AND c.contributor_employer_name <> ''
+           GROUP BY l.person_id, c.contributor_employer_name
+           ORDER BY l.person_id, total DESC, c.contributor_employer_name""").fetchall():
+        rows = out.setdefault(str(pid), [])
+        if len(rows) < 25:
+            rows.append({"name": name, "total_cents": total, "rank": len(rows) + 1})
+    return out
+
+
 def _committees(con, committee_urls: dict[str, str]) -> dict[str, list[dict]]:
     """person_id -> [{committee_id, name, role, url?, subcommittees:[{committee_id,
     name, role, url?}]}] from committee_memberships joined to committees (WO-6a).
@@ -594,7 +644,8 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              policy_areas: dict[str, list[str]], bill_titles: dict[str, str],
              rc_tallies: dict[str, tuple], district_offices: dict, social_media: dict,
              member_detail: dict, education: dict, previous_roles: dict,
-             federal_contact: dict, state_votes: dict, cospon_spine: dict) -> dict:
+             federal_contact: dict, state_votes: dict, cospon_spine: dict,
+             wa_campaign: dict, wa_contributors: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
     # WO-17: a state legislator publishes a legislative section ONLY when their
@@ -800,6 +851,24 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         if contribs:
             block["top_contributors"] = contribs[:25]
         money["campaign_finance"] = block
+    # WO-19: WA state legislators' campaign finance from the PDC (Tier A trusted
+    # extraction). Publishes ONLY through the deterministic exact-id crosswalk
+    # (disclosure_filer_links — human-reviewed allowlist joins, §9); a state
+    # legislator with no reviewed link keeps the honest "pending" note. Totals
+    # are the PDC's own gate-reconciled summary figures; top contributors are
+    # the fixed symmetric employer rollup (methodology: state-donor-rollups).
+    if not federal:
+        wa_cf = wa_campaign.get(h["person_id"])
+        if wa_cf and wa_cf["cycles"]:
+            wa_contribs = wa_contributors.get(h["person_id"])
+            block = {
+                "cycles": wa_cf["cycles"],
+                "provenance": _provenance(
+                    "wa_pdc", wa_cf["source_url"], manifest,
+                    methodology_id=METHODOLOGY_DONORS_STATE if wa_contribs else None)}
+            if wa_contribs:
+                block["top_contributors"] = wa_contribs[:25]
+            money["campaign_finance"] = block
     filings = disclosures.get(h["person_id"])
     if filings:
         # STOCK Act: links to the official PTR filings (itemized trades live in
@@ -904,6 +973,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         "state_vote_positions": con.execute(
             "SELECT count(*) FROM vote_positions WHERE roll_call_id NOT LIKE 'us/%'").fetchone()[0],
     }
+    wa_campaign = _wa_campaign_finance(con)       # WO-19: PDC cycles (exact-id links only)
+    wa_contributors = _wa_top_contributors(con)   # WO-19: PDC employer rollups
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
@@ -934,7 +1005,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                      contributors, disclosures, vote_records, rc_meta, party_majority,
                      committees, policy_areas, bill_titles, rc_tallies,
                      district_offices, social_media, member_detail, education,
-                     previous_roles, federal_contact, state_votes, cospon_spine)
+                     previous_roles, federal_contact, state_votes, cospon_spine,
+                     wa_campaign, wa_contributors)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 

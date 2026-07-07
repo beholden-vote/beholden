@@ -1136,26 +1136,32 @@ def test_graph_dossier_graph_ref_resolves_to_neighborhood(slice_dirs):
         assert (gdir / f"{d['person_id']}.json").exists()
 
 
-# --- WO-9 WA PDC trusted extraction (Tier A) --------------------------------
-# Fixtures mirror the real feed, verified live 2026-07-05: filer 24THLD 362 in
-# election_year 2025 has six itemized cash contributions summing to $2,183.00,
-# exactly the summary feed's contributions_amount for that (filer, year). No model
-# is in this path; the whole framework is deterministic parse + fail-closed gates.
+# --- WO-9 WA PDC trusted extraction (Tier A; reconciliation fixed WO-19) -----
+# Fixtures mirror the real feed, verified live 2026-07-05 and 2026-07-07: filer
+# 24THLD 362's 2025 campaign is PDC fund 25321 — six itemized cash contributions
+# summing to $2,183.00, exactly the summary feed's contributions_amount for that
+# fund. WO-19: the control-total group is fund_id (PDC's documented cross-dataset
+# correlation key), NOT (filer_id, election_year) — the two feeds can DISAGREE on
+# filer_id format for the same campaign (real pair below). No model is in this
+# path; the whole framework is deterministic parse + fail-closed gates.
 from beholden_etl.sources import wa_pdc as _wa            # noqa: E402
 from beholden_etl.bulk import contract as _bulk_contract  # noqa: E402
+from beholden_etl.bulk import crosswalk as _bulk_crosswalk  # noqa: E402
 from beholden_etl.bulk import reconcile as _bulk_reconcile  # noqa: E402
 from beholden_etl.jobs import transform as _transform      # noqa: E402
 
 # A snapshot's exact-bytes SHA-256 and retrieval time are provenance inputs; fixed
 # here so the envelope + idempotence assertions are stable.
 _WA_SHA = "0" * 64
+_WA_SUMMARY_SHA = "1" * 64
 _WA_RETRIEVED = "2026-07-05T00:00:00+00:00"
 
 
 def _wa_record(**over):
     """One itemized record shaped like the real Socrata JSON (url as {'url': ...})."""
     rec = {
-        "id": "20318665", "report_number": "110314712", "filer_id": "24THLD 362",
+        "id": "20318665", "report_number": "110314712", "committee_id": "17",
+        "fund_id": "25321", "filer_id": "24THLD 362",
         "filer_name": "24th LD Dem", "office": "", "party": "DEMOCRATIC",
         "legislative_district": "24", "election_year": "2025", "amount": "500.00",
         "cash_or_in_kind": "Cash", "receipt_date": "2025-09-15T00:00:00.000",
@@ -1168,7 +1174,8 @@ def _wa_record(**over):
     return rec
 
 
-# Six real-shaped itemized rows for (24THLD 362, 2025): 500+250+250+400+383+400 = 2183.00.
+# Six real-shaped itemized rows for fund 25321 (24THLD 362 / 2025):
+# 500+250+250+400+383+400 = 2183.00.
 _WA_ITEMIZED = [
     _wa_record(id="20318665", amount="500.00", contributor_name="Makah Tribal Council"),
     _wa_record(id="20318664", amount="250.00", contributor_name="Washburn's General Store"),
@@ -1177,8 +1184,9 @@ _WA_ITEMIZED = [
     _wa_record(id="20318668", amount="383.00", contributor_name="A. Donor"),
     _wa_record(id="20318669", amount="400.00", contributor_name="B. Donor"),
 ]
-# The companion control-total feed: one summary row per (filer, year).
-_WA_SUMMARY = [{"filer_id": "24THLD 362", "election_year": "2025",
+# The companion control-total feed: one summary row per FUND (WO-19).
+_WA_SUMMARY = [{"filer_id": "24THLD 362", "election_year": "2025", "fund_id": "25321",
+                "committee_id": "17", "person_id": "32765", "filer_type": "PAC",
                 "contributions_amount": "2183.00"}]
 
 
@@ -1190,15 +1198,21 @@ def _wa_warehouse():
 
 def test_wa_pdc_contract_is_public_domain_and_reconcilable():
     """The pinned contract records the verified license, keys, and the control-total
-    field actually used (summary contributions_amount grouped by filer/year)."""
+    field actually used: summary contributions_amount grouped by fund_id (WO-19 —
+    PDC's own documented cross-dataset correlation key), at epsilon 0."""
     c = _wa.CONTRACT
     assert c.source_id == "wa_pdc" and c.license_is_public_domain
     assert c.license == "Public Domain"
     assert c.record_locator == "id" and c.source_record_url == "url"
     assert c.control_total.total_field == "contributions_amount"
-    assert c.control_total.group_by == ("filer_id", "election_year")
+    assert c.control_total.group_by == ("fund_id",)
     assert c.control_total.epsilon_cents == 0
     assert c.jurisdiction == "ocd-division/country:us/state:wa"
+    # fund_id is a declared, non-nullable key field; the layout fingerprint is
+    # unchanged from 2026-07-05 (same 37 columns — only the grouping moved)
+    f = c.field("fund_id")
+    assert f is not None and f.is_key and not f.nullable
+    assert len(c.header) == 37
     # the enum domain is exactly what the live feed contains
     assert c.domain("cash_or_in_kind") == ("Cash", "In-kind")
 
@@ -1209,6 +1223,7 @@ def test_wa_pdc_copy_only_mappers_and_provenance():
     row, q = _wa.map_row(_wa_record(), file_sha256=_WA_SHA, retrieved_at=_WA_RETRIEVED)
     assert q is None
     assert row["id"] == "20318665" and row["filer_id"] == "24THLD 362"
+    assert row["fund_id"] == "25321" and row["committee_id"] == "17"   # WO-19 verbatim ids
     assert row["amount_cents"] == 50000 and row["raw_amount"] == "500.00"  # verbatim retained
     assert row["receipt_date"] == "2025-09-15"
     assert row["contributor_name"] == "Makah Tribal Council"
@@ -1227,7 +1242,7 @@ def test_wa_pdc_clean_parse_matching_control_total_lands(tmp_path):
     con = _wa_warehouse()
     stats = _transform.ingest_wa_pdc(con, _WA_ITEMIZED, _WA_SUMMARY,
                                      list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
-    assert stats == {"input": 6, "inserted": 6, "quarantined": 0}
+    assert stats == {"input": 6, "inserted": 6, "quarantined": 0, "deferred_funds": 0}
     n = con.execute("SELECT count(*) FROM disclosure_contributions").fetchone()[0]
     assert n == 6
     total = con.execute("SELECT sum(amount_cents) FROM disclosure_contributions").fetchone()[0]
@@ -1248,10 +1263,10 @@ def test_wa_pdc_control_total_mismatch_halts(tmp_path):
 
 
 def test_wa_pdc_missing_control_total_halts():
-    """A filer/year present in the itemized data with NO control total is itself a
+    """A fund present in the itemized data with NO control total is itself a
     failure — we never ship itemized data without a reconciliation basis (WO-9)."""
     with pytest.raises(_bulk_reconcile.ControlTotalError, match="NO control total"):
-        _bulk_reconcile.control_total_gate({("F", 2025): 100}, {}, 0, "wa_pdc")
+        _bulk_reconcile.control_total_gate({"25321": 100}, {}, 0, "wa_pdc")
 
 
 def test_wa_pdc_drifted_header_halts():
@@ -1278,21 +1293,24 @@ def test_wa_pdc_out_of_domain_value_quarantined_with_reason():
     A control total that matches only the good rows proves quarantined rows are
     excluded from the reconciled sum, not silently dropped."""
     con = _wa_warehouse()
+    no_fund = _wa_record(id="B5")                                      # missing fund_id
+    del no_fund["fund_id"]                                             # (no reconciliation basis)
     rows = [
         _wa_record(id="G1", amount="500.00"),                          # good
         _wa_record(id="B1", cash_or_in_kind="Loan"),                   # bad enum
         _wa_record(id="B2", amount="not-a-number"),                    # non-numeric amount
         _wa_record(id="B3", receipt_date="15th of Never"),             # unparseable date
         _wa_record(id="B4", election_year="soon"),                     # non-integer year
+        no_fund,
         {"filer_id": "24THLD 362", "amount": "1.00", "cash_or_in_kind": "Cash",
          "election_year": "2025", "url": {"url": "http://x"}},         # missing native id
     ]
-    # only the one good row ($500) reconciles against the summary total for the group
-    summary = [{"filer_id": "24THLD 362", "election_year": "2025",
+    # only the one good row ($500) reconciles against the fund's control total
+    summary = [{"filer_id": "24THLD 362", "election_year": "2025", "fund_id": "25321",
                 "contributions_amount": "500.00"}]
     stats = _transform.ingest_wa_pdc(con, rows, summary,
                                      list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
-    assert stats["input"] == 6 and stats["inserted"] == 1 and stats["quarantined"] == 5
+    assert stats["input"] == 7 and stats["inserted"] == 1 and stats["quarantined"] == 6
     assert stats["input"] == stats["inserted"] + stats["quarantined"]   # no-silent-drop
     reasons = [r[0] for r in con.execute(
         "SELECT reason FROM disclosure_quarantine ORDER BY reason").fetchall()]
@@ -1300,6 +1318,7 @@ def test_wa_pdc_out_of_domain_value_quarantined_with_reason():
     assert any("amount not numeric" in r for r in reasons)
     assert any("receipt_date unparseable" in r for r in reasons)
     assert any("election_year not an integer" in r for r in reasons)
+    assert any("missing fund_id" in r for r in reasons)                 # WO-19
     assert any("missing native id" in r for r in reasons)
     # the bad enum was quarantined verbatim, never coerced into the domain
     assert con.execute(
@@ -1332,6 +1351,368 @@ def test_wa_pdc_idempotent_reparse_is_identical():
                              list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
     assert con.execute("SELECT count(*) FROM disclosure_contributions").fetchone()[0] == 6
     con.close()
+
+
+# --- WO-19: fund_id reconciliation + deterministic filer<->person crosswalk --
+# The REAL observed id pair that broke the old (filer_id, election_year) grouping
+# (live 2026-07-07): the itemized feed labels Steve Ewing's 2025 campaign filer
+# 'EWINS2 258' (a second-office filer id — PDC's data dictionary documents that
+# "an individual running for a second office in the same election year will
+# receive a second filer id") while the summary feed labels the SAME campaign
+# 'EWINS  258'. Both carry fund_id 26142, and the fund reconciles to the cent.
+# Rows below are copied verbatim from the live feeds.
+_EWINS_URL = {"url": "https://my.pdc.wa.gov/public/registrations/campaign-finance-report/110286697"}
+
+
+def _ewins_record(rid, amount, **over):
+    rec = _wa_record(id=rid, amount=amount, committee_id="39276", fund_id="26142",
+                     filer_id="EWINS2 258", filer_name="Steve Ewing",
+                     office="COUNTY CHARTER REVIEW COMMISSIONER",
+                     legislative_district="", election_year="2025",
+                     receipt_date="2025-05-29T00:00:00.000", url=_EWINS_URL)
+    rec.update(over)
+    return rec
+
+
+_EWINS_ITEMIZED = [   # six real rows, 250+100+500+200+500+20 = 1570.00
+    _ewins_record("19863320", "250.00", contributor_name="Shipman Kymm"),
+    _ewins_record("19863325", "100.00", contributor_name="SMALL CONTRIBUTIONS"),
+    _ewins_record("19984860", "500.00", contributor_name="Appleby Michael",
+                  contributor_employer_name="Chicago Title"),
+    _ewins_record("20090288", "200.00", contributor_name="Petershagen Gary"),
+    _ewins_record("20108375", "500.00", contributor_name="GKR LLC"),
+    _ewins_record("20351674", "20.00", contributor_name="SMALL CONTRIBUTIONS"),
+]
+_EWINS_SUMMARY = [{
+    "filer_id": "EWINS  258", "election_year": "2025", "fund_id": "26142",
+    "committee_id": "39276", "person_id": "1167", "filer_type": "CA",
+    "filer_name": "Steve Ewing", "contributions_amount": "1570.00",
+    "expenditures_amount": "1570.00", "updated_at": "2026-04-07T17:41:07.000",
+    "url": {"url": "https://my.pdc.wa.gov/public/registrations/campaign-finance-report/110286697"},
+}]
+
+
+def test_wa_pdc_filer_id_format_mismatch_reconciles_on_fund_id():
+    """The exact real pair the old gate (correctly) rejected: itemized filer_id
+    'EWINS2 258' vs summary 'EWINS  258' for the same campaign. Grouped by
+    fund_id (PDC's documented cross-dataset correlation key) it reconciles to
+    the cent — with the gate code unchanged."""
+    con = _wa_warehouse()
+    stats = _transform.ingest_wa_pdc(con, _EWINS_ITEMIZED, _EWINS_SUMMARY,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert stats == {"input": 6, "inserted": 6, "quarantined": 0, "deferred_funds": 0}
+    total = con.execute("SELECT sum(amount_cents) FROM disclosure_contributions "
+                        "WHERE fund_id='26142'").fetchone()[0]
+    assert total == 157000
+    con.close()
+
+
+def test_wa_pdc_multiple_funds_per_filer_year_each_reconcile():
+    """A filer can run several funds in one election year (real: 'EWINS  258'
+    has two 2025 summary rows, funds 25644 and 26142). Each fund reconciles
+    against ITS OWN control total — under the old (filer, year) key the two
+    summary rows collapsed and the group could never match."""
+    con = _wa_warehouse()
+    itemized = _EWINS_ITEMIZED + [
+        # second real fund 25644 (committee 37541); amounts sum to its real
+        # summary total $12,632.94 (row split here is representative)
+        _ewins_record("E25644A", "12000.00", committee_id="37541", fund_id="25644",
+                      filer_id="EWINS  258"),
+        _ewins_record("E25644B", "632.94", committee_id="37541", fund_id="25644",
+                      filer_id="EWINS  258"),
+    ]
+    summary = _EWINS_SUMMARY + [{
+        "filer_id": "EWINS  258", "election_year": "2025", "fund_id": "25644",
+        "committee_id": "37541", "person_id": "1167", "filer_type": "CA",
+        "contributions_amount": "12632.94"}]
+    stats = _transform.ingest_wa_pdc(con, itemized, summary,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert stats["inserted"] == 8 and stats["quarantined"] == 0
+    con.close()
+
+
+# Real straddling fund (live 2026-07-07): Lisa Wellman's 2028 STATE SENATOR
+# campaign, fund 26513 — ten itemized rows labeled election_year 2028 ($4,150)
+# plus ONE labeled 2024 ($25, row 19922731, verbatim below). The summary total
+# ($4,175.00) covers the WHOLE fund, so a year-sliced fetch can never reconcile;
+# the fund-complete slice does. (In-window rows condensed to three here; the
+# 2024 straddler row is verbatim.)
+_WELLMAN_URL = {"url": "https://my.pdc.wa.gov/public/registrations/campaign-finance-report/110290659"}
+
+
+def _wellman_record(rid, amount, **over):
+    rec = _wa_record(id=rid, amount=amount, committee_id="40290", fund_id="26513",
+                     filer_id="WELLL  040", filer_name="Lisa Z. Wellman (Lisa Wellman)",
+                     office="STATE SENATOR", legislative_district="41",
+                     election_year="2028", receipt_date="2025-05-08T00:00:00.000",
+                     url=_WELLMAN_URL)
+    rec.update(over)
+    return rec
+
+
+_WELLMAN_ITEMIZED = [
+    _wellman_record("20180944", "600.00", contributor_name="A. Donor",
+                    contributor_employer_name="ACME Widgets"),
+    _wellman_record("20573721", "500.00", contributor_name="B. Donor",
+                    contributor_employer_name="ACME Widgets"),
+    _wellman_record("20573596", "3050.00", contributor_name="C. Donor",
+                    contributor_employer_name="Zephyr Labs"),
+    _wellman_record("19922731", "25.00", election_year="2024",   # the real straddler
+                    contributor_name="SMALL CONTRIBUTIONS"),
+]
+_WELLMAN_SUMMARY = [{
+    "filer_id": "WELLL  040", "election_year": "2028", "fund_id": "26513",
+    "committee_id": "40290", "person_id": "30266", "filer_type": "CA",
+    "filer_name": "Lisa Z. Wellman (Lisa Wellman)",
+    "contributions_amount": "4175.00", "expenditures_amount": "43646.46",
+    "updated_at": "2026-06-09T15:52:22.000",
+    "url": {"url": "https://my.pdc.wa.gov/registration/public/-/#/public/registration/66402"},
+}]
+# Lisa Wellman's real OpenStates identity (upper chamber, district 41).
+_WELLMAN_OCD_PERSON = "ocd-person/0c274c6c-6813-4a77-b7ed-5576e9989493"
+
+
+def test_wa_pdc_fund_straddling_the_year_window_reconciles_whole():
+    """A fund whose rows carry mixed election_year labels reconciles as a WHOLE
+    fund — proving election_year is no longer part of the reconciliation key
+    (the fetch is fund-complete so all four rows arrive together)."""
+    con = _wa_warehouse()
+    stats = _transform.ingest_wa_pdc(con, _WELLMAN_ITEMIZED, _WELLMAN_SUMMARY,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    assert stats == {"input": 4, "inserted": 4, "quarantined": 0, "deferred_funds": 0}
+    total = con.execute("SELECT sum(amount_cents) FROM disclosure_contributions "
+                        "WHERE fund_id='26513'").fetchone()[0]
+    assert total == 417500                                  # $4,175.00, to the cent
+    con.close()
+
+
+def test_wa_pdc_unmirrored_report_defers_fund_never_publishes_it():
+    """Real failure mode (live 2026-07-07, fund 27194): the summary recalculates
+    continuously while the itemized mirror refreshes in batches, so a control
+    total can already count a freshly filed report whose line items the snapshot
+    cannot carry. PDC's own Reporting History registry attests which reports
+    exist; a fund with an unamended C3 report received on/after the snapshot's
+    derived content cutoff but ABSENT from the itemized rows is DEFERRED — every
+    input row quarantined with the missing report number recorded (the
+    no-silent-drop invariant still counts them), nothing of that fund publishes.
+    Report-complete funds still reconcile through the UNCHANGED gate at epsilon
+    0, and an OLD absent C3 (legitimately line-item-free — 440 such funds
+    reconcile exactly, live) does NOT defer. Without the history registry
+    (history_records=None, the strict default) the same input HALTS."""
+    itemized = _EWINS_ITEMIZED + [
+        _ewins_record("S1", "100.00", committee_id="14296", fund_id="27194",
+                      filer_id="OFFIPE 121", filer_name="OPEIU Local 8 PAC",
+                      report_number="110369381"),
+        _ewins_record("S2", "38.86", committee_id="14296", fund_id="27194",
+                      filer_id="OFFIPE 121", filer_name="OPEIU Local 8 PAC",
+                      report_number="110369381"),
+    ]
+    summary = [
+        _EWINS_SUMMARY[0],
+        {"filer_id": "OFFIPE 121", "election_year": "2026", "fund_id": "27194",
+         "committee_id": "14296", "person_id": "33756", "filer_type": "CO",
+         "contributions_amount": "178.63"},              # counts the unmirrored report
+    ]
+    history = [
+        # EWINS fund: its (real) report is present in the itemized rows -> this
+        # row also sets the derived content cutoff (newest mirrored report).
+        {"report_number": "110314712", "fund_id": "26142", "origin": "C3",
+         "receipt_date": "2025-09-30T00:00:00.000"},
+        # 27194's mirrored report (present) ...
+        {"report_number": "110369381", "fund_id": "27194", "origin": "C3",
+         "receipt_date": "2026-07-02T00:00:00.000"},
+        # ... its freshly filed report, NOT yet in the itemized mirror (real
+        # observed pair: received 2026-07-07, absent from the 15:42Z snapshot)
+        {"report_number": "110370630", "fund_id": "27194", "origin": "C3",
+         "receipt_date": "2026-07-07T00:00:00.000"},
+        # an OLD absent C3 (legitimately no line items) must NOT defer
+        {"report_number": "110100000", "fund_id": "26142", "origin": "C3",
+         "receipt_date": "2025-01-15T00:00:00.000"},
+        # an absent C4 (expenditure report) never defers contributions
+        {"report_number": "110370999", "fund_id": "26142", "origin": "C4",
+         "receipt_date": "2026-07-07T00:00:00.000"},
+    ]
+    # cutoff derives to 2026-07-02 (newest PRESENT report), so 110370630 defers
+    assert _wa.deferred_funds_missing_reports(history, itemized) == {
+        "27194": ["110370630"]}
+
+    con = _wa_warehouse()
+    stats = _transform.ingest_wa_pdc(con, itemized, summary,
+                                     list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED,
+                                     history_records=history)
+    assert stats == {"input": 8, "inserted": 6, "quarantined": 2, "deferred_funds": 1}
+    assert con.execute("SELECT count(*) FROM disclosure_contributions "
+                       "WHERE fund_id='27194'").fetchone()[0] == 0   # nothing published
+    reasons = [r[0] for r in con.execute(
+        "SELECT reason FROM disclosure_quarantine").fetchall()]
+    assert len(reasons) == 2 and all("deferred to a consistent snapshot pair" in r
+                                     and "110370630" in r for r in reasons)
+    con.close()
+
+    # strict default: no report registry -> no deferral -> the gate halts
+    con = _wa_warehouse()
+    with pytest.raises(_bulk_reconcile.ControlTotalError, match="27194"):
+        _transform.ingest_wa_pdc(con, itemized, summary,
+                                 list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    con.close()
+
+
+def test_wa_pdc_conflicting_summary_fund_totals_halt():
+    """Two summary rows disagreeing on one fund's total is an integrity failure
+    of the reconciliation basis — halt, never last-writer-wins. Agreeing
+    duplicates are tolerated (idempotent re-reads)."""
+    dupe = [{"fund_id": "26142", "contributions_amount": "1570.00"},
+            {"fund_id": "26142", "contributions_amount": "9999.00"}]
+    with pytest.raises(_bulk_reconcile.ControlTotalError, match="conflicting totals"):
+        _wa.control_totals_cents(dupe)
+    same = [{"fund_id": "26142", "contributions_amount": "1570.00"},
+            {"fund_id": "26142", "contributions_amount": "1570.00"}]
+    assert _wa.control_totals_cents(same) == {"26142": 157000}
+
+
+def _wa_state_spine(con):
+    """Seat Lisa Wellman (real OpenStates identity) in the spine exactly as the
+    transform's OpenStates section would: persons + openstates identifier +
+    sldu:41 division/office + a current term. Returns her spine person_id."""
+    import uuid as _uuid
+    pid = str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"openstates:{_WELLMAN_OCD_PERSON}"))
+    ocd = "ocd-division/country:us/state:wa/sldu:41"
+    office_id = str(_uuid.uuid5(_uuid.NAMESPACE_URL, f"office:{ocd}:state_senator"))
+    store.insert(con, "persons", [{"person_id": pid, "full_name": "Lisa Wellman",
+                                   "given_name": "Lisa", "family_name": "Wellman"}])
+    store.insert(con, "person_identifiers", [{"person_id": pid, "id_scheme": "openstates",
+                                              "id_value": _WELLMAN_OCD_PERSON}])
+    store.insert(con, "divisions", [{"ocd_id": ocd, "parent_ocd": None, "level": "sldu",
+                                     "name": "WA sldu:41", "geoid": None,
+                                     "valid_from": "2025-01-01"}])
+    store.insert(con, "offices", [{"office_id": office_id, "ocd_id": ocd,
+                                   "branch": "legislative", "chamber": "upper",
+                                   "role": "state_senator"}])
+    store.insert(con, "terms", [{"term_id": str(_uuid.uuid4()), "person_id": pid,
+                                 "office_id": office_id, "party": "D",
+                                 "start_date": "2025-01-01", "end_date": None,
+                                 "is_vacant_marker": False, "meta": {}}])
+    return pid
+
+
+def _wa_allowlist_file(tmp_path, entries):
+    f = tmp_path / "allowlist.json"
+    f.write_text(json.dumps({"doc": "test", "entries": entries}), encoding="utf-8")
+    return f
+
+
+def test_wa_crosswalk_allowlist_exact_id_join_publishes_links(tmp_path):
+    """The ONLY publish path (§9): a committed, human-reviewed allowlist entry
+    joining PDC's person_id (30266) to an ocd-person already in the spine. The
+    link row carries the fund's verbatim summary totals + the §6 envelope, and
+    the build helpers surface cycles + the fixed symmetric employer rollup."""
+    con = _wa_warehouse()
+    pid = _wa_state_spine(con)
+    _transform.ingest_wa_pdc(con, _WELLMAN_ITEMIZED, _WELLMAN_SUMMARY,
+                             list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    allow = _wa_allowlist_file(tmp_path, [{
+        "wa_pdc_person_id": "30266", "ocd_person": _WELLMAN_OCD_PERSON,
+        "evidence_url": "https://my.pdc.wa.gov/registration/public/-/#/public/registration/66402",
+        "reviewed_on": "2026-07-07"}])
+    stats = _transform.crosswalk_wa_pdc(con, _WELLMAN_SUMMARY, _WA_SUMMARY_SHA,
+                                        _WA_RETRIEVED, allowlist_path=allow)
+    assert stats["links"] == 1 and stats["unresolved_allowlist"] == 0
+
+    row = con.execute("""SELECT person_id, wa_pdc_person_id, filer_id, election_year,
+                                contributions_amount_cents, expenditures_amount_cents,
+                                source_id, contract_version, file_sha256, retrieved_at,
+                                source_record_url
+                         FROM disclosure_filer_links""").fetchone()
+    assert str(row[0]) == pid and row[1] == "30266" and row[2] == "WELLL  040"
+    assert row[3] == 2028 and row[4] == 417500 and row[5] == 4364646
+    assert row[6] == "wa_pdc" and row[7] == _wa.CONTRACT.contract_version
+    assert row[8] == _WA_SUMMARY_SHA and row[9] == _WA_RETRIEVED
+    assert row[10].startswith("https://my.pdc.wa.gov/")
+
+    # build surfacing: one cycle row per fund, verbatim reconciled totals
+    cf = build._wa_campaign_finance(con)
+    assert cf[pid]["cycles"] == [{
+        "cycle": 2028, "total_raised_cents": 417500, "total_spent_cents": 4364646,
+        "cash_on_hand_cents": None, "as_of": "2026-06-09T15:52:22.000",
+        "source_url": "https://my.pdc.wa.gov/registration/public/-/#/public/registration/66402"}]
+    # employer rollup: fixed symmetric rule — grouped by verbatim employer,
+    # summed, ranked by total desc; the no-employer row is simply not in it
+    top = build._wa_top_contributors(con)[pid]
+    assert top == [{"name": "Zephyr Labs", "total_cents": 305000, "rank": 1},
+                   {"name": "ACME Widgets", "total_cents": 110000, "rank": 2}]
+    con.close()
+
+
+def test_wa_crosswalk_name_match_is_quarantined_never_published(tmp_path):
+    """With NO allowlist entry, a state-legislative candidacy whose filer_name
+    exactly matches the seat holder's name STILL publishes nothing — it lands in
+    the disclosure_link_candidates quarantine (with the seat holder and a
+    name_exact flag as review context), which the build helpers never read."""
+    con = _wa_warehouse()
+    pid = _wa_state_spine(con)
+    _transform.ingest_wa_pdc(con, _WELLMAN_ITEMIZED, _WELLMAN_SUMMARY,
+                             list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    stats = _transform.crosswalk_wa_pdc(con, _WELLMAN_SUMMARY, _WA_SUMMARY_SHA,
+                                        _WA_RETRIEVED,
+                                        allowlist_path=_wa_allowlist_file(tmp_path, []))
+    assert stats["links"] == 0 and stats["candidates"] == 1
+    assert con.execute("SELECT count(*) FROM disclosure_filer_links").fetchone()[0] == 0
+    cand = con.execute("""SELECT wa_pdc_person_id, fund_id, matched_ocd_person,
+                                 matched_name, match_basis
+                          FROM disclosure_link_candidates""").fetchone()
+    assert cand[0] == "30266" and cand[1] == "26513"
+    assert cand[2] == _WELLMAN_OCD_PERSON and cand[3] == "Lisa Wellman"
+    assert cand[4] == "seat:upper/41 name_exact=true"   # the parenthetical alias matches
+    # nothing surfaces on any dossier
+    assert build._wa_campaign_finance(con) == {}
+    assert build._wa_top_contributors(con) == {}
+    assert pid  # (spine person exists; still unlinked — unlinked is honest)
+    con.close()
+
+
+def test_wa_crosswalk_unresolved_allowlist_entry_is_visible_not_silent(tmp_path):
+    """A stale allowlist entry (ocd_person no longer in the spine, or a PDC
+    person with no funds in the slice) publishes nothing and lands in the
+    candidates table as allowlist_unresolved — visible, never silently inert."""
+    con = _wa_warehouse()
+    _wa_state_spine(con)
+    _transform.ingest_wa_pdc(con, _WELLMAN_ITEMIZED, _WELLMAN_SUMMARY,
+                             list(_wa.CONTRACT.header), _WA_SHA, _WA_RETRIEVED)
+    allow = _wa_allowlist_file(tmp_path, [{
+        "wa_pdc_person_id": "30266", "ocd_person": "ocd-person/not-in-spine",
+        "evidence_url": "https://example.com", "reviewed_on": "2026-07-07"}])
+    stats = _transform.crosswalk_wa_pdc(con, _WELLMAN_SUMMARY, _WA_SUMMARY_SHA,
+                                        _WA_RETRIEVED, allowlist_path=allow)
+    assert stats["links"] == 0 and stats["unresolved_allowlist"] == 1
+    reasons = [r[0] for r in con.execute(
+        "SELECT match_basis FROM disclosure_link_candidates").fetchall()]
+    assert any(r.startswith("allowlist_unresolved:") for r in reasons)
+    con.close()
+
+
+def test_wa_crosswalk_malformed_allowlist_halts(tmp_path):
+    """A malformed or self-contradictory allowlist is a config error — halt."""
+    incomplete = _wa_allowlist_file(tmp_path, [{"wa_pdc_person_id": "1"}])
+    with pytest.raises(_bulk_crosswalk.AllowlistError, match="non-empty"):
+        _bulk_crosswalk.load_allowlist(incomplete)
+    conflicting = tmp_path / "conflict.json"
+    conflicting.write_text(json.dumps({"entries": [
+        {"wa_pdc_person_id": "1", "ocd_person": "ocd-person/a",
+         "evidence_url": "https://x", "reviewed_on": "2026-07-07"},
+        {"wa_pdc_person_id": "1", "ocd_person": "ocd-person/b",
+         "evidence_url": "https://x", "reviewed_on": "2026-07-07"},
+    ]}), encoding="utf-8")
+    with pytest.raises(_bulk_crosswalk.AllowlistError, match="conflicting"):
+        _bulk_crosswalk.load_allowlist(conflicting)
+
+
+def test_wa_committed_allowlist_is_valid_and_currently_empty():
+    """The committed allowlist parses under strict validation. (It starts empty:
+    PDC and OpenStates share no native identifier, so every future entry is a
+    human-reviewed promotion of a quarantined candidate — see
+    docs/research/wa-pdc-reconciliation-findings.md.)"""
+    entries = _bulk_crosswalk.load_allowlist()
+    assert isinstance(entries, list)
 
 
 # --- WO-8 donor↔vote juxtaposition + methodology wiring ---------------------
@@ -1561,10 +1942,12 @@ def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monke
         assert isinstance(t["seconds"], (int, float))
 
 
-def test_fetch_wa_pdc_absent_when_disabled(tmp_path):
-    """The real wa_pdc fetcher returns None when gated off (config.WA_PDC_ENABLED
-    is False), so the orchestrator marks it 'absent' and omits it from sources —
-    the pre-WO-10 behavior, preserved."""
+def test_fetch_wa_pdc_absent_when_disabled(tmp_path, monkeypatch):
+    """When gated off (config.WA_PDC_ENABLED False — the pre-WO-19 state) the
+    real wa_pdc fetcher returns None, so the orchestrator marks it 'absent' and
+    omits it from sources. The readiness switch still exists; WO-19 flipped its
+    default after the unchanged gates passed on real data."""
+    monkeypatch.setattr(_fetch, "WA_PDC_ENABLED", False)
     assert _fetch.fetch_wa_pdc(tmp_path / "raw", prior={}) is None
 
 

@@ -1,7 +1,8 @@
 """Washington PDC itemized contributions — first Tier-A trusted-extraction source
-(docs/TRUSTED-EXTRACTION.md, WO-9). No API key; license is Public Domain.
+(docs/TRUSTED-EXTRACTION.md, WO-9; reconciliation fixed in WO-19). No API key;
+license is Public Domain.
 
-Two Socrata datasets on data.wa.gov, verified live 2026-07-05:
+Two Socrata datasets on data.wa.gov, verified live 2026-07-05 and 2026-07-07:
   - kv7h-kjye  "Contributions to Candidates and Political Committees" (itemized)
   - 3h9x-7bvm  "Campaign Finance Summary" (the reconciliation control totals)
 
@@ -15,24 +16,41 @@ Copy-only means: the ONLY transforms are `amount` dollars -> integer cents and
 `receipt_date` -> a date. No name normalization, no inference, no computed fields.
 The verbatim `amount` and `contributor_name` cells are retained forever (§6).
 
-Entity resolution is deliberately deferred: rows land keyed by WA `filer_id`
-only. We do NOT fuzzy-match filer_name to the person spine (unlinked is honest; a
-wrong link is not). A deterministic filer<->person crosswalk is a follow-on.
+Reconciliation key (WO-19). The control-total grouping is `fund_id`, NOT
+(filer_id, election_year). PDC's own data dictionary for BOTH datasets
+(https://data.wa.gov/api/views/kv7h-kjye.json · .../3h9x-7bvm.json) documents:
+  - fund_id — "The unique identifier for all reporting and finance records
+    associated with a single campaign. This can be used to correlate records
+    across different datasets."
+  - filer_id — NOT stable per person/campaign: "an individual running for a
+    second office in the same election year will receive a second filer id."
+    Verified live 2026-07-07: itemized filer_id 'EWINS2 258' vs summary
+    'EWINS  258' for the SAME campaign, fund_id 26142 — which reconciles to the
+    cent on fund_id ($1,570.00). A filer can also run several funds in one
+    election year (two 2025 summary rows for 'EWINS  258'), so (filer, year) is
+    not even a well-defined group. See docs/research/wa-pdc-reconciliation-findings.md.
+
+Entity resolution stays deterministic-only: rows land keyed by PDC ids. We do
+NOT fuzzy-match filer_name to the person spine (unlinked is honest; a wrong link
+is not). The filer<->person crosswalk (bulk/crosswalk.py) publishes only through
+a human-reviewed exact-id allowlist; name matches are quarantined (§9).
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 from ..bulk.contract import ControlTotal, Field, SourceContract
+from ..bulk.reconcile import ControlTotalError
 
 _HOST = "https://data.wa.gov"
 ITEMIZED_DATASET = "kv7h-kjye"
 SUMMARY_DATASET = "3h9x-7bvm"
+HISTORY_DATASET = "7qr9-q2c9"   # "Campaign Finance Reporting History" (per-report registry)
 
 # Exact, ordered CSV/SoQL header of kv7h-kjye (verified live 2026-07-05). This is
 # the schema-drift fingerprint: the header must match this list EXACTLY or the run
@@ -62,13 +80,32 @@ CONTRACT = SourceContract(
         "itemized_json": f"{_HOST}/resource/{ITEMIZED_DATASET}.json",
         "itemized_bulk_csv":
             f"{_HOST}/api/views/{ITEMIZED_DATASET}/rows.csv?accessType=DOWNLOAD",
+        # The dataset's own metadata (columns[].fieldName) — the observed header
+        # the schema-drift gate compares against the pinned fingerprint.
+        "itemized_metadata": f"{_HOST}/api/views/{ITEMIZED_DATASET}.json",
         "summary_json": f"{_HOST}/resource/{SUMMARY_DATASET}.json",
+        # Per-report registry: which filed reports exist per fund. Consulted by
+        # the deferral rule (deferred_funds_missing_reports) so a control total
+        # that already counts a report the itemized mirror has not materialized
+        # yet defers that fund instead of failing the whole run.
+        "history_json": f"{_HOST}/resource/{HISTORY_DATASET}.json",
         "paging": "$limit/$offset",
+        # WO-19: the itemized window is FUND-COMPLETE — after the election_year
+        # window pass, a completion pass fetches every remaining row of each fund
+        # already seen, so no reconciliation group is ever split by the window.
+        "window": "fund-complete (see fetch_itemized)",
     },
     header=ITEMIZED_HEADER,
     fields=(
         Field("id", "text", is_key=True, nullable=False),
         Field("report_number", "text"),
+        Field("committee_id", "text"),
+        # fund_id is the reconciliation group AND PDC's documented cross-dataset
+        # correlation key ("can be used to correlate records across different
+        # datasets" — dataset data dictionary, both feeds). Never absent live
+        # (verified 2026-07-07); a row without one has no reconciliation basis
+        # and is quarantined.
+        Field("fund_id", "text", is_key=True, nullable=False),
         Field("filer_id", "text", is_key=True, nullable=False),
         Field("filer_name", "text"),
         Field("office", "text"),
@@ -85,13 +122,16 @@ CONTRACT = SourceContract(
         Field("contributor_employer_name", "text"),
         Field("url", "url", nullable=False),
     ),
-    # Σ(itemized amount) per (filer_id, election_year) must equal the summary feed's
-    # `contributions_amount` for that filer/year (one summary row per group; verified
-    # 24THLD 362 / 2025 reconciles to the cent). epsilon 0 — exact match required.
+    # Σ(itemized amount) per fund_id must equal the summary feed's
+    # `contributions_amount` for that fund (one summary row per fund — PDC
+    # documents fund_id as the unique id of a single campaign's finance records).
+    # Verified live 2026-07-07: 2,670/2,670 fund-complete groups reconcile to the
+    # cent, including the filer_id-format mismatch pair ('EWINS2 258' itemized vs
+    # 'EWINS  258' summary, fund 26142). epsilon 0 — exact match required.
     control_total=ControlTotal(
         companion_source_id="wa_pdc_summary",
         total_field="contributions_amount",
-        group_by=("filer_id", "election_year"),
+        group_by=("fund_id",),
         sum_field="amount",
         epsilon_cents=0,
     ),
@@ -100,7 +140,17 @@ CONTRACT = SourceContract(
     license="Public Domain",
     license_is_public_domain=True,
     attribution="Public Disclosure Commission (http://pdc.wa.gov)",
-    contract_version="2026-07-05",
+    # Changelog:
+    #   2026-07-05  initial contract; control total grouped by (filer_id,
+    #               election_year) — rejected by the gate on real data (correct:
+    #               the two feeds disagree on filer_id format and a filer can run
+    #               several funds per year).
+    #   2026-07-07  WO-19: reconciliation regrouped by fund_id (PDC-documented
+    #               cross-dataset key); + committee_id/fund_id fields read;
+    #               fund-complete fetch window; summary fetched whole with the
+    #               registry columns (person_id, filer_type, expenditures, url).
+    #               Layout fingerprint (header) unchanged.
+    contract_version="2026-07-07",
 )
 
 _RETRYABLE = (httpx.HTTPStatusError, httpx.TransportError)
@@ -126,19 +176,39 @@ def _get_json(url: str, **params) -> list[dict]:
 PILOT_MIN_ELECTION_YEAR = 2025
 
 
-def fetch_itemized(page_size: int = 50000, max_pages: int = 20,
-                   min_election_year: int = PILOT_MIN_ELECTION_YEAR) -> list[dict]:
-    """Page the CURRENT-CYCLE itemized feed via $limit/$offset, ordered by native id
-    so paging is stable. Bounded to election_year >= min_election_year (the all-time
-    feed is ~6.3M rows). max_pages is a hard safety cap so an unbounded fetch can
-    never recur. Returns the raw records verbatim (no transformation)."""
-    url = CONTRACT.retrieval["itemized_json"]
-    where = f"election_year >= {int(min_election_year)}"
+def fetch_metadata() -> dict:
+    """The itemized dataset's OBSERVED metadata, from Socrata's own endpoint:
+      header           — columns[].fieldName in dataset order; what the
+                         schema-drift gate compares against the pinned
+                         ITEMIZED_HEADER (a real observation of the live layout,
+                         never an echo of the contract), and
+      rows_updated_at  — the mirror's last-refresh instant (UTC ISO), the
+                         reference point for the stale-control deferral rule
+                         (see stale_control_funds).
+    """
+    r = httpx.get(CONTRACT.retrieval["itemized_metadata"], timeout=120,
+                  follow_redirects=True)
+    r.raise_for_status()
+    meta = r.json()
+    return {
+        "header": [c["fieldName"] for c in meta["columns"]],
+        "rows_updated_at": datetime.fromtimestamp(
+            meta["rowsUpdatedAt"], tz=timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _fetch_paged(url: str, where: str, page_size: int, max_pages: int,
+                 select: str | None = None, order: str = "id") -> list[dict]:
+    """$limit/$offset paging ordered by a stable native column, hard-capped at
+    max_pages so an unbounded fetch can never recur. Records come back verbatim."""
     rows: list[dict] = []
     offset, page = 0, 0
     while True:
-        batch = _get_json(url, **{"$limit": page_size, "$offset": offset,
-                                  "$order": "id", "$where": where})
+        params = {"$limit": page_size, "$offset": offset, "$order": order,
+                  "$where": where}
+        if select:
+            params["$select"] = select
+        batch = _get_json(url, **params)
         if not batch:
             break
         rows.extend(batch)
@@ -149,22 +219,76 @@ def fetch_itemized(page_size: int = 50000, max_pages: int = 20,
     return rows
 
 
-def fetch_summary(min_election_year: int = PILOT_MIN_ELECTION_YEAR) -> list[dict]:
-    """The companion control-total feed (3h9x-7bvm), same current-cycle window as the
-    itemized feed so reconciliation groups line up. One row per (filer, election_year).
-    Returns raw records verbatim."""
+def _batched(items: list[str], size: int):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def fetch_itemized(page_size: int = 50000, max_pages: int = 20,
+                   min_election_year: int = PILOT_MIN_ELECTION_YEAR) -> list[dict]:
+    """Fetch a FUND-COMPLETE current-cycle slice of the itemized feed.
+
+    Pass 1 pages election_year >= min_election_year (the bounded pilot window,
+    ~380k rows). Pass 2 (WO-19) completes every fund seen in pass 1: a campaign's
+    rows can carry mixed election_year labels (verified live 2026-07-07 — e.g.
+    fund 27811 has 42 rows labeled 2026 plus 13 labeled 2024), and the summary
+    control total always covers the WHOLE fund, so a year-sliced fund can never
+    reconcile. The completion pass fetches the out-of-window remainder of each
+    seen fund (a handful of rows in practice), making every reconciliation group
+    complete by construction. Returns the raw records verbatim."""
+    url = CONTRACT.retrieval["itemized_json"]
+    rows = _fetch_paged(url, f"election_year >= {int(min_election_year)}",
+                        page_size, max_pages)
+    funds = sorted({r["fund_id"] for r in rows if r.get("fund_id")})
+    for batch in _batched(funds, 150):        # bounded $where length per request
+        quoted = ",".join("'" + f.replace("'", "''") + "'" for f in batch)
+        rows.extend(_fetch_paged(
+            url, f"fund_id in({quoted}) AND election_year < {int(min_election_year)}",
+            page_size, max_pages))
+    return rows
+
+
+# The summary registry columns we read: reconciliation control total + the PDC
+# filer/person registry fields the deterministic crosswalk needs (§9). person_id
+# is PDC's "preferred id for identifying a natural person" (their data dictionary).
+SUMMARY_SELECT = ("id,filer_id,election_year,committee_id,fund_id,person_id,"
+                  "filer_name,filer_type,contributions_amount,expenditures_amount,"
+                  "updated_at,url")
+
+
+def fetch_summary() -> list[dict]:
+    """The companion control-total + filer-registry feed (3h9x-7bvm), fetched
+    WHOLE (~58k rows — small) so every fund seen in the itemized slice finds its
+    control row regardless of how the two feeds label election_year. One row per
+    fund. Returns raw records verbatim."""
     url = CONTRACT.retrieval["summary_json"]
-    where = f"election_year >= {int(min_election_year)}"
     rows: list[dict] = []
     offset = 0
     while True:
         batch = _get_json(url, **{"$limit": 50000, "$offset": offset, "$order": "id",
-                                  "$select": "filer_id,election_year,contributions_amount",
-                                  "$where": where})
+                                  "$select": SUMMARY_SELECT})
         if not batch:
             break
         rows.extend(batch)
         offset += 50000
+    return rows
+
+
+# The per-report registry columns the deferral rule reads (7qr9-q2c9).
+HISTORY_SELECT = "report_number,fund_id,origin,amended_by_report,receipt_date"
+
+
+def fetch_history(fund_ids: list[str], page_size: int = 50000,
+                  max_pages: int = 20) -> list[dict]:
+    """The Reporting History rows for exactly the funds seen in the itemized
+    slice (batched fund_id IN queries, ~96k small rows for the current window).
+    Returns raw records verbatim."""
+    url = CONTRACT.retrieval["history_json"]
+    rows: list[dict] = []
+    for batch in _batched(sorted(set(fund_ids)), 150):
+        quoted = ",".join("'" + f.replace("'", "''") + "'" for f in batch)
+        rows.extend(_fetch_paged(url, f"fund_id in({quoted})", page_size, max_pages,
+                                 select=HISTORY_SELECT, order="report_number"))
     return rows
 
 
@@ -246,8 +370,8 @@ def map_row(rec: dict, *, file_sha256: str, retrieved_at: str):
 
     Value-domain enforcement (§5): a bad `cash_or_in_kind` enum, a non-numeric
     `amount`, a present-but-unparseable `receipt_date`, or a missing key (id /
-    filer_id / election_year / url) is QUARANTINED WITH A REASON — never coerced
-    into range. Everything else is a verbatim copy.
+    filer_id / fund_id / election_year / url) is QUARANTINED WITH A REASON —
+    never coerced into range. Everything else is a verbatim copy.
     """
     rid = rec.get("id")
     if not rid:
@@ -256,6 +380,12 @@ def map_row(rec: dict, *, file_sha256: str, retrieved_at: str):
     filer_id = rec.get("filer_id")
     if not filer_id:
         return None, _quarantine(rec, "missing filer_id", file_sha256=file_sha256)
+
+    # WO-19: fund_id is the reconciliation group — a row without one has no
+    # reconciliation basis (never observed live; quarantined if it ever appears).
+    fund_id = rec.get("fund_id")
+    if not fund_id:
+        return None, _quarantine(rec, "missing fund_id", file_sha256=file_sha256)
 
     url = _record_url(rec)
     if not url:
@@ -293,6 +423,8 @@ def map_row(rec: dict, *, file_sha256: str, retrieved_at: str):
         "retrieved_at": prov["retrieved_at"],
         "source_record_url": url,
         "report_number": rec.get("report_number"),
+        "committee_id": rec.get("committee_id"),          # WO-19: PDC committee id
+        "fund_id": str(fund_id),                          # WO-19: reconciliation group
         "filer_id": filer_id,
         "filer_name": rec.get("filer_name"),
         "office": rec.get("office"),
@@ -314,25 +446,92 @@ def map_row(rec: dict, *, file_sha256: str, retrieved_at: str):
 
 
 def control_totals_cents(summary_records: list[dict]) -> dict:
-    """The companion feed's control totals keyed by (filer_id, election_year), in
-    integer cents. One summary row per group (verified). A summary row with a
-    non-numeric/absent total or key is skipped — the control-total gate then treats
-    an itemized group with no control total as a failure (never a silent pass)."""
-    totals: dict[tuple[str, int], int] = {}
+    """The companion feed's control totals keyed by fund_id (WO-19), in integer
+    cents. PDC documents fund_id as the unique id of a single campaign's finance
+    records, so one summary row per fund (verified live: zero duplicates); if two
+    summary rows ever DISAGREE on a fund's total, that is a reconciliation-basis
+    integrity failure and the run halts — never a silent last-writer-wins. A
+    summary row with a non-numeric/absent total or no fund_id is skipped — the
+    control-total gate then treats an itemized group with no control total as a
+    failure (never a silent pass)."""
+    totals: dict[str, int] = {}
     for rec in summary_records:
-        filer_id = rec.get("filer_id")
-        year_raw = rec.get("election_year")
+        fund_id = rec.get("fund_id")
         cents = to_cents(rec.get(CONTRACT.control_total.total_field))
-        if not filer_id or cents is None:
+        if not fund_id or cents is None:
             continue
-        try:
-            year = int(year_raw)
-        except (TypeError, ValueError):
-            continue
-        totals[(filer_id, year)] = cents
+        fund_id = str(fund_id)
+        if fund_id in totals and totals[fund_id] != cents:
+            raise ControlTotalError(
+                f"control-total basis: {CONTRACT.source_id} summary feed carries "
+                f"conflicting totals for fund {fund_id}: {totals[fund_id]}c vs "
+                f"{cents}c — fund_id uniqueness violated upstream, halting")
+        totals[fund_id] = cents
     return totals
 
 
-def itemized_group_key(row: dict) -> tuple[str, int]:
-    """The reconciliation group for an inserted contribution row: (filer_id, year)."""
-    return (row["filer_id"], row["election_year"])
+def itemized_group_key(row: dict) -> str:
+    """The reconciliation group for an inserted contribution row: its fund_id
+    (WO-19 — PDC's documented cross-dataset correlation key)."""
+    return row["fund_id"]
+
+
+# The report origin that carries itemized contributions: C3, the cash-receipts
+# deposit report. (The itemized feed also carries B.1/AU/C.1/C.3 rows, but the
+# Reporting History registry tracks only C3/C4 report filings — verified live
+# 2026-07-07 across all 2,670 window funds — so C3 presence is the completeness
+# signal the registry can actually attest to.)
+CONTRIBUTION_REPORT_ORIGIN = "C3"
+
+
+def deferred_funds_missing_reports(history_records: list[dict],
+                                   itemized_records: list[dict]) -> dict[str, list[str]]:
+    """Funds whose control total CANNOT verify this snapshot pair, because a
+    freshly filed contribution report exists in PDC's own Reporting History but
+    the itemized mirror has not materialized its line items yet. Observed live
+    2026-07-07: the summary mirror recalculates continuously while the itemized
+    mirror refreshes in batches — fund 27194's control exceeded the itemized sum
+    by exactly the deposits of report 110370630, received that same day.
+
+    The rule, fully derived from the snapshot pair (no wall clock):
+      cutoff  = the newest `receipt_date` among history reports that ARE present
+                in the itemized snapshot (how far the mirror's content reaches);
+      deferred = funds with an unamended C3 report ABSENT from the snapshot and
+                received on/after that cutoff (not yet mirrored, day-granular).
+    Older absent C3s are legitimately line-item-free (440 such funds reconcile
+    exactly, verified live) and do not defer. Returns {fund_id: [missing
+    report_numbers]}. Deferral only ever NARROWS what publishes: the deferred
+    fund's rows are quarantined whole with a recorded reason, and the unchanged
+    control-total gate still halts on any mismatch among the remaining funds.
+    """
+    present: dict[str, set] = {}
+    for rec in itemized_records:
+        fund = rec.get("fund_id")
+        if fund is not None and rec.get("report_number"):
+            present.setdefault(str(fund), set()).add(str(rec["report_number"]))
+
+    cutoff = None
+    for h in history_records:
+        fund, num = h.get("fund_id"), h.get("report_number")
+        date = h.get("receipt_date")
+        if date and fund is not None and str(num) in present.get(str(fund), set()):
+            cutoff = date if cutoff is None or date > cutoff else cutoff
+    if cutoff is None:                       # nothing attested -> no deferral basis;
+        return {}                            # the gate stays fully strict
+
+    missing: dict[str, list[str]] = {}
+    for h in history_records:
+        if (h.get("origin") == CONTRIBUTION_REPORT_ORIGIN
+                and not h.get("amended_by_report")
+                and h.get("receipt_date") and h["receipt_date"] >= cutoff
+                and h.get("fund_id") is not None):
+            fund, num = str(h["fund_id"]), str(h.get("report_number"))
+            if num not in present.get(fund, set()):
+                missing.setdefault(fund, []).append(num)
+    return {f: sorted(nums) for f, nums in missing.items()}
+
+
+def quarantine_record(rec: dict, reason: str, *, file_sha256: str) -> dict:
+    """A quarantine row for one verbatim input record (public wrapper used by
+    the transform's stale-control deferral path)."""
+    return _quarantine(rec, reason, file_sha256=file_sha256)

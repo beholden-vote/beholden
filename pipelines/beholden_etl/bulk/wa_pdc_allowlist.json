@@ -1,0 +1,16 @@
+{
+  "doc": [
+    "Human-reviewed exact-id crosswalk: WA PDC person_id -> OpenStates ocd-person",
+    "(docs/TRUSTED-EXTRACTION.md §9; WO-19). PDC and OpenStates share NO native",
+    "identifier (verified 2026-07-07 — see docs/research/wa-pdc-reconciliation-findings.md),",
+    "so every link here is a REVIEWED PROMOTION of a quarantined candidate from the",
+    "disclosure_link_candidates table: a human verifies the PDC candidacy against the",
+    "legislator (evidence_url) and commits the pair. No model, no name-matcher, and no",
+    "pipeline stage ever writes to this file. Empty entries = no WA money publishes on",
+    "any dossier (unlinked is honest; a wrong link is not).",
+    "Entry shape: {wa_pdc_person_id, ocd_person, evidence_url, reviewed_on} — all required.",
+    "wa_pdc_person_id is PDC's summary-feed person_id ('the preferred id for identifying",
+    "a natural person' — their data dictionary); ocd_person must already be in the spine."
+  ],
+  "entries": []
+}

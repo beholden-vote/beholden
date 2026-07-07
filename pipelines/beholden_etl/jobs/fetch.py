@@ -344,26 +344,47 @@ def fetch_house_clerk(raw: Path, prior: dict) -> dict:
 
 
 def fetch_wa_pdc(raw: Path, prior: dict) -> dict | None:
-    """WA PDC bulk disclosure (WO-9, Tier A). Gated OFF via config.WA_PDC_ENABLED
-    until the itemized↔summary reconciliation is fixed; when off, returns None and
-    the source is absent from the manifest (unchanged behavior). A network hiccup
-    skips the source for this run rather than sinking the federal slice."""
+    """WA PDC bulk disclosure (WO-9, Tier A; reconciliation fixed by WO-19 —
+    control totals group by fund_id and the itemized slice is fund-complete).
+    config.WA_PDC_ENABLED is a readiness switch, not a gate bypass; when off,
+    returns None and the source is absent from the manifest. A network hiccup
+    skips the source for this run rather than sinking the federal slice. The
+    manifest records the OBSERVED dataset header (Socrata metadata columns), so
+    the transform's schema-drift gate compares a real observation against the
+    pinned contract — never the contract against itself."""
     if not WA_PDC_ENABLED:
         return None
     try:
+        wa_meta = wa_pdc.fetch_metadata()
         wa_items = wa_pdc.fetch_itemized()
+        # A mid-fetch mirror refresh would mix pre/post-refresh pages — refuse
+        # the inconsistent snapshot (the source is skipped this run; a hydrated
+        # prior snapshot, if any, remains the honest basis).
+        if wa_pdc.fetch_metadata()["rows_updated_at"] != wa_meta["rows_updated_at"]:
+            raise RuntimeError("wa_pdc itemized mirror refreshed mid-fetch")
         wa_summary = wa_pdc.fetch_summary()
-        wa_bytes = wa_pdc.snapshot_bytes(wa_items)
-        wa_sha = wa_pdc.sha256(wa_bytes)
+        # Per-report registry for the seen funds — the unmirrored-report
+        # deferral basis (transform.ingest_wa_pdc; WO-19).
+        wa_history = wa_pdc.fetch_history(
+            [r["fund_id"] for r in wa_items if r.get("fund_id")])
+        wa_sha = wa_pdc.sha256(wa_pdc.snapshot_bytes(wa_items))
+        wa_summary_sha = wa_pdc.sha256(wa_pdc.snapshot_bytes(wa_summary))
+        wa_history_sha = wa_pdc.sha256(wa_pdc.snapshot_bytes(wa_history))
         wa_retrieved = _now()
         _write_json(raw / "wa_pdc" / "itemized.json", wa_items)
         _write_json(raw / "wa_pdc" / "summary.json", wa_summary)
+        _write_json(raw / "wa_pdc" / "history.json", wa_history)
         _write_json(raw / "wa_pdc" / "manifest.json", {
-            "file_sha256": wa_sha, "retrieved_at": wa_retrieved,
-            "header": list(wa_pdc.CONTRACT.header),
+            "file_sha256": wa_sha, "summary_sha256": wa_summary_sha,
+            "history_sha256": wa_history_sha,
+            "retrieved_at": wa_retrieved,
+            "header": wa_meta["header"],
+            "itemized_rows_updated_at": wa_meta["rows_updated_at"],
             "contract_version": wa_pdc.CONTRACT.contract_version,
-            "window": f"election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR}",
-            "itemized_count": len(wa_items), "summary_count": len(wa_summary)})
+            "window": (f"fund-complete: election_year>={wa_pdc.PILOT_MIN_ELECTION_YEAR} "
+                       "plus every remaining row of each fund seen"),
+            "itemized_count": len(wa_items), "summary_count": len(wa_summary),
+            "history_count": len(wa_history)})
         return {"retrieved_at": wa_retrieved,
                 "source_url": wa_pdc.CONTRACT.retrieval["itemized_json"],
                 "count": len(wa_items), "file_sha256": wa_sha}
@@ -443,8 +464,10 @@ _FETCHERS = {
     "wikidata": fetch_wikidata,      # WO-15: education, needs the legislators snapshot
 }
 # Manifest source-key -> the config.SOURCES key whose SLA governs its freshness.
-# wa_pdc has no config.SOURCES entry (experimental, gated off); it is never
-# freshness-skipped and always runs its (no-op-when-disabled) fetcher.
+# wa_pdc (registered in config.SOURCES since WO-19) is never freshness-skipped:
+# the reconciliation gate needs the itemized+summary pair captured in the same
+# fetch, so its (no-op-when-disabled) fetcher always runs rather than reusing a
+# hydrated half-pair.
 _SLA_KEY = {"wa_pdc": None}
 
 

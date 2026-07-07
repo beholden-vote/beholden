@@ -179,48 +179,68 @@ no bypass of the dossier provenance validator is ever added.
 
 ## 12. Contract notes — the first real SourceContract
 
-### `wa_pdc` — Washington PDC itemized contributions (Tier A, verified 2026-07-05)
+### `wa_pdc` — Washington PDC itemized contributions (Tier A, verified 2026-07-05; reconciliation re-keyed 2026-07-07)
 
-The reference implementation (WO-9). Declared in `pipelines/beholden_etl/sources/wa_pdc.py`
-as `CONTRACT`; the framework types live in `pipelines/beholden_etl/bulk/`
-(`contract.py`, `reconcile.py`); rows land in `db/migrations/004_disclosure.sql`
-(`disclosure_contributions` + `disclosure_quarantine`). Not surfaced in the dossier UI
-yet — a deterministic filer↔legislator crosswalk is an explicit follow-on.
+The reference implementation (WO-9; reconciliation fixed + surfaced by WO-19). Declared
+in `pipelines/beholden_etl/sources/wa_pdc.py` as `CONTRACT`; the framework types live in
+`pipelines/beholden_etl/bulk/` (`contract.py`, `reconcile.py`, `crosswalk.py`); rows land
+in `db/migrations/004_disclosure.sql` + `006_disclosure_crosswalk.sql`
+(`disclosure_contributions` + `disclosure_quarantine` + `disclosure_filer_links` +
+`disclosure_link_candidates`). Surfaced on a state legislator's dossier **only** through
+the human-reviewed exact-id allowlist (see below).
 
 | Field | Value |
 |---|---|
 | `source_id` | `wa_pdc` |
-| `contract_version` | `2026-07-05` |
+| `contract_version` | `2026-07-07` (changelog in `wa_pdc.py`; layout fingerprint unchanged since 2026-07-05) |
 | `jurisdiction` | `ocd-division/country:us/state:wa` |
 | Itemized dataset | Socrata `kv7h-kjye` — "Contributions to Candidates and Political Committees" |
-| Itemized JSON | `https://data.wa.gov/resource/kv7h-kjye.json` (`$limit`/`$offset`, `$order=id`) |
+| Itemized JSON | `https://data.wa.gov/resource/kv7h-kjye.json` (`$limit`/`$offset`, `$order=id`, fund-complete window) |
 | Itemized bulk CSV | `https://data.wa.gov/api/views/kv7h-kjye/rows.csv?accessType=DOWNLOAD` |
 | `record_locator` | `id` (native Socrata record id) |
 | `source_record_url` | `url` (per-record link to the official filed report PDF) |
 | **License** | **Public Domain** — attribution: Public Disclosure Commission (http://pdc.wa.gov) |
-| Schema-drift fingerprint | the exact 37-field header (`wa_pdc.ITEMIZED_HEADER`); any add/drop/rename/reorder halts |
+| Schema-drift fingerprint | the exact 37-field header (`wa_pdc.ITEMIZED_HEADER`), compared against the OBSERVED metadata columns; any add/drop/rename/reorder halts |
 
 **Control total (the reconciliation basis actually used).** Companion dataset Socrata
 `3h9x-7bvm` — "Campaign Finance Summary" (also Public Domain). The field is
-**`contributions_amount`**, grouped by **`(filer_id, election_year)`** — one summary row
-per group. Σ(itemized `amount`) for a group must equal that group's `contributions_amount`
-**exactly** (`epsilon_cents = 0`). Verified live: filer `24THLD 362`, election_year 2025 —
-six itemized cash contributions summing to $2,183.00, matching the summary total to the
-cent. An itemized (filer, year) group with **no** matching summary total is a gate failure
-(never ship itemized data without a reconciliation basis); a filer that reports a summary
-total but itemizes nothing is simply out of scope for this dataset.
+**`contributions_amount`**, grouped by **`fund_id`** — one summary row per fund.
+`fund_id` is PDC's own documented cross-dataset correlation key ("the unique identifier
+for all reporting and finance records associated with a single campaign … can be used to
+correlate records across different datasets" — the datasets' data dictionaries), whereas
+`filer_id` is documented NOT to be stable (a second office in the same year mints an
+uncorrelated second filer id — the real `EWINS2 258` vs `EWINS  258` pair). Σ(itemized
+`amount`) for a fund must equal that fund's `contributions_amount` **exactly**
+(`epsilon_cents = 0`); the fetched slice is fund-complete so the window can never split
+a group. Verified live 2026-07-07: 2,670/2,670 fund groups reconcile to the cent. An
+itemized fund with **no** summary control total is a gate failure (never ship itemized
+data without a reconciliation basis); a fund with a summary total but no itemized rows
+is simply out of scope. One completeness rule rides above the gate: the two Socrata
+mirrors refresh on different cadences, so a fund whose freshly filed C3 report exists
+in PDC's own Reporting History registry (`7qr9-q2c9`) but is not yet materialized in
+the itemized mirror is **deferred whole** (every row quarantined with the missing
+report number recorded — a control total that already counts an unmirrored report
+cannot be verified by this snapshot); the unchanged gate still halts on any mismatch
+among report-complete funds. Full decomposition of both failure modes:
+[`docs/research/wa-pdc-reconciliation-findings.md`](research/wa-pdc-reconciliation-findings.md).
 
 **Value domains.** `cash_or_in_kind ∈ {Cash, In-kind}` (verified exhaustive). `amount` is a
 signed number — negatives (refunds/corrections) are legitimate and preserved, never clamped.
 A bad enum, non-numeric amount, present-but-unparseable date, non-integer `election_year`,
-or a missing key (`id`/`filer_id`/`url`) is **quarantined with a reason**, never coerced.
+or a missing key (`id`/`filer_id`/`fund_id`/`url`) is **quarantined with a reason**, never coerced.
 
 **Provenance envelope (per row).** `source_id`, `contract_version`, `file_sha256`,
 `retrieved_at`, `record_locator` (native `id`), `source_record_url` (`url`), plus the
 verbatim `raw_amount` and `raw_contributor_name` cells retained forever (§6).
 
-**Entity resolution.** Rows are keyed by WA `filer_id` only — deliberately **not**
-fuzzy-matched to the person spine. Unlinked is honest; a wrong link is not (§9).
+**Entity resolution (§9, implemented by WO-19).** Rows are keyed by PDC ids — never
+fuzzy-matched. PDC and OpenStates share no native identifier, so the ONLY publish path
+is `bulk/wa_pdc_allowlist.json`: a committed, human-reviewed mapping from PDC
+`person_id` to an ocd-person already in the spine. Every state-legislative candidacy
+observed in the slice is scored deterministically into the `disclosure_link_candidates`
+quarantine (seat holder by exact chamber+district + a name-equality flag as review
+context) for possible promotion; the build stage never reads that table. Unlinked is
+honest; a wrong link is not.
 
 **First implementation:** `docs/workplan/WO-9-sos-disclosure-pilot.md` — a single-state
 Tier A pilot against WA PDC (public domain), proving the contract + gates end to end

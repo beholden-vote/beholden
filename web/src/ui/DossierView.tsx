@@ -292,8 +292,10 @@ function MoneyTab({ dossier }: { dossier: Dossier }) {
 
       {money?.campaign_finance && (
         <Section title={STRINGS.campaignFinanceTitle} provenance={money.campaign_finance.provenance}>
-          {money.campaign_finance.cycles.map((c) => (
-            <div className="stat-row" key={c.cycle}>
+          {/* WO-19: a WA candidate can run two campaigns (funds) in one election
+              year — cycle alone is no longer a unique key, so index joins it. */}
+          {money.campaign_finance.cycles.map((c, i) => (
+            <div className="stat-row" key={`${c.cycle}-${i}`}>
               <div className="stat"><b>{c.total_raised_cents != null ? formatMoneyCents(c.total_raised_cents) : "—"}</b><span>raised ({c.cycle})</span></div>
               <div className="stat"><b>{c.total_spent_cents != null ? formatMoneyCents(c.total_spent_cents) : "—"}</b><span>spent</span></div>
               <div className="stat"><b>{c.cash_on_hand_cents != null ? formatMoneyCents(c.cash_on_hand_cents) : "—"}</b><span>cash on hand</span></div>
@@ -309,7 +311,14 @@ function MoneyTab({ dossier }: { dossier: Dossier }) {
               </ul>
             </>
           )}
-          <p className="muted">{STRINGS.campaignFinanceNote}</p>
+          {/* WO-19: the note names the actual reporting agency — FEC for federal
+              members, the WA PDC when the section's provenance says so. Both
+              strings live in the approved table; same section either way. */}
+          <p className="muted">
+            {money.campaign_finance.provenance?.source === "wa_pdc"
+              ? STRINGS.campaignFinanceNoteWaPdc
+              : STRINGS.campaignFinanceNote}
+          </p>
         </Section>
       )}
 

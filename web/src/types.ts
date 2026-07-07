@@ -138,10 +138,13 @@ export interface Dossier {
       provenance?: Provenance;
     };
     campaign_finance?: {
+      /** Federal: one row per FEC two-year cycle. WA state (WO-19): one row per
+       *  PDC fund (campaign) — a candidate with two same-year campaigns gets two
+       *  rows, each carrying its own official registration link (source_url). */
       cycles: {
         cycle: number; total_raised_cents: number | null;
         total_spent_cents: number | null; cash_on_hand_cents: number | null;
-        as_of: string;
+        as_of: string; source_url?: string;
       }[];
       /** WO-12: rank is FEC's own -total order (1..N); list capped at 25. */
       top_contributors?: { name: string; total_cents: number; rank?: number }[];

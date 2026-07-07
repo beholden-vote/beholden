@@ -12,6 +12,7 @@
  *    #co-voting      party agreement math    (build/key_votes.py agreement_pct;
  *                                             build/graph.py co_voting_edges)
  *    #donor-rollups  FEC employer aggregates (sources/fec.py by_employer)
+ *    #state-donor-rollups  WA PDC employer aggregates (jobs/build.py, WO-19)
  *    #shared-donors  graph shared-donor edge (build/graph.py shared_donor_edges)
  *    #sources        pointer to the Sources registry overlay
  *
@@ -24,7 +25,8 @@ import type { InfoPage } from "./chrome";
 /** Sections of this page, in order — the id is the in-page anchor a dossier links
  *  to (e.g. #methodology/key-votes scrolls here). */
 const SECTION_IDS = [
-  "dw-nominate", "key-votes", "co-voting", "donor-rollups", "shared-donors", "sources",
+  "dw-nominate", "key-votes", "co-voting", "donor-rollups", "state-donor-rollups",
+  "shared-donors", "sources",
 ] as const;
 
 export function Methodology({ anchor, onOpenInfo }: {
@@ -128,6 +130,27 @@ recency_bonus = 0.25 × (rank / n)                 # newest vote → 0.25`}</pre
         These are employer aggregates of individual donors — not a company's
         donation, not a PAC, and not a measure of influence. They describe who is
         reported to have given, and nothing more.
+      </p>
+
+      {/* ---- State donor rollups (WO-19) ---- */}
+      <h2 id="state-donor-rollups">Top contributors (state disclosure rollups)</h2>
+      <p>
+        For state legislators whose campaign finance comes from a state disclosure
+        agency (currently the Washington Public Disclosure Commission), "top
+        contributors" are computed by Beholden with one fixed rule, applied
+        identically to every filer regardless of party: itemized contributions
+        that reconciled against the agency's own summary totals are grouped by the
+        contributor's verbatim reported employer, summed, and ranked by total
+        descending (<span className="mono">jobs/build.py · _wa_top_contributors</span>).
+        Contributions filed without a reported employer are not part of the
+        employer rollup.
+      </p>
+      <p>
+        A state legislator's dossier carries this money section only where the
+        campaign's filer record is linked to the legislator by an exact,
+        human-reviewed identifier match — never by name matching. Unlinked
+        campaigns stay unlinked; the same employer-aggregate caveats as the FEC
+        rollups above apply.
       </p>
 
       {/* ---- Shared-donor graph edge ---- */}

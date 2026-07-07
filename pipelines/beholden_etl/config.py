@@ -36,6 +36,12 @@ SOURCES: dict[str, Source] = {
     # the dossier carries a verbatim caveat alongside it — labeled trust, not
     # silent equivalence with official sources. Rarely changes -> a 30-day SLA.
     "wikidata": Source("wikidata", "https://www.wikidata.org", 24 * 30),
+    # WO-9/WO-19: WA PDC bulk campaign finance (Tier A trusted extraction,
+    # license Public Domain). Two Socrata feeds fetched as one coherent pair
+    # (itemized + summary control totals) — fetch never freshness-skips this
+    # source (see jobs/fetch._SLA_KEY), so the SLA here governs the coverage
+    # dashboard only. New contributions post daily; summaries recalc in-step.
+    "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)

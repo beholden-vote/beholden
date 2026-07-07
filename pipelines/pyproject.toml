@@ -21,3 +21,8 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["beholden_etl*"]
+
+[tool.setuptools.package-data]
+# WO-19: the committed, human-reviewed WA PDC person allowlist ships with the
+# package (bulk/crosswalk.py loads it next to its own source file).
+beholden_etl = ["bulk/*.json"]
