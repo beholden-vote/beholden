@@ -22,7 +22,11 @@ WO-10 — resilient · incremental · parallel:
   * **Parallel, nested:** within `fetch_openstates`, the 52 state/territory CSV
     pulls are themselves independent, unauthenticated GETs against a static host
     with no documented rate limit, so they fan out across their own small thread
-    pool rather than one source-level thread walking 52 states serially.
+    pool rather than one source-level thread walking 52 states serially. Same
+    idea within `fetch_congress_gov`'s ~537-member loop, sharing one client
+    whose throttle is now lock-protected (congress_gov.CongressGovClient) so
+    concurrent callers still respect the one hourly cap — the loop was actually
+    bottlenecked on congress.gov's per-request latency, not the rate ceiling.
   * **Fail-closed preserved:** on a transient per-item failure we fall back to that
     item's last-good hydrated snapshot (correct, slightly stale) rather than
     dropping it. We only hard-fail when there is no prior snapshot AND absence
@@ -85,17 +89,69 @@ def fetch_unitedstates_legislators(raw: Path, prior: dict) -> dict:
         "social_media": len(social_media)}
 
 
+_CONGRESS_MEMBER_WORKERS = 8
+
+
+def _fetch_one_member(client, raw: Path, leg_dir: Path, detail_dir: Path, bio: str) -> dict:
+    """One member's legislation + member-detail calls, on the shared, now
+    thread-safe-throttled client (congress_gov.CongressGovClient._throttle
+    holds a lock, so concurrent callers still respect the one hourly cap —
+    this buys overlap on congress.gov's per-request latency, not a higher
+    dispatch rate). Returns counters for the caller to accumulate; a fail-
+    closed legislation failure with no prior snapshot raises through, same
+    as the old serial loop."""
+    reused = 0
+    rel = Path("congress.gov") / "legislation" / f"{bio}.json"
+    try:
+        _write_json(leg_dir / f"{bio}.json", {
+            "bioguide": bio,
+            "sponsored": client.sponsored_legislation(bio),
+            "cosponsored_count": client.cosponsored_count(bio)})
+    except Exception as e:
+        # Transient per-item failure. Absence here fabricates (a missing
+        # legislation file ⇒ counts 0). Fall back to the last-good snapshot if
+        # the lake has one (correct, slightly stale); otherwise fail closed.
+        snap = rawlake.last_good(raw, rel)
+        if snap is None:
+            raise
+        _write_json(leg_dir / f"{bio}.json", snap)   # keep the last-good file
+        reused = 1
+        print(f"fetch: congress.gov {bio} reused last-good snapshot ({type(e).__name__})")
+
+    detail_ok = 0
+    detail_rel = Path("congress.gov") / "member-detail" / f"{bio}.json"
+    try:
+        _write_json(detail_dir / f"{bio}.json", client.member_detail(bio))
+        detail_ok = 1
+    except Exception as e:
+        # Honest-absent: contact/bio extras only, never a fabricated
+        # legislative count. Fall back to a last-good snapshot if one
+        # exists; otherwise the member simply has no member-detail file
+        # this run (build.py treats that as honest absence).
+        snap = rawlake.last_good(raw, detail_rel)
+        if snap is not None:
+            _write_json(detail_dir / f"{bio}.json", snap)
+            detail_ok = 1
+        print(f"fetch: congress.gov member-detail {bio} skipped ({type(e).__name__})")
+    return {"reused": reused, "detail_ok": detail_ok}
+
+
 def fetch_congress_gov(raw: Path, prior: dict) -> dict:
     """Current membership + per-member sponsored/cosponsored legislation, PLUS
     (WO-15) member-detail (birthYear/partyHistory/leadership/DC office) — one
     extra call per member on the SAME client/rate governor. The long pole;
-    runs concurrently with FEC. FAIL-CLOSED for legislation: a per-member
-    failure does NOT skip — a dropped member would publish a false 'sponsored
-    0'. Instead we fall back to that member's last-good hydrated snapshot; only
-    when there is no prior snapshot does the exception propagate and sink the
-    run (never fabricate). Member-detail is HONEST-ABSENT instead: a failure
-    there costs only contact/bio extras, never a fabricated legislative count,
-    so it degrades to the last-good snapshot or simply stays absent."""
+    runs concurrently with FEC, and fans its own ~537 members across a thread
+    pool sharing one client — congress.gov's per-request latency (not the
+    hourly cap) was the actual bottleneck, so overlapping in-flight requests
+    cuts wall time without exceeding the rate governor (now lock-protected;
+    see congress_gov.CongressGovClient._throttle). FAIL-CLOSED for legislation:
+    a per-member failure does NOT skip — a dropped member would publish a false
+    'sponsored 0'. Instead we fall back to that member's last-good hydrated
+    snapshot; only when there is no prior snapshot does the exception propagate
+    and sink the run (never fabricate). Member-detail is HONEST-ABSENT instead:
+    a failure there costs only contact/bio extras, never a fabricated
+    legislative count, so it degrades to the last-good snapshot or simply
+    stays absent."""
     client = congress_gov.CongressGovClient()
     members = list(client.current_members(CONGRESS))
     _write_json(raw / "congress.gov" / f"members-{CONGRESS}.json", members)
@@ -105,39 +161,17 @@ def fetch_congress_gov(raw: Path, prior: dict) -> dict:
     bioguides = [m["bioguideId"] for m in members if m.get("bioguideId")]
     reused = 0
     detail_count = 0
-    for i, bio in enumerate(bioguides, 1):
-        rel = Path("congress.gov") / "legislation" / f"{bio}.json"
-        try:
-            _write_json(leg_dir / f"{bio}.json", {
-                "bioguide": bio,
-                "sponsored": client.sponsored_legislation(bio),
-                "cosponsored_count": client.cosponsored_count(bio)})
-        except Exception as e:
-            # Transient per-item failure. Absence here fabricates (a missing
-            # legislation file ⇒ counts 0). Fall back to the last-good snapshot if
-            # the lake has one (correct, slightly stale); otherwise fail closed.
-            snap = rawlake.last_good(raw, rel)
-            if snap is None:
-                raise
-            _write_json(leg_dir / f"{bio}.json", snap)   # keep the last-good file
-            reused += 1
-            print(f"fetch: congress.gov {bio} reused last-good snapshot ({type(e).__name__})")
-        detail_rel = Path("congress.gov") / "member-detail" / f"{bio}.json"
-        try:
-            _write_json(detail_dir / f"{bio}.json", client.member_detail(bio))
-            detail_count += 1
-        except Exception as e:
-            # Honest-absent: contact/bio extras only, never a fabricated
-            # legislative count. Fall back to a last-good snapshot if one
-            # exists; otherwise the member simply has no member-detail file
-            # this run (build.py treats that as honest absence).
-            snap = rawlake.last_good(raw, detail_rel)
-            if snap is not None:
-                _write_json(detail_dir / f"{bio}.json", snap)
-                detail_count += 1
-            print(f"fetch: congress.gov member-detail {bio} skipped ({type(e).__name__})")
-        if i % 100 == 0 or i == len(bioguides):
-            print(f"fetch: legislation {i}/{len(bioguides)} members")
+    done = 0
+    with ThreadPoolExecutor(max_workers=_CONGRESS_MEMBER_WORKERS) as pool:
+        futures = {pool.submit(_fetch_one_member, client, raw, leg_dir, detail_dir, bio): bio
+                   for bio in bioguides}
+        for fut in as_completed(futures):
+            result = fut.result()   # re-raises a fail-closed legislation exception, sinking the run
+            reused += result["reused"]
+            detail_count += result["detail_ok"]
+            done += 1
+            if done % 100 == 0 or done == len(bioguides):
+                print(f"fetch: legislation {done}/{len(bioguides)} members")
 
     meta = {
         "retrieved_at": _now(),

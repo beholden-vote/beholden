@@ -2,6 +2,7 @@
 Keyed, rate-limited (5,000 req/hr), paginated (max 250/page), retrying."""
 from __future__ import annotations
 import os
+import threading
 import time
 
 import httpx
@@ -24,16 +25,23 @@ class CongressGovClient:
         if not self.api_key:
             raise RuntimeError("CONGRESS_GOV_API_KEY is not set (see docs/SETUP.md §1)")
         self._last_call = 0.0
+        # Guards _last_call: the client is shared across a member-fetch thread
+        # pool (fetch.py), so the throttle's read-sleep-write must be atomic or
+        # concurrent callers could each see a stale _last_call and burst past
+        # the hourly cap. httpx.Client itself is documented thread-safe, so only
+        # this shared timing state needs a lock — the network call runs outside it.
+        self._lock = threading.Lock()
         # 60s read timeout + generous connect: congress.gov can be slow to first
         # byte on the busier per-member endpoints; a monolithic ~2h fetch makes
         # thousands of calls, so a single slow response must not be fatal.
         self._http = httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0))
 
     def _throttle(self):
-        wait = MIN_INTERVAL_S - (time.monotonic() - self._last_call)
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call = time.monotonic()
+        with self._lock:
+            wait = MIN_INTERVAL_S - (time.monotonic() - self._last_call)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call = time.monotonic()
 
     @retry(stop=stop_after_attempt(8),
            wait=wait_exponential(multiplier=2, max=60),
