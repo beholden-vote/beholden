@@ -185,6 +185,105 @@ OPENSTATES_TN_CSV = (
     ",,,,,,,,,,\n"
 )
 
+# WO-17: a WA state legislator whose state has NO landed votes snapshot — the
+# honest-absent path: identity-only dossier, no legislative section, never a
+# fabricated zero count.
+OPENSTATES_WA_CSV = (
+    "id,name,current_party,current_district,current_chamber,given_name,family_name,image,birth_date,sources,"
+    "email,capitol_address,capitol_voice,capitol_fax,district_address,district_voice,district_fax,"
+    "twitter,youtube,instagram,facebook\n"
+    "ocd-person/dddd4444-4444-4444-4444-444444444444,Wanda West,Democratic,3,lower,Wanda,West,,,https://leg.wa.gov/wanda,"
+    ",,,,,,,,,,\n"
+)
+
+# WO-17: the TN state-votes lake snapshot (raw/openstates/votes/tn.json) —
+# shaped like sources/openstates_votes.crawl_state output, bill records shaped
+# per the v3 OpenAPI spec (research-doc-derived; the live key is not available
+# to the test suite, per repo convention of synthetic no-network fixtures).
+#   SB 512: sponsored by Pat (primary), cosponsored by Dana, plus an
+#     org-sponsorship with no person id (skipped, never name-matched). One
+#     upper-chamber vote: Pat yes, an UNKNOWN ocd-person no (-> quarantined),
+#     and a voter the source itself couldn't resolve (voter=None -> skipped).
+#   HB 7: sponsored by Dana, signed into law (-> became_law). One lower-chamber
+#     vote: Dana no.
+STATE_VOTES_TN = {
+    "state": "tn", "created_since": "2025-01-01",
+    "cursor": "2026-07-06T04:00:00+00:00", "retrieved_at": RETRIEVED_AT, "fetched": 2,
+    "bills": {
+        "ocd-bill/11112222-3333-4444-5555-666677778888": {
+            "id": "ocd-bill/11112222-3333-4444-5555-666677778888",
+            "identifier": "SB 512", "session": "114", "title": "Education Savings Act",
+            "subject": ["Education"],
+            "openstates_url": "https://openstates.org/tn/bills/114/SB512/",
+            "sources": [{"url": "https://wapp.capitol.tn.gov/apps/BillInfo/default.aspx?BillNumber=SB0512"}],
+            "first_action_date": "2025-02-01", "latest_action_date": "2025-03-01",
+            "updated_at": "2025-03-02T00:00:00+00:00",
+            "actions": [
+                {"description": "Introduced", "date": "2025-02-01",
+                 "classification": ["introduction"], "organization": {"classification": "upper"}},
+                {"description": "Passed Senate", "date": "2025-03-01",
+                 "classification": ["passage"], "organization": {"classification": "upper"}},
+            ],
+            "sponsorships": [
+                {"name": "Pat Upper", "primary": True, "classification": "primary",
+                 "person": {"id": "ocd-person/aaaa1111-1111-1111-1111-111111111111", "name": "Pat Upper"}},
+                {"name": "Dana Lower", "primary": False, "classification": "cosponsor",
+                 "person": {"id": "ocd-person/bbbb2222-2222-2222-2222-222222222222", "name": "Dana Lower"}},
+                {"name": "Cmte on Education", "primary": False, "classification": "cosponsor",
+                 "person": None},                       # org sponsor: no id -> skipped
+            ],
+            "votes": [
+                {"id": "ocd-vote/cccc3333-3333-3333-3333-333333333333",
+                 "motion_text": "Third Reading", "start_date": "2025-03-01",
+                 "result": "pass", "organization": {"classification": "upper"},
+                 "counts": [{"option": "yes", "value": 17}, {"option": "no", "value": 14}],
+                 "sources": [{"url": "https://wapp.capitol.tn.gov/votes/sb512-third-reading"}],
+                 "votes": [
+                     {"option": "yes", "voter_name": "Pat Upper",
+                      "voter": {"id": "ocd-person/aaaa1111-1111-1111-1111-111111111111"}},
+                     {"option": "no", "voter_name": "Gone Member",
+                      "voter": {"id": "ocd-person/9999dead-dead-dead-dead-deaddeaddead"}},
+                     {"option": "yes", "voter_name": "Unresolved Name", "voter": None},
+                 ]},
+            ],
+        },
+        "ocd-bill/99998888-7777-6666-5555-444433332222": {
+            "id": "ocd-bill/99998888-7777-6666-5555-444433332222",
+            "identifier": "HB 7", "session": "114", "title": "Road Naming Act",
+            "subject": [],
+            "openstates_url": "https://openstates.org/tn/bills/114/HB7/",
+            "sources": [],
+            "first_action_date": "2025-01-20", "latest_action_date": "2025-05-10",
+            "updated_at": "2025-05-11T00:00:00+00:00",
+            "actions": [
+                {"description": "Introduced", "date": "2025-01-20",
+                 "classification": ["introduction"], "organization": {"classification": "lower"}},
+                {"description": "Passed House", "date": "2025-03-10",
+                 "classification": ["passage"], "organization": {"classification": "lower"}},
+                {"description": "Passed Senate", "date": "2025-04-20",
+                 "classification": ["passage"], "organization": {"classification": "upper"}},
+                {"description": "Signed by Governor", "date": "2025-05-10",
+                 "classification": ["executive-signature"], "organization": {"classification": "executive"}},
+            ],
+            "sponsorships": [
+                {"name": "Dana Lower", "primary": True, "classification": "primary",
+                 "person": {"id": "ocd-person/bbbb2222-2222-2222-2222-222222222222", "name": "Dana Lower"}},
+            ],
+            "votes": [
+                {"id": "ocd-vote/eeee5555-5555-5555-5555-555555555555",
+                 "motion_text": "Passage", "start_date": "2025-03-10",
+                 "result": "pass", "organization": {"classification": "lower"},
+                 "counts": [{"option": "yes", "value": 60}, {"option": "no", "value": 30}],
+                 "sources": [],
+                 "votes": [
+                     {"option": "no", "voter_name": "Dana Lower",
+                      "voter": {"id": "ocd-person/bbbb2222-2222-2222-2222-222222222222"}},
+                 ]},
+            ],
+        },
+    },
+}
+
 # Jane's FEC candidate totals (dollars, as the API returns them -> stored cents).
 FEC_TOTALS = {"H8TN06001": {"candidate_id": "H8TN06001", "cycle": 2026, "totals": {
     "receipts": 1234567.89, "disbursements": 900000.0,
@@ -322,6 +421,11 @@ def slice_dirs(tmp_path):
         (raw / "fec" / "contributors" / f"{cand}.json").write_text(json.dumps(rec))
     (raw / "openstates" / "people").mkdir(parents=True)
     (raw / "openstates" / "people" / "tn.csv").write_text(OPENSTATES_TN_CSV)
+    # WO-17: WA people land but NO votes snapshot for WA (honest-absent state);
+    # TN lands both, so TN legislators get the legislative section.
+    (raw / "openstates" / "people" / "wa.csv").write_text(OPENSTATES_WA_CSV)
+    (raw / "openstates" / "votes").mkdir(parents=True)
+    (raw / "openstates" / "votes" / "tn.json").write_text(json.dumps(STATE_VOTES_TN))
     (raw / "house_clerk").mkdir(parents=True)
     (raw / "house_clerk" / "ptr.json").write_text(json.dumps(HOUSE_PTR))
     # WO-15: district offices + social media (federal, unitedstates_legislators
@@ -371,8 +475,8 @@ def test_people_search_index_emitted(slice_dirs):
     officeholder across every layer, each carrying the fields the client search
     needs to jump to a dossier. Same fields for every official (symmetric)."""
     people = json.loads((slice_dirs / "data" / "search" / "people.json").read_text())
-    # 3 federal + 2 state legislators, all with names.
-    assert len(people) == 5
+    # 3 federal + 3 state legislators (TN×2 + WA×1, WO-17), all with names.
+    assert len(people) == 6
     for row in people:
         assert set(row) == {"person_id", "full_name", "office", "party", "ocd_id"}
     jane = next(p for p in people if p["full_name"] == "Jane Rep")
@@ -388,7 +492,7 @@ def test_people_search_index_emitted(slice_dirs):
 
 def test_every_dossier_is_contract_valid(slice_dirs):
     files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
-    assert len(files) == 5                          # 3 federal + 2 state legislators
+    assert len(files) == 6              # 3 federal + 3 state legislators (WO-17 adds WA)
     for f in files:
         d = json.loads(f.read_text())
         dossiers.validate(d)                       # no provenance, no publish
@@ -583,9 +687,11 @@ def test_top_contributors_absent_when_no_committee(slice_dirs):
 
 # --- E4 state legislators ---------------------------------------------------
 def test_state_legislators_light_up_state_layers(slice_dirs):
-    """OpenStates people populate the sldu/sldl feeds + identity-only dossiers,
-    keyed on the OCD ids the tile stamper produces. Ideology/legislative are
-    omitted (not faked), and the dossier still validates."""
+    """OpenStates people populate the sldu/sldl feeds + dossiers, keyed on the
+    OCD ids the tile stamper produces. Ideology stays federal-only (omitted, not
+    faked); since WO-17 a covered state's legislators also carry a legislative
+    section (asserted in the WO-17 tests below), while an uncovered state's
+    dossier stays identity-only — and both validate."""
     sldu = json.loads((slice_dirs / "data" / "stylefeeds" / "sldu.json").read_text())
     sldl = json.loads((slice_dirs / "data" / "stylefeeds" / "sldl.json").read_text())
     assert sldu["ocd-division/country:us/state:tn/sldu:5"]["party"] == "R"
@@ -597,10 +703,15 @@ def test_state_legislators_light_up_state_layers(slice_dirs):
     assert pat["photo_url"] == "https://img/pat.jpg"
 
     doss = _dossier_named(slice_dirs, "Pat Upper")
-    dossiers.validate(doss)                     # identity-only is contract-valid
-    assert "ideology" not in doss and "legislative" not in doss
+    dossiers.validate(doss)
+    assert "ideology" not in doss               # DW-NOMINATE is federal-only
     assert doss["identity"]["provenance"]["source"] == "openstates"
     assert doss["identity"]["office"]["chamber"] == "upper"
+
+    # WA landed people but no votes snapshot -> identity-only, contract-valid.
+    wanda = _dossier_named(slice_dirs, "Wanda West")
+    dossiers.validate(wanda)
+    assert "ideology" not in wanda and "legislative" not in wanda
 
 
 # --- WO-1 roll-call votes ---------------------------------------------------
@@ -701,11 +812,15 @@ def test_dossier_key_votes_populated_and_provenanced(slice_dirs):
 
 def test_roll_calls_and_positions_land_in_spine(slice_dirs):
     """The transform fills roll_calls + vote_positions; non-crosswalk ICPSRs and
-    cast_code 0 rows are dropped without breaking FK integrity."""
+    cast_code 0 rows are dropped without breaking FK integrity. (Counts scope to
+    the federal 'us/…' ids — WO-17 lands state roll calls in the same tables,
+    asserted separately in the WO-17 tests.)"""
     con = store.connect(str(slice_dirs / "wh.duckdb"))
-    assert con.execute("SELECT count(*) FROM roll_calls").fetchone()[0] == 3
+    assert con.execute(
+        "SELECT count(*) FROM roll_calls WHERE roll_call_id LIKE 'us/%'").fetchone()[0] == 3
     # 6 valid casts (Jane x3, Al x3); icpsr 99 + cast_code 0 rows are excluded.
-    assert con.execute("SELECT count(*) FROM vote_positions").fetchone()[0] == 6
+    assert con.execute(
+        "SELECT count(*) FROM vote_positions WHERE roll_call_id LIKE 'us/%'").fetchone()[0] == 6
     # RC1 links to the existing bills row; procedural RC2/RC3 keep NULL bill_id.
     linked = con.execute(
         "SELECT bill_id FROM roll_calls WHERE roll_call_id='us/119/house/1'").fetchone()[0]
@@ -982,7 +1097,7 @@ def test_graph_neighborhood_emitted_with_committee_edge(slice_dirs):
     from beholden_etl.build import graph
     gdir = slice_dirs / "data" / "graph" / "neighborhood"
     files = list(gdir.glob("*.json"))
-    assert len(files) == 5                                   # one per current holder
+    assert len(files) == 6                       # one per current holder (WO-17 adds WA)
     docs = {json.loads(f.read_text())["center"]: json.loads(f.read_text()) for f in files}
     for d in docs.values():
         graph.validate(d)                                    # no receipts, no publish
@@ -2023,3 +2138,334 @@ def test_fetch_wikidata_batches_labels_and_skips_persons_without_entity(tmp_path
     assert "Q2" not in claims                              # failed entity -> no claims entry
     labels = json.loads((raw / "wikidata" / "labels.json").read_text())
     assert labels == {"Q100": "Acme U"}
+
+
+# --- WO-17: state votes/bills via OpenStates API v3 ---------------------------
+from beholden_etl.sources import openstates_votes as _osv  # noqa: E402
+
+_PAT_OCD = "ocd-person/aaaa1111-1111-1111-1111-111111111111"
+_DANA_OCD = "ocd-person/bbbb2222-2222-2222-2222-222222222222"
+_UNKNOWN_OCD = "ocd-person/9999dead-dead-dead-dead-deaddeaddead"
+_SB512_RC = "tn/114/upper/cccc3333-3333-3333-3333-333333333333"
+
+
+def _state_person_id(ocd_person: str) -> str:
+    import uuid
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"openstates:{ocd_person}"))
+
+
+def test_openstates_votes_id_formats():
+    """State bill_id = '{state}/{session}/{identifier-slug}' — lowercase,
+    whitespace runs -> '-' (DATA-CONTRACTS §2 additive note). Roll calls key on
+    the API's own ocd-vote uuid, so ids are deterministic and collision-free."""
+    assert _osv.state_bill_id("TN", "114", "SB 512") == "tn/114/sb-512"
+    assert _osv.state_bill_id("ca", "20252026", " AB 1 ") == "ca/20252026/ab-1"
+    assert _osv.state_bill_id("tx", "89 1", "HB  21") == "tx/89-1/hb-21"
+    assert _osv.state_roll_call_id("tn", "114", "upper", "ocd-vote/abc-123") == \
+        "tn/114/upper/abc-123"
+    # DC and PR are districts/territories, not states, in OCD jurisdiction ids.
+    assert _osv.jurisdiction_id("tn") == "ocd-jurisdiction/country:us/state:tn/government"
+    assert _osv.jurisdiction_id("dc") == "ocd-jurisdiction/country:us/district:dc/government"
+    assert _osv.jurisdiction_id("pr") == "ocd-jurisdiction/country:us/territory:pr/government"
+
+
+def test_openstates_votes_status_derivation():
+    """bills.status derives from OpenStates' own action classifications with a
+    fixed precedence, conservative default 'introduced' (mirror of the federal
+    congress_gov.derive_status: unknown never becomes a stronger claim)."""
+    st = _osv.derive_status
+    assert st([]) == "introduced"
+    assert st([{"classification": ["introduction"]}]) == "introduced"
+    assert st([{"classification": ["referral-committee"]}]) == "committee"
+    assert st([{"classification": ["passage"],
+                "organization": {"classification": "lower"}}]) == "passed_chamber"
+    assert st([{"classification": ["passage"], "organization": {"classification": "lower"}},
+               {"classification": ["passage"], "organization": {"classification": "upper"}},
+               ]) == "passed_both"
+    # Nebraska-style unicameral passage stays passed_chamber, never passed_both.
+    assert st([{"classification": ["passage"],
+                "organization": {"classification": "legislature"}}]) == "passed_chamber"
+    assert st([{"classification": ["passage"], "organization": {"classification": "lower"}},
+               {"classification": ["executive-signature"]}]) == "law"
+    assert st([{"classification": ["became-law"]}]) == "law"
+    assert st([{"classification": ["executive-veto"]}]) == "vetoed"
+    assert st([{"classification": ["failure"]}]) == "failed"
+
+
+def test_openstates_votes_parse_bill_rows_and_source_skips():
+    """parse_bill maps a v3 record to spine-shaped rows: options to the
+    positions CHECK enum, tallies verbatim, sponsorships by ocd-person id only.
+    Source-side unlinkable records (org sponsorships with no person id; voters
+    the SOURCE couldn't resolve) are skipped AND counted — never name-matched."""
+    parsed = _osv.parse_bill(
+        "tn", STATE_VOTES_TN["bills"]["ocd-bill/11112222-3333-4444-5555-666677778888"])
+    assert parsed["bill"]["bill_id"] == "tn/114/sb-512"
+    assert parsed["bill"]["jurisdiction"] == "tn" and parsed["bill"]["session"] == "114"
+    assert parsed["bill"]["status"] == "passed_chamber"
+    assert parsed["bill"]["policy_areas"] == ["Education"]   # the state's own subjects
+    assert parsed["bill"]["introduced_on"] == "2025-02-01"
+    # sponsorships: Pat primary -> sponsor, Dana -> cosponsor; org sponsor skipped
+    assert parsed["sponsorships"] == [
+        {"bill_id": "tn/114/sb-512", "ocd_person": _PAT_OCD, "role": "sponsor"},
+        {"bill_id": "tn/114/sb-512", "ocd_person": _DANA_OCD, "role": "cosponsor"}]
+    rc = parsed["roll_calls"][0]
+    assert rc["roll_call_id"] == _SB512_RC and rc["chamber"] == "upper"
+    assert rc["question"] == "Third Reading" and rc["result"] == "pass"
+    assert (rc["yea_count"], rc["nay_count"]) == (17, 14)    # verbatim tallies
+    # positions keep the raw ocd-person ref (transform owns join + quarantine);
+    # the voter=None row is skipped (source itself couldn't resolve the person).
+    assert parsed["positions"] == [
+        {"roll_call_id": _SB512_RC, "ocd_person": _PAT_OCD, "position": "yea"},
+        {"roll_call_id": _SB512_RC, "ocd_person": _UNKNOWN_OCD, "position": "nay"}]
+    assert parsed["skipped"] == {"sponsorships": 1, "positions": 1}
+    # citation URLs are source-provided: state page first, openstates fallback
+    assert parsed["bill_url"].startswith("https://wapp.capitol.tn.gov/")
+    assert parsed["rc_urls"][_SB512_RC] == "https://wapp.capitol.tn.gov/votes/sb512-third-reading"
+
+
+def test_openstates_votes_option_mapping_never_guesses():
+    """Every mapped option lands in the vote_positions CHECK enum; an option
+    outside the documented map (e.g. 'paired') is skipped and counted, never
+    guessed into a side the member didn't take."""
+    votes = [{"option": o, "voter_name": f"V{i}", "voter": {"id": f"ocd-person/{i}"}}
+             for i, o in enumerate(
+                 ["yes", "no", "abstain", "absent", "excused", "not voting", "paired"])]
+    record = {"id": "ocd-bill/x", "identifier": "SB 1", "session": "114",
+              "title": "T", "openstates_url": "https://openstates.org/x",
+              "votes": [{"id": "ocd-vote/v1", "motion_text": "M", "start_date": "2025-01-01",
+                         "result": "pass", "organization": {"classification": "upper"},
+                         "counts": [], "sources": [], "votes": votes}]}
+    parsed = _osv.parse_bill("tn", record)
+    assert [p["position"] for p in parsed["positions"]] == \
+        ["yea", "nay", "present", "not_voting", "not_voting", "not_voting"]
+    assert parsed["skipped"]["positions"] == 1               # 'paired' skipped, counted
+    rc = parsed["roll_calls"][0]
+    assert rc["yea_count"] is None and rc["nay_count"] is None  # absent tallies stay NULL
+
+
+def test_openstates_votes_schema_drift_halts():
+    """A PRESENT record missing a required field is schema drift — parse_bill
+    raises (and the transform lets it halt the run) rather than publishing a
+    half-parsed state. Absent data is honest; drifted data is not."""
+    good = json.loads(json.dumps(
+        STATE_VOTES_TN["bills"]["ocd-bill/11112222-3333-4444-5555-666677778888"]))
+    no_ident = json.loads(json.dumps(good))
+    del no_ident["identifier"]
+    with pytest.raises(_osv.SchemaDriftError, match="identifier"):
+        _osv.parse_bill("tn", no_ident)
+    no_motion = json.loads(json.dumps(good))
+    del no_motion["votes"][0]["motion_text"]
+    with pytest.raises(_osv.SchemaDriftError, match="motion_text"):
+        _osv.parse_bill("tn", no_motion)
+    no_result = json.loads(json.dumps(good))
+    no_result["votes"][0]["result"] = None
+    with pytest.raises(_osv.SchemaDriftError, match="result"):
+        _osv.parse_bill("tn", no_result)
+
+
+def test_openstates_votes_crawl_incremental_cursor_and_merge():
+    """The since-cursor design: an incremental crawl passes the persisted cursor
+    as updated_since and merges the delta into the prior snapshot by ocd-bill
+    id; the next cursor is the crawl's own START minus a skew lap (so records
+    that move mid-crawl are re-covered next night). A prior snapshot from a
+    DIFFERENT biennium window is discarded — full recrawl."""
+    calls = []
+
+    class _Client:
+        def bills(self, jurisdiction, created_since, updated_since=None):
+            calls.append((jurisdiction, created_since, updated_since))
+            yield {"id": "ocd-bill/new", "identifier": "SB 1", "session": "114"}
+
+    now = datetime(2026, 7, 7, 6, 0, 0, tzinfo=timezone.utc)
+    prior = {"created_since": "2025-01-01", "cursor": "2026-07-01T00:00:00+00:00",
+             "bills": {"ocd-bill/old": {"id": "ocd-bill/old"}}}
+    doc = _osv.crawl_state(_Client(), "tn", "2025-01-01", prior, now=now)
+    assert calls[-1] == ("ocd-jurisdiction/country:us/state:tn/government",
+                         "2025-01-01", "2026-07-01T00:00:00+00:00")
+    assert set(doc["bills"]) == {"ocd-bill/old", "ocd-bill/new"}   # merged, not replaced
+    assert doc["cursor"] == "2026-07-07T05:00:00+00:00"            # start minus skew lap
+    assert doc["fetched"] == 1
+    # New biennium window -> prior discarded, no updated_since (full recrawl).
+    doc2 = _osv.crawl_state(_Client(), "tn", "2027-01-01", prior, now=now)
+    assert calls[-1][2] is None
+    assert set(doc2["bills"]) == {"ocd-bill/new"}
+
+
+def test_state_votes_land_in_spine(slice_dirs):
+    """Ingest round-trip: the landed tn.json fills bills/sponsorships/
+    roll_calls (with verbatim tallies)/vote_positions, joined to persons by
+    exact ocd-person id through the openstates crosswalk."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    try:
+        b = dict(con.execute(
+            "SELECT bill_id, status FROM bills WHERE jurisdiction='tn'").fetchall())
+        assert b == {"tn/114/sb-512": "passed_chamber", "tn/114/hb-7": "law"}
+        sp = set(con.execute(
+            """SELECT bill_id, person_id::VARCHAR, role FROM sponsorships
+               WHERE bill_id LIKE 'tn/%'""").fetchall())
+        pat, dana = _state_person_id(_PAT_OCD), _state_person_id(_DANA_OCD)
+        assert sp == {("tn/114/sb-512", pat, "sponsor"),
+                      ("tn/114/sb-512", dana, "cosponsor"),
+                      ("tn/114/hb-7", dana, "sponsor")}
+        tallies = con.execute(
+            "SELECT yea_count, nay_count FROM roll_calls WHERE roll_call_id = ?",
+            [_SB512_RC]).fetchone()
+        assert tallies == (17, 14)
+        vp = set(con.execute(
+            """SELECT roll_call_id, person_id::VARCHAR, position FROM vote_positions
+               WHERE roll_call_id NOT LIKE 'us/%'""").fetchall())
+        assert vp == {(_SB512_RC, pat, "yea"),
+                      ("tn/114/lower/eeee5555-5555-5555-5555-555555555555", dana, "nay")}
+    finally:
+        con.close()
+
+
+def test_state_votes_unknown_person_quarantined_never_guessed(slice_dirs):
+    """A vote cast by an ocd-person absent from the crosswalk (mid-session
+    turnover) is quarantined with its contexts — one row per distinct unknown
+    id, never joined by name, never silently lost."""
+    con = store.connect(str(slice_dirs / "wh.duckdb"))
+    try:
+        rows = con.execute(
+            "SELECT raw_payload FROM quarantine_identities WHERE source='openstates'").fetchall()
+        assert len(rows) == 1
+        payload = json.loads(rows[0][0])
+        assert payload["id_value"] == _UNKNOWN_OCD
+        assert payload["states"] == ["tn"]
+        assert payload["vote_positions"] == 1 and payload["sponsorships"] == 0
+        # ...and no vote_positions row was invented for the unknown person.
+        n = con.execute(
+            """SELECT count(*) FROM vote_positions vp
+               WHERE vp.roll_call_id NOT LIKE 'us/%'""").fetchone()[0]
+        assert n == 2                                        # Pat + Dana only
+    finally:
+        con.close()
+
+
+def test_state_dossier_publishes_legislative_section(slice_dirs):
+    """WO-17 acceptance: a covered state's legislator publishes the SAME
+    legislative section shape as a federal member — counts, recent_bills,
+    key_votes (yea/nay tallies + official source URL), party_agreement_pct,
+    committees [] — under openstates provenance, so the frontend Record tab
+    (which gates purely on `legislative` existing) lights up unchanged."""
+    pat = _dossier_named(slice_dirs, "Pat Upper")
+    dossiers.validate(pat)
+    assert "ideology" not in pat                             # federal-only, still
+    leg = pat["legislative"]
+    assert set(leg) == {"counts", "recent_bills", "key_votes", "party_agreement_pct",
+                        "committees", "provenance", "votes_provenance",
+                        "committees_provenance"}              # federal-identical shape
+    assert leg["counts"] == {"sponsored": 1, "cosponsored": 0, "became_law": 0}
+    assert leg["committees"] == [] and leg["committees_provenance"] is None
+    rb = leg["recent_bills"][0]
+    assert rb["bill_id"] == "tn/114/sb-512" and rb["status"] == "passed_chamber"
+    assert rb["url"].startswith("https://wapp.capitol.tn.gov/")   # source-provided link
+    [kv] = leg["key_votes"]
+    assert kv["roll_call_id"] == _SB512_RC and kv["position"] == "yea"
+    assert (kv["yea_count"], kv["nay_count"]) == (17, 14)     # tallies, verbatim
+    assert kv["url"] == "https://wapp.capitol.tn.gov/votes/sb512-third-reading"
+    assert kv["bill_title"] == "Education Savings Act"
+    assert kv["bill_url"].startswith("https://wapp.capitol.tn.gov/")
+    assert kv["policy_areas"] == ["Education"]
+    assert kv["description"] is None                          # honest absence (state)
+    # 1 decided vote < MIN_AGREEMENT_VOTES -> agreement omitted, not faked; the
+    # votes envelope then anchors key-vote selection (same rule as federal).
+    assert leg["party_agreement_pct"] is None
+    assert leg["provenance"]["source"] == "openstates"
+    assert leg["provenance"]["methodology_id"] is None        # verbatim counts
+    assert leg["votes_provenance"]["source"] == "openstates"
+    assert leg["votes_provenance"]["methodology_id"] == "key-votes"
+
+    dana = _dossier_named(slice_dirs, "Dana Lower")
+    dleg = dana["legislative"]
+    # cosponsored comes from the WAREHOUSED cosponsor rows for states (federal
+    # reads its per-member raw count instead); became_law counts HB 7.
+    assert dleg["counts"] == {"sponsored": 1, "cosponsored": 1, "became_law": 1}
+    [dkv] = dleg["key_votes"]
+    assert dkv["position"] == "nay"
+    # HB 7 shipped no state source URL -> openstates.org bill page fallback.
+    assert dleg["recent_bills"][0]["url"] == "https://openstates.org/tn/bills/114/HB7/"
+
+
+def test_state_dossier_honest_absent_without_votes_snapshot(slice_dirs):
+    """WA landed people but NO votes snapshot: Wanda keeps an identity-only
+    dossier — no legislative section, no zero counts fabricated from absence."""
+    wanda = _dossier_named(slice_dirs, "Wanda West")
+    dossiers.validate(wanda)
+    assert "legislative" not in wanda and "ideology" not in wanda
+
+
+def test_state_votes_coverage_counts(slice_dirs):
+    """coverage.json carries the state-votes counters (live verification hooks
+    for the pilot) and the openstates family stays ONE source row within SLA."""
+    coverage = json.loads((slice_dirs / "data" / "coverage.json").read_text())
+    c = coverage["counts"]
+    assert c["state_votes_states"] == 1
+    assert c["state_bills"] == 2
+    assert c["state_roll_calls"] == 2
+    assert c["state_vote_positions"] == 2
+    assert coverage["sources"]["openstates"]["within_sla"] is True
+
+
+def test_state_nodes_stay_edge_free_in_graph(slice_dirs):
+    """State-chamber graph EDGES are WO-18's scope: with state votes now
+    warehoused, state members must still emit valid, edge-free neighborhoods
+    (their graph_ref resolves; nothing new is computed for them yet)."""
+    from beholden_etl.build import graph
+    pat_id = _state_person_id(_PAT_OCD)
+    doc = json.loads((slice_dirs / "data" / "graph" / "neighborhood" / f"{pat_id}.json").read_text())
+    graph.validate(doc)
+    assert doc["edges"] == []
+
+
+def test_fetch_openstates_votes_skipped_without_key(tmp_path, monkeypatch):
+    """Without OPENSTATES_KEY the votes crawl is skipped entirely — every pilot
+    state stays honest-absent (identity-only dossiers) and the people CSVs
+    still land. No fabricated zero, no run failure."""
+    from beholden_etl.jobs import fetch as _f
+    from beholden_etl.sources import openstates as _os
+    monkeypatch.delenv("OPENSTATES_KEY", raising=False)
+    monkeypatch.setattr(_os, "STATE_SLUGS", ["tn"])
+    monkeypatch.setattr(_os, "fetch_people_csv", lambda s: "id,name\nx,Y\n")
+    raw = tmp_path / "raw"
+    meta = _f.fetch_openstates(raw, prior={})
+    assert meta["count"] == 1                        # people landed regardless
+    assert "votes_states" not in meta                # votes honestly absent
+    assert not (raw / "openstates" / "votes").exists()
+
+
+def test_fetch_openstates_votes_crawls_and_per_state_failure_skips(tmp_path, monkeypatch):
+    """With the key present, the votes crawl fans the pilot states out on one
+    shared client and lands raw/openstates/votes/{state}.json per state. A
+    per-state failure skips THAT state only (honest-absent, prior snapshot
+    untouched) while the rest land — the run never sinks on one state."""
+    from beholden_etl.jobs import fetch as _f
+    from beholden_etl.sources import openstates as _os
+    from beholden_etl.sources import openstates_votes as osv_mod
+
+    monkeypatch.setenv("OPENSTATES_KEY", "test-key")
+    monkeypatch.setattr(_f, "STATE_VOTES_SLUGS", ["tn", "wa"])
+    monkeypatch.setattr(_os, "STATE_SLUGS", ["tn", "wa"])
+    monkeypatch.setattr(_os, "fetch_people_csv", lambda s: "id,name\nx,Y\n")
+
+    record = STATE_VOTES_TN["bills"]["ocd-bill/11112222-3333-4444-5555-666677778888"]
+
+    class _StubClient:
+        def __init__(self, api_key=None):
+            pass
+
+        def bills(self, jurisdiction, created_since, updated_since=None):
+            if "wa" in jurisdiction:
+                raise RuntimeError("simulated per-state failure")
+            yield record
+
+    monkeypatch.setattr(osv_mod, "OpenStatesVotesClient", _StubClient)
+
+    raw = tmp_path / "raw"
+    meta = _f.fetch_openstates(raw, prior={})
+    assert meta["votes_states"] == ["tn"]            # WA skipped, TN landed
+    assert meta["votes_bills"] == 1 and meta["votes_fetched"] == 1
+    doc = json.loads((raw / "openstates" / "votes" / "tn.json").read_text())
+    assert doc["state"] == "tn" and record["id"] in doc["bills"]
+    assert doc["created_since"] == "2025-01-01"      # current-biennium bound
+    assert not (raw / "openstates" / "votes" / "wa.json").exists()

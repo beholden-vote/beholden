@@ -23,6 +23,7 @@ from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
+from ..sources import openstates_votes                          # WO-17 (state votes/bills)
 from .transform import DEFAULT_DB
 from .. import store
 
@@ -170,9 +171,61 @@ def _office_display(chamber: str, ocd_id: str) -> str:
     return f"{state} · {seat}"
 
 
-# Federal chambers carry ideology + a legislative record; state chambers (E4)
-# ship identity only for now, sourced from OpenStates.
+# Federal chambers carry ideology + a legislative record. State chambers (E4)
+# shipped identity only until WO-17: a state legislator in a STATE_VOTES_SLUGS
+# pilot state whose votes snapshot landed now publishes the SAME legislative
+# section shape (counts, recent_bills, key_votes, party_agreement_pct) from
+# OpenStates; states without a landed snapshot stay identity-only — honest
+# absence, never a fabricated zero. Ideology stays federal-only (DW-NOMINATE).
 FEDERAL_CHAMBERS = {"house", "senate"}
+STATE_CHAMBERS = {"upper", "lower"}
+
+
+def _state_from_ocd(ocd_id: str) -> str | None:
+    """'ocd-division/country:us/state:tn/sldu:5' -> 'tn' (None when the id
+    carries no state segment)."""
+    return ocd_id.split("state:")[1].split("/")[0] if "state:" in ocd_id else None
+
+
+def _state_votes_meta(raw_dir: Path) -> dict:
+    """WO-17: what the landed state-votes lake can vouch for at build time.
+
+    Returns {covered: set[state slug], bill_urls: bill_id -> url,
+    rc_urls: roll_call_id -> url}. `covered` gates the legislative section per
+    state: only a state whose snapshot actually landed publishes one (a zero
+    count inside a covered state is honest; a zero from an absent state would
+    be fabricated, so absent states publish nothing). URLs are the
+    source-provided citation links (state legislature page, else the
+    openstates.org bill page) that don't live in the spine tables — same
+    read-raw-at-build pattern as the federal _rollcall_meta."""
+    votes_dir = Path(raw_dir) / "openstates" / "votes"
+    covered: set[str] = set()
+    bill_urls: dict[str, str] = {}
+    rc_urls: dict[str, str] = {}
+    if not votes_dir.exists():
+        return {"covered": covered, "bill_urls": bill_urls, "rc_urls": rc_urls}
+    for f in sorted(votes_dir.glob("*.json")):
+        doc = json.loads(f.read_text(encoding="utf-8"))
+        state = doc.get("state") or f.stem
+        covered.add(state)
+        for record in (doc.get("bills") or {}).values():
+            parsed = openstates_votes.parse_bill(state, record)
+            if parsed["bill_url"]:
+                bill_urls[parsed["bill"]["bill_id"]] = parsed["bill_url"]
+            for rcid, url in parsed["rc_urls"].items():
+                if url:
+                    rc_urls[rcid] = url
+    return {"covered": covered, "bill_urls": bill_urls, "rc_urls": rc_urls}
+
+
+def _bill_link(bill_id_str: str, state_bill_urls: dict[str, str]) -> str | None:
+    """Citation URL for any bills-spine id: federal ids construct the
+    congress.gov page (deterministic pattern, WO-1); state ids use the
+    SOURCE-PROVIDED link captured at fetch time — never a constructed state
+    URL. None when the source shipped no link (honest absence)."""
+    if bill_id_str.startswith("us/"):
+        return congress_gov.bill_public_url(bill_id_str)
+    return state_bill_urls.get(bill_id_str)
 
 
 def _current_holders(con) -> list[dict]:
@@ -251,8 +304,10 @@ def _previous_roles(con) -> dict[str, list[dict]]:
     return out
 
 
-def _legislative_stats(con) -> dict[str, dict]:
-    """person_id -> {sponsored, became_law, recent_bills[]} from the bills spine."""
+def _legislative_stats(con, state_bill_urls: dict[str, str]) -> dict[str, dict]:
+    """person_id -> {sponsored, became_law, recent_bills[]} from the bills
+    spine. Covers federal AND (WO-17) state sponsorships — the citation URL is
+    resolved per jurisdiction by _bill_link."""
     stats: dict[str, dict] = {}
     for pid, sponsored, became_law in con.execute(
         """SELECT s.person_id, count(*) AS sponsored,
@@ -275,9 +330,19 @@ def _legislative_stats(con) -> dict[str, dict]:
         # omitted them — honest absence, never an invented date.
         stats[str(pid)]["recent_bills"].append(
             {"bill_id": bill_id_, "title": title, "status": status,
-             "url": congress_gov.bill_public_url(bill_id_),
+             "url": _bill_link(bill_id_, state_bill_urls),
              "introduced_on": introduced_on, "latest_action_on": latest_action_on})
     return stats
+
+
+def _cosponsored_spine(con) -> dict[str, int]:
+    """person_id -> count of role='cosponsor' sponsorship rows (WO-17). The
+    federal path never warehouses cosponsor rows (the count comes per-member
+    from raw congress.gov snapshots, _cosponsored_counts), so this is the
+    state legislators' cosponsored figure — same table, different source path."""
+    return {str(pid): n for pid, n in con.execute(
+        "SELECT person_id, count(*) FROM sponsorships"
+        " WHERE role='cosponsor' GROUP BY person_id").fetchall()}
 
 
 def _vote_records(con) -> dict[str, list[dict]]:
@@ -466,11 +531,15 @@ def _all_sponsorships(con) -> dict[str, list[dict]]:
     """person_id -> [{bill_id, url}] of EVERY bill the member sponsored (the graph
     cosponsorship edge needs the full set, not the dossier's top-10). Keyed on the
     deterministic bills-spine bill_id, so a shared-bill edge is an exact id match,
-    never a name guess."""
+    never a name guess. FEDERAL rows only for now: the entity graph's state
+    chambers are WO-18's scope (see _build_graph), so state sponsorship rows
+    (WO-17) don't feed edges yet."""
     out: dict[str, list[dict]] = {}
     for pid, bill_id_ in con.execute(
-        """SELECT person_id, bill_id FROM sponsorships
-           WHERE role='sponsor' ORDER BY person_id, bill_id""").fetchall():
+        """SELECT s.person_id, s.bill_id FROM sponsorships s
+           JOIN bills b USING(bill_id)
+           WHERE s.role='sponsor' AND b.jurisdiction='us'
+           ORDER BY s.person_id, s.bill_id""").fetchall():
         out.setdefault(str(pid), []).append(
             {"bill_id": bill_id_, "url": congress_gov.bill_public_url(bill_id_)})
     return out
@@ -525,9 +594,16 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
              policy_areas: dict[str, list[str]], bill_titles: dict[str, str],
              rc_tallies: dict[str, tuple], district_offices: dict, social_media: dict,
              member_detail: dict, education: dict, previous_roles: dict,
-             federal_contact: dict) -> dict:
+             federal_contact: dict, state_votes: dict, cospon_spine: dict) -> dict:
     bio = h.get("bioguide")
     federal = h["chamber"] in FEDERAL_CHAMBERS
+    # WO-17: a state legislator publishes a legislative section ONLY when their
+    # state's votes snapshot actually landed (honest-absent per state — a zero
+    # inside a covered state is real; a zero from an absent state would be
+    # fabricated, so absent states keep identity-only dossiers).
+    state_slug = _state_from_ocd(h["ocd_id"])
+    state_covered = (h["chamber"] in STATE_CHAMBERS
+                     and state_slug in state_votes["covered"])
     vacant = bool(h["is_vacant_marker"])
     photo_url = h.get("image_url") or photo.get(bio)   # OpenStates image or congress.gov headshot
     detail = member_detail.get(bio) if bio else None
@@ -611,8 +687,7 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
 
     sections = {"identity": identity, "graph_ref": f"/graph/neighborhood/{h['person_id']}"}
 
-    # Ideology + legislative record are federal-only for now; state dossiers
-    # (E4) publish identity only, each fact still sourced (no provenance, no publish).
+    # Ideology is federal-only (DW-NOMINATE); a state dossier omits it.
     if federal:
         score = None if h["ideology_score"] is None else float(h["ideology_score"])
         sections["ideology"] = {
@@ -625,26 +700,34 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
                                       f"https://voteview.com/congress/{h['chamber']}", manifest,
                                       methodology_id=METHODOLOGY_IDEOLOGY),
         }
+
+    # Legislative record: federal members (WO-1), and — WO-17 — state
+    # legislators whose state's votes snapshot landed. ONE shape, ONE formula
+    # set (key-vote selection, party agreement) for both; only the sources and
+    # citation-URL resolution differ, so the Record tab lights up for state
+    # legislators with zero frontend changes.
+    if federal or state_covered:
         stats = leg_spine.get(h["person_id"], {})
-        # Key votes + party agreement are Voteview-sourced (roll_calls /
+        # Key votes + party agreement are vote-derived (roll_calls /
         # vote_positions), so the legislative section carries a second provenance
         # envelope for its vote-derived facts — no provenance, no publish.
         my_votes = vote_records.get(h["person_id"], [])
         selected = key_votes.select_key_votes(my_votes, rc_meta)
         agreement = key_votes.agreement_pct(my_votes, h["party"], party_majority)
         for kv in selected:                        # link the citation to the bill page when known
-            kv["bill_url"] = congress_gov.bill_public_url(kv["bill_id"]) if kv.get("bill_id") else None
+            kv["bill_url"] = _bill_link(kv["bill_id"], state_votes["bill_urls"]) if kv.get("bill_id") else None
             # WO-12: the decided bill's warehoused title, so the drill-down shows
             # what the vote decided. Null for procedural votes with no bill —
             # honest absence, never an invented title.
             kv["bill_title"] = bill_titles.get(kv["bill_id"]) if kv.get("bill_id") else None
-            # WO-8: attach congress.gov's policy-area taxonomy for the decided bill
-            # (the money-&-votes juxtaposition's only "relatedness" chip). Absent
-            # for procedural votes (no bill) or bills with no classified area —
-            # never invented, and never a Beholden-drawn link.
+            # WO-8: attach the source's own policy taxonomy for the decided bill
+            # (congress.gov policyArea federally, the state's subject list via
+            # OpenStates) — a descriptive chip, never our inference. Absent
+            # for procedural votes (no bill) or bills with no classified area.
             kv["policy_areas"] = policy_areas.get(kv["bill_id"]) if kv.get("bill_id") else None
-            # WO-12: Voteview's secondary vote text, verbatim, only when it adds
-            # information beyond `question` (voteview.question_and_description).
+            # WO-12: the source's secondary vote text, verbatim, only when it adds
+            # information beyond `question` (federal only; state roll calls have
+            # no separate description -> None, honest absence).
             kv["description"] = (rc_meta.get(kv["roll_call_id"]) or {}).get("description")
             # WO-12: chamber-wide tallies, persisted on roll_calls (migration
             # 005) and published verbatim; null when the source lacked a tally.
@@ -654,21 +737,38 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         # dedicated committees_provenance envelope (like votes_provenance above),
         # stamped only when the member actually sits on a committee. No
         # provenance, no publish; absent (never on a committee) omits the stamp
-        # and leaves committees as [].
+        # and leaves committees as []. State committee rosters aren't ingested
+        # yet, so state sections always publish [] here (absent, not zero-faked).
         my_committees = committees.get(h["person_id"], [])
+        if federal:
+            cosponsored = cospon.get(bio, 0)
+            section_prov = _provenance(
+                "congress.gov",
+                f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
+                manifest)
+            votes_prov_source, votes_prov_url = (
+                "voteview", f"https://voteview.com/congress/{h['chamber']}")
+        else:
+            # WO-17: cosponsor rows ARE warehoused for states (unlike federal,
+            # where the count comes from the raw congress.gov snapshot).
+            cosponsored = cospon_spine.get(h["person_id"], 0)
+            state_bills_url = f"https://openstates.org/{state_slug}/bills/"
+            section_prov = _provenance("openstates", state_bills_url, manifest)
+            votes_prov_source, votes_prov_url = "openstates", state_bills_url
         sections["legislative"] = {
             "counts": {"sponsored": stats.get("sponsored", 0),
-                       "cosponsored": cospon.get(bio, 0),
+                       "cosponsored": cosponsored,
                        "became_law": stats.get("became_law", 0)},
             "recent_bills": stats.get("recent_bills", []),
             "key_votes": selected,
             "party_agreement_pct": agreement,
             "committees": my_committees,
-            "provenance": _provenance("congress.gov",
-                                      f"https://www.congress.gov/member/{bio}" if bio else SOURCES["congress.gov"].base_url,
-                                      manifest),
-            "votes_provenance": _provenance("voteview",
-                                            f"https://voteview.com/congress/{h['chamber']}", manifest,
+            "provenance": section_prov,
+            # Same methodology anchors for state and federal (rule #3 —
+            # symmetric by construction): the key-vote salience and party-
+            # agreement formulas on /methodology are source-agnostic and apply
+            # verbatim to state roll calls.
+            "votes_provenance": _provenance(votes_prov_source, votes_prov_url, manifest,
                                             methodology_id=(METHODOLOGY_AGREEMENT if agreement is not None
                                                             else METHODOLOGY_KEY_VOTES))
                                 if selected or agreement is not None else None,
@@ -757,6 +857,11 @@ def _build_graph(out: Path, holders: list[dict], all_sponsorships: dict,
 
     edges: list[dict] = []
     for chamber, ids in by_chamber.items():
+        # State-chamber edges (co-voting, cosponsorship across 7k+ legislators)
+        # are WO-18's scope — until then state members stay edge-free nodes,
+        # exactly as before WO-17 landed their vote data in the warehouse.
+        if chamber not in FEDERAL_CHAMBERS:
+            continue
         window = window_by_chamber[chamber]
         edges += graph.cosponsorship_edges(ids, all_sponsorships, window)
         edges += graph.co_voting_edges(ids, positions, rc_refs, window)
@@ -774,9 +879,10 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     manifest = _load_manifest(raw_dir)
     photo = _photo_map(raw_dir)
 
+    state_votes = _state_votes_meta(raw_dir)      # WO-17: covered states + citation URLs
     con = store.connect(db_path)
     holders = _current_holders(con)
-    leg_spine = _legislative_stats(con)
+    leg_spine = _legislative_stats(con, state_votes["bill_urls"])
     campaign = _campaign_finance(con)
     contributors = _top_contributors(con)
     vote_records = _vote_records(con)
@@ -787,11 +893,30 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     bill_titles = _bill_titles(con)               # WO-12: key-vote bill_title join
     rc_tallies = _roll_call_tallies(con)          # WO-12: persisted yea/nay tallies
     previous_roles = _previous_roles(con)         # WO-15: past terms (our own warehouse)
+    cospon_spine = _cosponsored_spine(con)        # WO-17: state cosponsored counts
+    # WO-17: state-votes coverage counters (state ids never start 'us/').
+    state_counts = {
+        "state_votes_states": len(state_votes["covered"]),
+        "state_bills": con.execute(
+            "SELECT count(*) FROM bills WHERE jurisdiction <> 'us'").fetchone()[0],
+        "state_roll_calls": con.execute(
+            "SELECT count(*) FROM roll_calls WHERE roll_call_id NOT LIKE 'us/%'").fetchone()[0],
+        "state_vote_positions": con.execute(
+            "SELECT count(*) FROM vote_positions WHERE roll_call_id NOT LIKE 'us/%'").fetchone()[0],
+    }
     con.close()
     medians = _medians(holders)
     cospon = _cosponsored_counts(raw_dir)
     disclosures = _disclosures(raw_dir, holders)
     rc_meta = _rollcall_meta(raw_dir)
+    # WO-17: state roll calls enter the SAME key-vote meta map (ids never
+    # collide with federal 'us/…' ids). Salience needs a real tally, so a state
+    # roll call with no recorded counts is simply not key-vote-eligible —
+    # honest exclusion, never an invented closeness.
+    for rcid, url in state_votes["rc_urls"].items():
+        yea, nay = rc_tallies.get(rcid, (None, None))
+        if yea is not None and nay is not None:
+            rc_meta[rcid] = {"yea": yea, "nay": nay, "url": url}
     federal_contact = _federal_contact_map(raw_dir)     # WO-15
     district_offices = _district_offices_map(raw_dir)   # WO-15
     social_media = _social_media_map(raw_dir)           # WO-15
@@ -809,7 +934,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                      contributors, disclosures, vote_records, rc_meta, party_majority,
                      committees, policy_areas, bill_titles, rc_tallies,
                      district_offices, social_media, member_detail, education,
-                     previous_roles, federal_contact)
+                     previous_roles, federal_contact, state_votes, cospon_spine)
             for h in holders]
     dossiers.publish(docs, out / "dossiers")
 
@@ -887,7 +1012,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         "counts": {"dossiers": len(docs), "graph_neighborhoods": graph_docs,
                    "cd_stylefeed": len(cd_feed), "states_stylefeed": len(states_feed),
                    "house": len(house), "senate": len(senate),
-                   "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"])},
+                   "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"]),
+                   **state_counts},   # WO-17: state bills/votes coverage
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},
     }
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))

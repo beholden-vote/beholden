@@ -42,8 +42,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import rawlake
-from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, WA_PDC_ENABLED
+from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, STATE_VOTES_SLUGS, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
+from ..sources import openstates_votes                           # WO-17 (state votes/bills)
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 from ..sources import wikidata                                   # WO-15 (education)
 
@@ -257,12 +258,43 @@ def _fetch_one_state(state: str) -> tuple[str, str | None]:
         return state, None
 
 
+def _fetch_one_state_votes(client, raw: Path, state: str) -> tuple[str, dict | None]:
+    """WO-17: one state's incremental bills+votes crawl on the shared,
+    thread-safe-throttled v3 client. Reads the prior lake snapshot for the
+    since-cursor, merges the delta, writes the state file back. A per-state
+    failure skips WITHOUT touching the hydrated prior file — that state keeps
+    its last-good snapshot (correct, slightly stale) or stays honestly absent;
+    either way nothing is fabricated and the run continues. Schema drift
+    (SchemaDriftError) raises through: a half-parsed state must halt, not ship."""
+    rel = Path("openstates") / "votes" / f"{state}.json"
+    try:
+        prior_doc = rawlake.last_good(raw, rel)
+        doc = openstates_votes.crawl_state(
+            client, state, openstates_votes.biennium_start(CONGRESS), prior_doc)
+        _write_json(raw / rel, doc)
+        return state, doc
+    except openstates_votes.SchemaDriftError:
+        raise                                     # fail closed — never swallowed
+    except Exception as e:
+        print(f"fetch: openstates votes {state} skipped ({type(e).__name__})")
+        return state, None
+
+
 def fetch_openstates(raw: Path, prior: dict) -> dict:
-    """State legislators, bulk CSV per state (E4). The 52 states/territories are
+    """State legislators, bulk CSV per state (E4), PLUS (WO-17) state bills +
+    roll-call votes for the STATE_VOTES_SLUGS pilot via the keyed v3 API —
+    one source family, one manifest row, one SLA. The 52 people CSVs are
     independent, unauthenticated GETs against a static host with no documented
     rate limit (openstates.py), so they fan out across a small thread pool —
     wall time is bounded by the slowest state, not the sum of all 52. A single
-    state hiccup skips — state coverage is honest-absent, not fabricated."""
+    state hiccup skips — state coverage is honest-absent, not fabricated.
+
+    The votes crawl fans its pilot states across a second pool sharing ONE
+    v3 client whose throttle is lock-protected (openstates_votes.
+    OpenStatesVotesClient), so concurrency overlaps request latency without
+    exceeding the API cap. Without OPENSTATES_KEY the votes crawl is skipped
+    entirely (every pilot state stays honest-absent — identity-only dossiers,
+    exactly like today); the people crawl still lands either way."""
     os_dir = raw / "openstates" / "people"
     os_count = 0
     with ThreadPoolExecutor(max_workers=_OPENSTATES_WORKERS) as pool:
@@ -272,7 +304,29 @@ def fetch_openstates(raw: Path, prior: dict) -> dict:
             os_dir.mkdir(parents=True, exist_ok=True)
             (os_dir / f"{state}.csv").write_text(csv_text, encoding="utf-8")
             os_count += max(csv_text.count("\n") - 1, 0)
-    return {"retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
+    meta = {"retrieved_at": _now(), "source_url": "https://openstates.org/", "count": os_count}
+
+    # --- WO-17: state bills + votes (v3 API, incremental per-state crawl) ---
+    if STATE_VOTES_SLUGS and openstates_votes.api_key_available():
+        client = openstates_votes.OpenStatesVotesClient()
+        votes_states, votes_bills, votes_fetched = [], 0, 0
+        with ThreadPoolExecutor(max_workers=min(4, len(STATE_VOTES_SLUGS))) as pool:
+            futures = [pool.submit(_fetch_one_state_votes, client, raw, s)
+                       for s in STATE_VOTES_SLUGS]
+            for fut in as_completed(futures):
+                state, doc = fut.result()   # re-raises SchemaDriftError (fail closed)
+                if doc is None:
+                    continue
+                votes_states.append(state)
+                votes_bills += len(doc.get("bills") or {})
+                votes_fetched += doc.get("fetched", 0)
+        meta["votes_states"] = sorted(votes_states)
+        meta["votes_bills"] = votes_bills
+        meta["votes_fetched"] = votes_fetched
+    elif STATE_VOTES_SLUGS:
+        print("fetch: openstates votes skipped (OPENSTATES_KEY not set) — "
+              "pilot states stay honest-absent")
+    return meta
 
 
 def fetch_house_clerk(raw: Path, prior: dict) -> dict:

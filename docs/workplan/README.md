@@ -77,7 +77,7 @@ sequentially — the WOs touch the same files.
 | 14 | Map fills by level (Senate delegation stylefeed) | P+map (after 12) | merged |
 | 15 | Contact · social · previous-roles · bio · education data | P (after 12) | merged |
 | 16 | Header action row + Overview bio/education + Social tab | F (after 11, 15) | merged |
-| 17 | State votes/bills via OpenStates API v3 | P | open |
+| 17 | State votes/bills via OpenStates API v3 | P | in review (pilot ca/tx/ny/fl/tn) |
 | 18 | State co-voting edges + party agreement | P (after 17) | open |
 | 19 | WA PDC reconciliation fix + surface in Money tab | P (independent) | open |
 | 20 | State-money pilot wave (3–5 best-portal states) | P (after 19) | open |

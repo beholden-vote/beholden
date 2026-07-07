@@ -19,6 +19,7 @@ from ..sources import congress_gov
 from ..sources import fec
 from ..sources import legislators as L
 from ..sources import openstates
+from ..sources import openstates_votes                          # WO-17 (state votes/bills)
 from ..sources import voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 from ..bulk import reconcile as bulk_reconcile                  # WO-9 (fail-closed gates)
@@ -447,6 +448,91 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "divisions", list(os_divs.values()))
         store.insert(con, "offices", list(os_offices.values()))
         store.insert(con, "terms", os_terms)
+
+    # ==== WO-17: state bills + roll-call votes (OpenStates v3) ==================
+    # Reads the landed per-state snapshots (raw/openstates/votes/{st}.json) only —
+    # never the network. Joins to persons EXCLUSIVELY by exact ocd-person id
+    # through the openstates crosswalk written just above; a sponsorship or vote
+    # referencing an unknown ocd-person is skipped and its id quarantined
+    # (never name-matched, never guessed). parse_bill raises SchemaDriftError on
+    # a present-but-drifted record, and it propagates — fail closed, a
+    # half-parsed state must halt the run, while a state with NO landed file is
+    # simply honest-absent (its legislators keep identity-only dossiers).
+    votes_dir = raw / "openstates" / "votes"
+    if votes_dir.exists():
+        ocd_to_person = {r[1]: str(r[0]) for r in con.execute(
+            "SELECT person_id, id_value FROM person_identifiers"
+            " WHERE id_scheme='openstates'").fetchall()}
+        sv_bills: dict[str, dict] = {}
+        sv_sponsorships, seen_sv_sp = [], set()
+        sv_roll_calls, seen_sv_rc = [], set()
+        sv_positions, seen_sv_vp = [], set()
+        # Unknown ocd-person ids, deduped: quarantined once each with the
+        # contexts they appeared in (auditable, bounded — never silently lost).
+        unknown_persons: dict[str, dict] = {}
+        skipped_unlinked = 0                    # source-side person-less records
+
+        for f in sorted(votes_dir.glob("*.json")):
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            state = doc.get("state") or f.stem
+            for record in (doc.get("bills") or {}).values():
+                parsed = openstates_votes.parse_bill(state, record)   # drift raises
+                bid = parsed["bill"]["bill_id"]
+                sv_bills.setdefault(bid, parsed["bill"])
+                skipped_unlinked += parsed["skipped"]["sponsorships"]
+                skipped_unlinked += parsed["skipped"]["positions"]
+                for sp in parsed["sponsorships"]:
+                    pid = ocd_to_person.get(sp["ocd_person"])
+                    if not pid:
+                        q = unknown_persons.setdefault(sp["ocd_person"], {
+                            "id_scheme": "openstates", "id_value": sp["ocd_person"],
+                            "states": set(), "sponsorships": 0, "vote_positions": 0})
+                        q["states"].add(state)
+                        q["sponsorships"] += 1
+                        continue
+                    pk = (sp["bill_id"], pid, sp["role"])
+                    if pk not in seen_sv_sp:
+                        seen_sv_sp.add(pk)
+                        sv_sponsorships.append({
+                            "bill_id": sp["bill_id"], "person_id": pid,
+                            "role": sp["role"], "is_original": None,
+                            "sponsored_on": None})
+                for rc in parsed["roll_calls"]:
+                    if rc["roll_call_id"] not in seen_sv_rc:
+                        seen_sv_rc.add(rc["roll_call_id"])
+                        sv_roll_calls.append(rc)
+                for pos in parsed["positions"]:
+                    pid = ocd_to_person.get(pos["ocd_person"])
+                    if not pid:
+                        q = unknown_persons.setdefault(pos["ocd_person"], {
+                            "id_scheme": "openstates", "id_value": pos["ocd_person"],
+                            "states": set(), "sponsorships": 0, "vote_positions": 0})
+                        q["states"].add(state)
+                        q["vote_positions"] += 1
+                        continue
+                    pk = (pos["roll_call_id"], pid)
+                    if pk not in seen_sv_vp:
+                        seen_sv_vp.add(pk)
+                        sv_positions.append({
+                            "roll_call_id": pos["roll_call_id"], "person_id": pid,
+                            "position": pos["position"]})
+
+        store.insert(con, "bills", list(sv_bills.values()))
+        store.insert(con, "sponsorships", sv_sponsorships)
+        store.insert(con, "roll_calls", sv_roll_calls)
+        # Positions are the volume table (7k+ legislators at fan-out): insert
+        # set-based in bounded chunks like the federal ~500k-row path above.
+        for i in range(0, len(sv_positions), 10000):
+            store.insert(con, "vote_positions", sv_positions[i:i + 10000])
+        if unknown_persons:
+            store.insert(con, "quarantine_identities", [
+                {"raw_payload": {**q, "states": sorted(q["states"])},
+                 "source": "openstates"} for q in unknown_persons.values()])
+        print(f"transform: state votes bills={len(sv_bills)} "
+              f"sponsorships={len(sv_sponsorships)} roll_calls={len(sv_roll_calls)} "
+              f"positions={len(sv_positions)} "
+              f"unknown_persons_quarantined={len(unknown_persons)} "
+              f"source_unlinked_skipped={skipped_unlinked}")
 
     # --- WO-9: WA PDC bulk disclosure (trusted extraction, fail-closed gates) ---
     # Reads the landed snapshot only (never the network); ingest_wa_pdc runs the

@@ -92,7 +92,7 @@ CREATE INDEX ON terms (office_id) WHERE end_date IS NULL;  -- fast "current hold
 ```sql
 -- ============ LEGISLATIVE ============
 CREATE TABLE bills (
-  bill_id      TEXT PRIMARY KEY,           -- 'us/119/hr/2384' | 'tn/2026/sb/512'
+  bill_id      TEXT PRIMARY KEY,           -- 'us/119/hr/2384' | 'tn/114/sb-512' (see id note below)
   jurisdiction TEXT NOT NULL,
   session      TEXT NOT NULL,
   title        TEXT NOT NULL,
@@ -155,6 +155,18 @@ CREATE TABLE ideology_scores (
   PRIMARY KEY (person_id, scheme, scope)
 );
 ```
+
+**Legislative id formats (additive note, WO-17).** Federal bills keep
+`us/{congress}/{type-slug}/{number}` (e.g. `us/119/hr/2384`). State bills
+(OpenStates v3 ingest) use `{state}/{session}/{identifier-slug}` where both the
+session identifier and the bill identifier are lowercased with whitespace runs
+collapsed to `-` — TN's "SB 512" in session "114" is `tn/114/sb-512`
+(`sources/openstates_votes.state_bill_id`). Roll calls follow the same split:
+federal `us/{congress}/{chamber}/{rollnumber}`, state
+`{state}/{session}/{chamber}/{ocd-vote-uuid}` (the uuid tail of the API's own
+`ocd-vote` id). The two families never collide, so bills, roll_calls,
+sponsorships and vote_positions hold both jurisdictions in the same tables,
+disambiguated by `jurisdiction` / the id prefix.
 
 ```sql
 -- ============ MONEY ============

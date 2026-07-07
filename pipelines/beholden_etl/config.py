@@ -20,7 +20,12 @@ SOURCES: dict[str, Source] = {
         "unitedstates_legislators",
         "https://raw.githubusercontent.com/unitedstates/congress-legislators/main", 36),  # roster/committees rarely change
     "voteview": Source("voteview", "https://voteview.com/static/data/out", 36),   # votes/ideology: every other night, not 60 days
-    "openstates": Source("openstates", "https://data.openstates.org", 72, True),  # state legislators change slowly
+    # WO-17: the openstates family now carries state bills/roll-call votes (v3
+    # API, OPENSTATES_KEY) alongside the people CSVs — votes move daily, so the
+    # SLA drops from 72h to 24h. One registry row for the whole family keeps
+    # freshness/coverage honest for the fastest-moving fact it publishes; the
+    # people CSVs it drags along nightly are cheap unauthenticated GETs.
+    "openstates": Source("openstates", "https://data.openstates.org", 24, True),
     "fec": Source("fec", "https://api.open.fec.gov/v1", 72, True),   # donor filings post periodically
     "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24),   # new trades daily
     "senate_efd": Source("senate_efd", "https://efdsearch.senate.gov", 24),
@@ -45,6 +50,15 @@ RAW_DIST = "dist/raw"        # immutable landed snapshots, per source
 
 # Current scope of the federal legislative slice.
 CONGRESS = 119
+
+# WO-17 pilot: states whose bills + roll-call votes are crawled from the
+# OpenStates v3 API (sources/openstates_votes.py). Chosen from the research
+# doc's best-coverage list (docs/research/state-votes-evaluation.md §3):
+# the four most populous well-covered states plus TN, the doc's small clean
+# control state. Fan-out to all 52 slugs is this one line becoming
+# `sources/openstates.STATE_SLUGS` once the pilot's page counts + rate-limit
+# headroom are confirmed on the real key.
+STATE_VOTES_SLUGS = ["ca", "tx", "ny", "fl", "tn"]
 TILE_VINTAGE = "2025"  # Census cartographic-boundary release (GENZ2025); bump on new vintage
 FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congress
 
