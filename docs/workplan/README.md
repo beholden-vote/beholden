@@ -77,6 +77,17 @@ sequentially — the WOs touch the same files.
 | 14 | Map fills by level (Senate delegation stylefeed) | P+map (after 12) | merged |
 | 15 | Contact · social · previous-roles · bio · education data | P (after 12) | merged |
 | 16 | Header action row + Overview bio/education + Social tab | F (after 11, 15) | merged |
+| 17 | State votes/bills via OpenStates API v3 | P | open |
+| 18 | State co-voting edges + party agreement | P (after 17) | open |
+| 19 | WA PDC reconciliation fix + surface in Money tab | P (independent) | open |
+| 20 | State-money pilot wave (3–5 best-portal states) | P (after 19) | open |
+| 21 | Place geometry (TIGER incorporated-places tiles) | T | open |
+| 22 | Local officials beachhead (top metros + one full state) | P (rolling) | open |
+| 23 | In-app bill pages + full voting-record artifacts | P+F (federal now; state after 17) | open |
+| 24 | Voting-bloc analysis (descriptive, symmetric) | P+F (after 23) | open |
+| 25 | Donor networks deeper (multi-cycle, PAC flows) | P (independent) | open |
+| 26 | State lobbying registries (WA/CA/TX pilot) | P (after 19) | open |
+| 27 | Senate eFD filing links (chamber parity) | P (independent) | open |
 
 **WO-1…16 merged (2026-07-06).** WO-11…16 were the depth round: dossier tabs, cited
 drill-downs, an interactive connections graph, per-level map fills, and the
@@ -92,9 +103,9 @@ envelope with a verbatim crowd-edited credibility note rendered wherever it appe
 the official source (Bioguide) is bot-walled, and the user accepted labeled Wikidata
 over omission. Ballotpedia/VoteSmart rejected (restrictive licensing).
 
-Other open follow-ons (not WOs yet): WA PDC itemized↔summary reconciliation fix (the two
-feeds use different filer_id formats — blocks re-enabling `WA_PDC_ENABLED`); surface WA
-disclosure data once a deterministic filer↔legislator crosswalk exists; build the
-state-votes vertical (OpenStates API v3 — GO per `docs/research/state-votes-evaluation.md`);
-full per-member voting record artifacts; in-app bill pages; multi-congress ideology
-timeline; committees CI needs Python 3.11.
+**WO-17…27 are Round 3** — state depth, local beachhead, and new connection types. Full
+context, external-landscape verdicts (aggregators dead; OpenStates v3 GO; LegiScan
+licensing-risky), locked user decisions, and per-WO scope live in
+[`ROADMAP-R3.md`](ROADMAP-R3.md). Remaining small follow-ons: multi-congress ideology
+timeline; committees CI needs Python 3.11; Tier B verifier (build when a Wave-2 state
+needs it); public API docs page; coverage dashboard page.
