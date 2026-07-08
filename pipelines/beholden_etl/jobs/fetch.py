@@ -276,7 +276,18 @@ def _fetch_one_state_votes(client, raw: Path, state: str) -> tuple[str, dict | N
     except openstates_votes.SchemaDriftError:
         raise                                     # fail closed — never swallowed
     except Exception as e:
-        print(f"fetch: openstates votes {state} skipped ({type(e).__name__})")
+        # Unwrap tenacity's RetryError so the skip line names the REAL cause
+        # (e.g. HTTP 429 rate-limit vs 401 bad key) instead of a generic
+        # "RetryError" — the first live run's opaque failures cost a diagnostic
+        # full rebuild to attribute to the free-tier quota (WO-17 note).
+        cause = getattr(getattr(e, "last_attempt", None), "exception", lambda: None)()
+        detail = type(e).__name__
+        status = getattr(getattr(cause, "response", None), "status_code", None)
+        if status is not None:
+            detail = f"{type(cause).__name__} HTTP {status}"
+        elif cause is not None:
+            detail = f"{type(cause).__name__}"
+        print(f"fetch: openstates votes {state} skipped ({detail})")
         return state, None
 
 

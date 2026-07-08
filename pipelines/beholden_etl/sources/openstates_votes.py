@@ -54,10 +54,20 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 API_BASE = "https://v3.openstates.org"
 PER_PAGE = 20            # spec default 10, no documented max — 20 is the research
                          # doc's conservative choice (state-votes-evaluation §2)
-# The current free-tier quota is NOT stated on the authoritative pages
-# (research doc §5, top risk). Historically cited limits are ~1 req/s, so we
-# pace conservatively just under that and let 429 Retry-After govern the rest.
-MIN_INTERVAL_S = 1.1
+# VERIFIED LIVE 2026-07-07: the OpenStates v3 tiers are per-minute AND per-day
+# capped — default/free 10/min·500/day, bronze 40/min·5k/day, silver
+# 80/min·50k/day (openstates/issues#205). The original 1.1s guess (~54/min)
+# exceeded even bronze and 429-stormed every state on the first live run. Pace
+# to the LOWEST paid tier by default (bronze, 40/min ⇒ ≥1.5s) with headroom, so
+# a granted key of any tier works out of the box; OPENSTATES_MIN_INTERVAL_S
+# overrides it (drop toward 0.8s on silver+ to backfill faster). Free/default
+# keys (500/day) still can't cold-start a full-biennium multi-state backfill —
+# an approved tier key is the intended path (see the WO-17 live-validation note).
+def _min_interval_s() -> float:
+    try:
+        return max(float(os.environ.get("OPENSTATES_MIN_INTERVAL_S") or 0) or 1.6, 0.25)
+    except ValueError:
+        return 1.6
 # Everything the transform needs and nothing more (documents/versions/
 # abstracts stay out — they dominate payload size and feed nothing).
 INCLUDE = ("sponsorships", "votes", "actions", "sources")
@@ -88,12 +98,13 @@ class OpenStatesVotesClient:
         if not self.api_key:
             raise RuntimeError("OPENSTATES_KEY is not set (see docs/SETUP.md §1)")
         self._last_call = 0.0
+        self._min_interval = _min_interval_s()   # tier-safe pacing (see _min_interval_s)
         self._lock = threading.Lock()
         self._http = httpx.Client(timeout=httpx.Timeout(60.0, connect=15.0))
 
     def _throttle(self):
         with self._lock:
-            wait = MIN_INTERVAL_S - (time.monotonic() - self._last_call)
+            wait = self._min_interval - (time.monotonic() - self._last_call)
             if wait > 0:
                 time.sleep(wait)
             self._last_call = time.monotonic()
