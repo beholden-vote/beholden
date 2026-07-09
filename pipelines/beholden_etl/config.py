@@ -59,12 +59,17 @@ CONGRESS = 119
 
 # WO-17 pilot: states whose bills + roll-call votes are crawled from the
 # OpenStates v3 API (sources/openstates_votes.py). Chosen from the research
-# doc's best-coverage list (docs/research/state-votes-evaluation.md §3):
-# the four most populous well-covered states plus TN, the doc's small clean
-# control state. Fan-out to all 52 slugs is this one line becoming
-# `sources/openstates.STATE_SLUGS` once the pilot's page counts + rate-limit
-# headroom are confirmed on the real key.
-STATE_VOTES_SLUGS = ["ca", "tx", "ny", "fl", "tn"]
+# doc's best-coverage list (docs/research/state-votes-evaluation.md §3).
+#
+# FREE-TIER INTERIM (2026-07-08): the default OpenStates key is 10 req/min ·
+# 500 req/day (verified live 2026-07-07 — a 5-state cold-start 429-stormed).
+# TN's whole biennium is ~100-150 pages (~150 requests, votes/sponsorships
+# embedded), which fits 500/day with room to spare, so we validate the full
+# live path (auth, pacing, parse, exact ocd-person join, dossier Record tab,
+# coverage) on TN alone now. The big states (ca/tx/ny/fl) can't fit the free
+# daily cap and wait for the requested approved tier key; when it lands,
+# restore ["ca","tx","ny","fl","tn"] and drop OPENSTATES_MIN_INTERVAL_S.
+STATE_VOTES_SLUGS = ["tn"]
 TILE_VINTAGE = "2025"  # Census cartographic-boundary release (GENZ2025); bump on new vintage
 FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congress
 

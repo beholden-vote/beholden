@@ -37,6 +37,10 @@ jobs:
       CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
       FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
       OPENSTATES_KEY: ${{ secrets.OPENSTATES_KEY }}   # WO-17 state votes (API v3)
+      # Free-tier pacing (10 req/min cap): 6.5s ≈ 9/min, under the limit. When
+      # the approved tier key lands, set repo variable OPENSTATES_MIN_INTERVAL_S
+      # (e.g. 0.8 for silver) to backfill faster — this default is the fallback.
+      OPENSTATES_MIN_INTERVAL_S: ${{ vars.OPENSTATES_MIN_INTERVAL_S || '6.5' }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
