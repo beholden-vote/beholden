@@ -34,6 +34,21 @@ import { MoneyVotes, hasMoneyVotes } from "./MoneyVotes";
 
 /** WO-6a: committee role enum -> display label. Party-agnostic (rule #3): the
  *  same mapping regardless of which party holds the chair. */
+/** Human label per official_links type. Without this the generic template read
+ *  "Official official record" for the local sources, whose link type IS
+ *  "official". */
+const OFFICIAL_LINK_LABELS: Record<string, string> = {
+  official: "Official record",
+  bioguide: "Official bioguide record",
+};
+
+/** WO-22: is this office below the state level? Used only to pick honest
+ *  empty-state copy — a county commissioner must not be told their record comes
+ *  from OpenStates, which has never heard of them. */
+function isLocalOffice(ocdId: string): boolean {
+  return /\/(county|parish|borough|place):/.test(ocdId);
+}
+
 const COMMITTEE_ROLE_LABEL: Record<string, string> = {
   chair: "Chair", ranking: "Ranking Member", vice_chair: "Vice Chair", member: "Member",
 };
@@ -110,7 +125,7 @@ function OverviewTab({ dossier }: { dossier: Dossier }) {
           <p className="links">
             {identity.official_links.map((l) => (
               <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer">
-                Official {l.type} record ↗
+                {OFFICIAL_LINK_LABELS[l.type] ?? `Official ${l.type} record`} ↗
               </a>
             ))}
           </p>
@@ -131,7 +146,11 @@ function OverviewTab({ dossier }: { dossier: Dossier }) {
 
       {!ideology && !legislative && (
         <Section title="Record">
-          <EmptyNote>{STRINGS.stateLegPending}</EmptyNote>
+          <EmptyNote>
+            {isLocalOffice(identity.office.ocd_id)
+              ? STRINGS.localPending
+              : STRINGS.stateLegPending}
+          </EmptyNote>
         </Section>
       )}
 

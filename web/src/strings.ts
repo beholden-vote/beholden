@@ -26,6 +26,12 @@ export const STRINGS = {
   // Legislative surfaces
   legislativePending:
     "Vote-by-vote records and sponsorship history are being synced from congress.gov. They appear here for every member as the sync lands.",
+  // WO-22: local officials are NOT state legislators and their data does not
+  // come from OpenStates. Showing them stateLegPending named a source that has
+  // never heard of them — a false attribution on the one screen whose whole
+  // promise is that every fact names where it came from.
+  localPending:
+    "Voting records and campaign finance are not published for local officials yet. Identity, office, and contact details come from this government's own published roster, linked above.",
   stateLegPending:
     "Ideology scores, voting records, and campaign finance for state legislators are being added. Identity, party, and district are sourced from OpenStates.",
   ideologyPendingInsufficientVotes:
