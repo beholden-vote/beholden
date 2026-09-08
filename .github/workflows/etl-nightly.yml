@@ -69,7 +69,17 @@ jobs:
       - name: Build serving artifacts
         run: make build   # dossiers/ stylefeeds/ pins/ coverage.json
       - name: Publish
-        run: make publish # serving JSON -> R2 bucket root; raw lake -> R2 /raw/{date}/
+        # serving JSON -> R2 bucket root; raw lake -> R2 /raw/{date}/.
+        # Unchanged serving files are skipped (a HEAD is class-B and cheap; the
+        # PUT is class-A and capped at 1M/mo). A full_rebuild writes every object
+        # unconditionally — the point of that dispatch is to replace whatever is
+        # in the bucket, so it must not defer to what the bucket claims to hold.
+        run: |
+          if [ "${{ github.event.inputs.full_rebuild }}" = "true" ]; then
+            python -m beholden_etl.jobs.publish --force-all
+          else
+            make publish
+          fi
       - name: Tag pipeline version
         # Best-effort bookkeeping only — every published fact already carries
         # PIPELINE_VERSION in its provenance envelope regardless of this tag.

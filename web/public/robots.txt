@@ -1,0 +1,9 @@
+# Beholden — see who represents you, and what they've actually done.
+# https://beholden.vote
+#
+# The site is public record and wants to be found. Only the edge functions,
+# which serve no content of their own, are off-limits.
+
+User-agent: *
+Allow: /
+Disallow: /api/

@@ -2087,6 +2087,89 @@ def test_publish_writes_last_good_pointer_dry_run(tmp_path):
     assert all(k.startswith("raw/latest/") for k in keys)
 
 
+def test_build_publishes_robots_txt_disallowing_the_enumerable_paths(slice_dirs):
+    """data.beholden.vote is an R2 custom domain, so its crawl policy has to BE
+    an object at the bucket root — build writes it, publish uploads dist/data
+    verbatim. /dossiers/ and /graph/ are the only paths a crawler can walk into
+    tens of thousands of requests (the ids come from search/people.json), and
+    /raw/ is the reproducibility lake, not a serving surface. Everything else
+    stays crawlable: these are public records."""
+    robots = (slice_dirs / "data" / "robots.txt").read_text()
+    assert "Disallow: /dossiers/" in robots
+    assert "Disallow: /graph/" in robots
+    assert "Disallow: /raw/" in robots
+    assert "Allow: /" in robots
+    assert "Disallow: /pins/" not in robots
+    assert "Disallow: /search/" not in robots
+
+
+class _FakeR2:
+    """Stand-in for the boto3 S3 client. Capitalised kwargs mirror boto3's real
+    signature, which is what publish calls it with. HEAD answers from a preloaded
+    {key: etag} map and raises ClientError for anything absent, like R2 does."""
+
+    def __init__(self, stored):
+        self.stored = stored
+        self.puts = []
+
+    def head_object(self, Bucket, Key):
+        from botocore.exceptions import ClientError
+        if Key not in self.stored:
+            raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
+        return {"ETag": f'"{self.stored[Key]}"'}
+
+    def put_object(self, Bucket, Key, Body, ContentType, CacheControl):
+        self.puts.append(Key)
+
+
+def test_publish_skips_only_the_bytes_r2_already_holds(tmp_path):
+    """The class-A saver. An object whose stored ETag equals the content MD5 is
+    already correct, so its PUT is skipped. Everything else uploads: changed
+    bytes, an object that isn't there, and a multipart ETag (characterised here
+    because it is the shape most likely to be mishandled later — it is a digest
+    of part digests, never of the content).
+
+    The asymmetry is the whole design: skipping a file that DID change publishes
+    stale data, while re-writing an unchanged one costs one class-A op. So every
+    uncertain case must land on the upload side."""
+    import hashlib
+    from beholden_etl.jobs import publish as _publish
+
+    data = tmp_path / "data"
+    data.mkdir()
+    for name in ("absent.json", "changed.json", "multipart.json", "same.json"):
+        (data / name).write_text("{}")
+    md5 = hashlib.md5(b"{}", usedforsecurity=False).hexdigest()
+
+    client = _FakeR2({
+        "same.json": md5,                                            # identical -> skip
+        "changed.json": hashlib.md5(b"stale", usedforsecurity=False).hexdigest(),
+        "multipart.json": f"{md5}-4",                                # not an MD5
+    })                                                               # absent.json: 404
+    batch = [(p, p.name) for p in sorted(data.iterdir())]
+
+    sent = _publish._put_batch(client, batch, "cc", skip_unchanged=True)
+    assert set(client.puts) == {"absent.json", "changed.json", "multipart.json"}
+    assert sent == 3
+
+
+def test_publish_force_all_writes_even_unchanged_objects(tmp_path):
+    """--force-all (and therefore a full_rebuild dispatch) writes unconditionally.
+    The point of that run is to replace whatever sits in the bucket, so it must
+    not defer to the bucket's own account of what it holds."""
+    import hashlib
+    from beholden_etl.jobs import publish as _publish
+
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "same.json").write_text("{}")
+    client = _FakeR2({"same.json": hashlib.md5(b"{}", usedforsecurity=False).hexdigest()})
+
+    # skip_unchanged defaults off — this is exactly what run(force_all=True) does.
+    assert _publish._put_batch(client, [(data / "same.json", "same.json")], "cc") == 1
+    assert client.puts == ["same.json"]
+
+
 # --- WO-12 cited drill-down data ---------------------------------------------
 def test_question_and_description_rule():
     """`question` keeps the WO-1 first-non-blank rule; `description` carries the

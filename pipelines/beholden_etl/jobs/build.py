@@ -35,6 +35,32 @@ PARTY_DISPLAY = {"D": "Democratic", "R": "Republican", "I": "Independent",
                  "U": "Not published"}
 IDEOLOGY_SCOPE = f"{CONGRESS}th Congress"
 
+# data.beholden.vote is an R2 custom domain: it serves whatever object sits at
+# the key, so robots.txt has to BE an object in the bucket. It is written here
+# rather than in publish because publish uploads dist/data verbatim to the
+# bucket root — anything that needs to exist at the root is a build artifact.
+#
+# The Disallow lines are shape, not secrecy: every fact stays readable one
+# object at a time. /dossiers/ and /graph/ hold ~8,000 objects each, keyed by
+# ids that /search/people.json enumerates, so they are the only paths a crawler
+# can walk into the tens of thousands of requests. /raw/ is the immutable
+# source lake — reproducibility material, not a serving surface, and it has
+# been publicly crawlable without ever saying so.
+ROBOTS_TXT = """\
+# Beholden — public-record civic data. https://beholden.vote
+#
+# These facts are public records and free to read. The per-person files are
+# shaped for a browser opening one dossier at a time, not for enumeration:
+# /dossiers/ and /graph/ hold ~8,000 objects each and are rate-limited.
+# Pins, style feeds, tiles and the search index are welcome to crawl.
+
+User-agent: *
+Disallow: /dossiers/
+Disallow: /graph/
+Disallow: /raw/
+Allow: /
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -1189,6 +1215,9 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},
     }
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
+
+    # Crawl policy for the data host, published as an object at the bucket root.
+    (out / "robots.txt").write_text(ROBOTS_TXT)
 
     print(f"build: {len(docs)} dossiers · house={len(house)} senate={len(senate)} "
           f"sldu={len(by_layer['sldu'])} sldl={len(by_layer['sldl'])} -> {out}")
