@@ -5,6 +5,9 @@ import { lazy, Suspense } from "react";
 import { PARTY_COLORS, VACANT_FILL, type LayerId } from "../map";
 import { STRINGS } from "../strings";
 import { GRADES, type Grade } from "./gradeFilter";
+// Layers sorted by level of government — the axis users actually think in.
+// Shared with the stack panel so the two can never disagree (lib/levels.ts).
+import { PANEL_SECTIONS as LEVEL_GROUPS } from "../lib/levels";
 
 // WO-8: the methodology page's content loads only when an info overlay opens on
 // it (dynamic import keeps the formula copy out of the main bundle, matching the
@@ -15,14 +18,6 @@ const LAYER_LABELS: Record<LayerId, string> = {
   cd: "U.S. House", states: "U.S. Senate", sldu: "State Senate", sldl: "State House",
   county: "Counties",
 };
-// Layers sorted by level of government — the axis users actually think in.
-// Local now carries county boundaries (workplan WO-6b); off by default, fades in
-// as you zoom into a metro. City/place geometry joins the group in a later WO.
-const LEVEL_GROUPS: { level: string; layers: LayerId[] }[] = [
-  { level: "Federal", layers: ["cd", "states"] },
-  { level: "State", layers: ["sldu", "sldl"] },
-  { level: "Local", layers: ["county"] },
-];
 
 // Legend swatches: every party code the feeds can carry, in a fixed
 // party-agnostic order (alphabetical by code — same deterministic rule as
@@ -111,23 +106,19 @@ export function LayerControl({ visible, auto, onToggle, onAuto, minGrade, onMinG
       {LEVEL_GROUPS.map((g) => (
         <div className="layer-group" key={g.level}>
           <span className="layer-group-label">{g.level}</span>
-          {g.layers.length === 0 ? (
-            <span className="layer-soon">Counties · coming soon</span>
-          ) : (
-            g.layers.map((id) => (
-              <label className="layer-row" key={id}>
-                <input type="checkbox" checked={!!visible[id]}
-                       onChange={(e) => onToggle(id, e.target.checked)} />
-                <span>{LAYER_LABELS[id]}</span>
-              </label>
-            ))
-          )}
+          {g.layers.map((id) => (
+            <label className="layer-row" key={id}>
+              <input type="checkbox" checked={!!visible[id]}
+                     onChange={(e) => onToggle(id, e.target.checked)} />
+              <span>{LAYER_LABELS[id]}</span>
+            </label>
+          ))}
         </div>
       ))}
       <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
       <Legend showSplit={!!visible.states} />
       <span className="layer-ctl-hint">
-        {auto ? "State districts show as you zoom in." : "Manual — Auto by zoom is off."}
+        {auto ? "State and county layers show as you zoom in." : "Manual — Auto by zoom is off."}
       </span>
     </div>
   );
@@ -257,7 +248,11 @@ function Sources() {
     ["Voteview (DW-NOMINATE)", "Ideology scores from recorded roll-call votes."],
     ["Federal Election Commission", "Campaign finance: money raised, spent, on hand."],
     ["Washington Public Disclosure Commission", "Washington state campaign finance: contributions and expenditures, reconciled against the PDC's own summary totals."],
+    ["OpenStates", "State legislators nationwide, plus bills and roll-call votes in pilot states."],
+    ["Wikidata", "Education history only, labeled as a publicly edited source wherever it appears."],
     ["U.S. Census Bureau", "District boundaries (TIGER) and address geocoding."],
+    ["Sumner County, TN", "County commissioners: who holds each of the 24 district seats, from the county's own commission roster."],
+    ["City of Hendersonville, TN", "The mayor and Board of Aldermen, from the city's own officials directory."],
   ];
   return (
     <>
@@ -265,7 +260,9 @@ function Sources() {
       <p className="lede">
         Every section of every dossier names the official source it draws from and links
         to the underlying record. Adding a source means adding it here, with a methodology
-        and a freshness commitment — no unregistered source may appear on the site.
+        and a freshness commitment — no unregistered source may appear on the site. Each
+        fact also carries a grade for how it was obtained; the scale is on the
+        methodology page.
       </p>
       <dl className="info-defs">
         {rows.map(([name, what]) => (

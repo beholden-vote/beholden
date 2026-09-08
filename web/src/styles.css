@@ -505,7 +505,6 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .layer-group-label { display: block; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sig); margin: 7px 0 3px; }
 .layer-group:nth-of-type(2) .layer-group-label { color: var(--mut); }
 .layer-group:nth-of-type(3) .layer-group-label { color: var(--dim); }
-.layer-soon { display: block; font-size: 11px; color: var(--dim); font-style: italic; padding: 2px 0; }
 
 /* "you are here" marker (DOM marker; approx = coarse IP, exact = geolocation) */
 .you-marker {

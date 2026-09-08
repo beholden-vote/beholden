@@ -101,6 +101,15 @@ first, narrow scope first, scraping last**:
 4. **Scraping (Firecrawl-class tools):** only for the residual, and only through the existing
    `extract_confidence` / `review_status` / quarantine machinery. Never straight to publish.
 
+**STATUS (2026-09-08): first locality shipped.** Sumner County + Hendersonville, TN — 37
+officeholders, grade B, from each government's own published roster. Confirms the pilot shape in
+point 3 below: contracts scale per-locality, and the completeness gate (the body's own seat count)
+is the local analogue of a control total. Two findings worth carrying to the next locality: (a) the
+blocker was never the fetch code, it was `build`'s hardcoded chamber→layer map, which silently
+produced dossiers no pin pointed at; (b) local campaign finance in TN is filed with the COUNTY
+election commission, not the state — `apps.tn.gov/tncamp` excludes it — and those filings are
+image-only scans with no text layer.
+
 **Schema is ready:** `divisions.level` already enumerates `county`/`place`; OCD ids exist for
 both (`.../county:davidson`, `.../place:nashville`). Tiles: add `us-counties-{vintage}.pmtiles`
 (+ optionally top-metro `place` polygons) with the same stamper.

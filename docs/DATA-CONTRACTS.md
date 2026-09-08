@@ -397,7 +397,9 @@ Pin layer: `/pins/{layer}.json` — `[{ person_id, ocd_id, lat, lng (division ce
 
 ## 6. Source Registry (enum)
 
-`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
+`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `wikidata` · `wa_pdc` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
+
+**Local sources are registered per locality** (WO-22): `sumner_county` · `hendersonville`. There is no national roster of local officials, so coverage, freshness and grade are only meaningful per government — one registry row, one coverage row, one SLA each. Local person identifiers are namespaced `local:<locality>` rather than enumerated in the `person_identifiers.id_scheme` CHECK, because no identifier authority exists below the state level.
 
 Adding a source = adding an enum value + a methodology entry + a freshness SLA row in the coverage dashboard + **a default `grade_reason` (§1.1)**. No unregistered source may appear in a provenance envelope, and no source may publish without a registered grade reason (both enforced by dossier-builder validation).
 

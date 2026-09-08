@@ -107,14 +107,27 @@ domain name. *(Details in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).)*
 |---|---|
 | 🏛️ **Federal** | Every sitting member of the U.S. House & Senate — full profiles: votes, committees, money, donors, disclosures, connections |
 | 🏫 **State** | State legislators nationwide (both chambers) with cited profiles |
-| 🗺️ **Local** | County boundaries for orientation |
+| 🗺️ **Local** | County boundaries nationwide · **pilot:** Sumner County, TN commissioners and the Hendersonville, TN mayor & Board of Aldermen |
 
-**✅ Shipped** — a tabbed dossier with cited drill-downs on every vote, committee, and funding connection · an interactive connections graph · party colors for every map level · contact buttons, social profiles, and biographies.
-**🧭 Coming next** — state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county & city officials · a public API.
+**✅ Shipped** — a tabbed dossier with cited drill-downs on every vote, committee, and funding connection · an interactive connections graph · party colors for every map level · contact buttons, social profiles, and biographies · a **source-quality grade on every fact**, with a filter to hide grades you don't want.
+**🧭 Coming next** — state *voting records* (source confirmed) · state *campaign finance* (the ingestion framework is built and gated behind verification) · county roll-call votes · more counties and cities · a public API.
+
+**Local coverage is deliberately narrow and honestly labeled.** There is no national roster of
+county and municipal officials, and the aggregators that sell one carry licensing we won't accept.
+So local coverage grows one government at a time, from that government's own published record — and
+every county we don't cover says so rather than implying it's empty.
 
 We only expand where we can stay honest. When a data source has restrictive licensing or can’t be verified, we
 **say so and wait** rather than ship something we can’t stand behind — see the
 **[trusted-extraction framework](docs/TRUSTED-EXTRACTION.md)** for how new public records get added without ever guessing.
+
+Sources differ in how they reach us: a congressional roll call arrives as a bulk data feed, a county
+commission's may only exist inside a PDF of the minutes. Both are official, so both can publish —
+but they shouldn't *look* the same. Every fact carries a **grade** for how it was obtained, from
+`A` (bulk official data) to `D` (derived or inferred), explained on the
+[methodology page](https://beholden.vote/#methodology/source-quality). A grade describes our method,
+never the official — and it is never a way to publish a doubtful number. Data that fails a quality
+check is withheld entirely, not downgraded.
 
 ## 🔧 For developers
 
