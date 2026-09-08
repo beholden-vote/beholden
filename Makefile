@@ -1,7 +1,7 @@
 # Beholden — free-tier pipeline entrypoints (see ARCHITECTURE.md §3)
 PY := python3 -m beholden_etl
 
-.PHONY: fetch transform build publish tiles-fetch tiles-build tiles-publish spike web dev
+.PHONY: fetch transform build publish bulk tiles-fetch tiles-build tiles-publish spike web dev
 
 fetch:          ## land raw snapshots in R2 (immutable)
 	$(PY).jobs.fetch
@@ -14,6 +14,9 @@ build:          ## dossiers, stylefeeds, pins, graph, search index, coverage
 
 publish:        ## push artifacts to Pages dir + R2
 	$(PY).jobs.publish
+
+bulk:           ## WO-30: paid bulk artifact -> private R2 (redistributable sources only)
+	$(PY).jobs.bulk
 
 tiles-fetch:
 	bash spike/fetch_tiger.sh 2025

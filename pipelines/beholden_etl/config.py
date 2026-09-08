@@ -62,28 +62,77 @@ class Source:
     # that are grade B for a printed roll call and D for an inferred position —
     # but it may never emit one without a registered reason.
     grade_reason: str = "official_structured"
+    # --- WO-30: redistribution terms (TRUSTED-EXTRACTION §8) -----------------
+    # `license` is the VERBATIM terms as the source states them, plus the
+    # explicit determination. `redistributable` answers exactly one question:
+    # may this source's facts enter a bulk artifact we charge for?
+    #
+    # It defaults to False and that default is load-bearing. Publishing a fact
+    # on a free public site and selling a compiled copy of it are different acts
+    # under most terms — the FollowTheMoney evaluation was a NO-GO precisely on
+    # a NonCommercial clause (docs/research/state-money-evaluation.md), and §8
+    # says a source with incompatible terms does not ship. A source nobody has
+    # read the terms for is not "probably fine"; it is undetermined, and
+    # undetermined stays out. Flipping one to True is a human act with the
+    # verbatim terms recorded next to it, never a default and never a guess.
+    license: str | None = None
+    license_url: str | None = None
+    redistributable: bool = False
 
 # freshness_sla_hours is BOTH the coverage-dashboard alert threshold AND (WO-10) the
 # incremental re-fetch threshold: a hydrated snapshot younger than its SLA is reused
 # rather than re-fetched. With a ~24h nightly cadence, an SLA of X hours re-fetches
 # that source roughly every ceil(X/24) nights — so fast movers stay ≤24-48h fresh
 # while the parallel + resume-on-failure win comes without starving refreshes.
+# 17 U.S.C. §105 — the one determination that needs no negotiation: a work
+# prepared by an officer or employee of the US Government as part of their
+# official duties carries no copyright, so there is nothing to license and
+# nothing to breach by redistributing it. Everything else has to be read.
+US_GOV_WORK = ("17 U.S.C. §105: 'Copyright protection under this title is not "
+               "available for any work of the United States Government.' "
+               "Determination: public domain, redistributable without condition.")
+UNDETERMINED = ("Terms not yet read and recorded (TRUSTED-EXTRACTION §8). "
+                "Facts from this source publish freely on the site and are "
+                "EXCLUDED from any paid bulk artifact until a human records the "
+                "verbatim terms here.")
+
 SOURCES: dict[str, Source] = {
-    "congress.gov": Source("congress.gov", "https://api.congress.gov/v3", 24, True),   # bills/sponsors daily
+    "congress.gov": Source("congress.gov", "https://api.congress.gov/v3", 24, True,   # bills/sponsors daily
+                           license=US_GOV_WORK, redistributable=True,
+                           license_url="https://www.copyright.gov/title17/92chap1.html#105"),
+    # CC0 is claimed in the repo's own README, but the claim has not been read
+    # and recorded here against §8 — and this source underwrites `identity` on
+    # every federal dossier, so getting it wrong is not a partial failure. Left
+    # undetermined deliberately: it is a five-minute human check, not a guess.
     "unitedstates_legislators": Source(
         "unitedstates_legislators",
-        "https://raw.githubusercontent.com/unitedstates/congress-legislators/main", 36),  # roster/committees rarely change
-    "voteview": Source("voteview", "https://voteview.com/static/data/out", 36),   # votes/ideology: every other night, not 60 days
+        "https://raw.githubusercontent.com/unitedstates/congress-legislators/main", 36,  # roster/committees rarely change
+        license=UNDETERMINED),
+    # Academic (UCLA) publication of roll calls + DW-NOMINATE. The underlying
+    # roll calls are US Government works; the NOMINATE scores are Voteview's own
+    # scholarly output, which is a different question with a different answer.
+    # Undetermined until someone reads their terms.
+    "voteview": Source("voteview", "https://voteview.com/static/data/out", 36,   # votes/ideology: every other night, not 60 days
+                       license=UNDETERMINED),
     # WO-17: the openstates family now carries state bills/roll-call votes (v3
     # API, OPENSTATES_KEY) alongside the people CSVs — votes move daily, so the
     # SLA drops from 72h to 24h. One registry row for the whole family keeps
     # freshness/coverage honest for the fastest-moving fact it publishes; the
     # people CSVs it drags along nightly are cheap unauthenticated GETs.
-    "openstates": Source("openstates", "https://data.openstates.org", 24, True),
-    "fec": Source("fec", "https://api.open.fec.gov/v1", 72, True),   # donor filings post periodically
-    "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24),   # new trades daily
-    "senate_efd": Source("senate_efd", "https://efdsearch.senate.gov", 24),
-    "census_tiger": Source("census_tiger", "https://www2.census.gov/geo/tiger", 24 * 365),
+    # WO-30, the blocking one: openstates underwrites ~7,400 of ~7,928 dossiers,
+    # so its terms decide whether a paid bulk artifact can carry state coverage
+    # at all. Nothing about it is recorded anywhere in this repo. Until it is,
+    # state officials publish freely on the site and appear in no paid artifact.
+    "openstates": Source("openstates", "https://data.openstates.org", 24, True,
+                         license=UNDETERMINED),
+    "fec": Source("fec", "https://api.open.fec.gov/v1", 72, True,   # donor filings post periodically
+                  license=US_GOV_WORK, redistributable=True),
+    "house_clerk": Source("house_clerk", "https://disclosures-clerk.house.gov", 24,   # new trades daily
+                          license=US_GOV_WORK, redistributable=True),
+    "senate_efd": Source("senate_efd", "https://efdsearch.senate.gov", 24,
+                         license=US_GOV_WORK, redistributable=True),
+    "census_tiger": Source("census_tiger", "https://www2.census.gov/geo/tiger", 24 * 365,
+                           license=US_GOV_WORK, redistributable=True),
     # WO-15: crowd-edited encyclopedia, used ONLY for identity.education (P69
     # educated-at + P512/P582 qualifiers). Every education fact's provenance
     # envelope points at THIS source key (never unitedstates_legislators), and
@@ -93,21 +142,35 @@ SOURCES: dict[str, Source] = {
     # caveat; the grade makes that same judgement machine-readable and filterable
     # instead of prose the reader has to notice.
     "wikidata": Source("wikidata", "https://www.wikidata.org", 24 * 30,
-                       grade_reason="crowd_edited"),
+                       grade_reason="crowd_edited", license=UNDETERMINED),
     # WO-9/WO-19: WA PDC bulk campaign finance (Tier A trusted extraction,
     # license Public Domain). Two Socrata feeds fetched as one coherent pair
     # (itemized + summary control totals) — fetch never freshness-skips this
     # source (see jobs/fetch._SLA_KEY), so the SLA here governs the coverage
     # dashboard only. New contributions post daily; summaries recalc in-step.
-    "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36),
+    # The one non-federal source whose terms this repo has already read and
+    # recorded: TRUSTED-EXTRACTION §12 states the WA PDC feeds are explicitly
+    # Public Domain, attribution "Public Disclosure Commission". That
+    # determination was made for a free public site; it carries to redistribution
+    # because public domain has no downstream condition to carry.
+    "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36,
+                     license=("Washington State Public Disclosure Commission, via "
+                              "data.wa.gov: License 'Public Domain'. Attribution: "
+                              "Public Disclosure Commission. Determination recorded "
+                              "in docs/TRUSTED-EXTRACTION.md §12."),
+                     license_url="https://data.wa.gov", redistributable=True),
     # WO-22 local pilot. ONE REGISTRY ROW PER LOCALITY, deliberately: there is no
     # national local roster, so coverage, freshness and grade are only meaningful
     # per government. Rosters change at elections, not nightly — a 7-day SLA
     # keeps the dashboard honest without re-fetching a static page every night.
+    # Local government web rosters. Almost certainly public record under Tennessee
+    # law, but "almost certainly" is the reasoning §8 exists to refuse, and each
+    # locality is its own determination — that is the whole point of one registry
+    # row per government.
     "sumner_county": Source("sumner_county", "https://sumnercountytn.gov", 24 * 7,
-                            grade_reason="official_web_roster"),
+                            grade_reason="official_web_roster", license=UNDETERMINED),
     "hendersonville": Source("hendersonville", "https://www.hvilletn.org", 24 * 7,
-                             grade_reason="official_web_roster"),
+                             grade_reason="official_web_roster", license=UNDETERMINED),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)
