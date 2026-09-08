@@ -144,8 +144,10 @@ export function ocdShortLabel(ocdId: string): string {
   // one shows the seat, which is what the reader is looking at in the stack.
   const seat = /\/(council_district|ward):([\w-]+)/.exec(ocdId);
   const local = /\/(?:county|parish|borough|place):([\w~-]+)/.exec(ocdId)?.[1];
+  // Title-case on word START only — \b would also fire after the apostrophe a
+  // restored "~" produces, rendering Prince George's as "Prince George'S".
   const pretty = local ? local.replace(/_/g, " ").replace(/~/g, "'")
-    .replace(/\w/g, (c) => c.toUpperCase()) : null;
+    .replace(/(^|\s)\w/g, (m) => m.toUpperCase()) : null;
   if (seat && pretty) {
     return seat[1] === "ward" ? `${pretty} Ward ${seat[2]}` : `${pretty} District ${seat[2]}`;
   }
