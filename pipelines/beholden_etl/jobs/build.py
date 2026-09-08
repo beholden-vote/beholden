@@ -28,7 +28,11 @@ from .transform import DEFAULT_DB
 from .. import store
 
 PARTY_DISPLAY = {"D": "Democratic", "R": "Republican", "I": "Independent",
-                 "L": "Libertarian", "G": "Green", "NP": "Nonpartisan"}
+                 "L": "Libertarian", "G": "Green", "NP": "Nonpartisan",
+                 # WO-22: "U" means the SOURCE does not publish a party. It is
+                 # deliberately distinct from "NP" (Nonpartisan), which would be
+                 # a claim about the office that many local sources never make.
+                 "U": "Not published"}
 IDEOLOGY_SCOPE = f"{CONGRESS}th Congress"
 
 
@@ -175,6 +179,14 @@ METHODOLOGY_DONORS = "donor-rollups"       # FEC by_employer top contributors (f
 METHODOLOGY_DONORS_STATE = "state-donor-rollups"  # WO-19: WA PDC employer rollups (below)
 
 
+def _local_name(ocd_id: str, kind: str) -> str:
+    """Human name of the county/place segment of an ocd id ('st_clair' ->
+    'St. Clair'). The slug is lossy by design (the registry's rule collapses
+    punctuation), so this is a display convenience only — never a join key."""
+    seg = ocd_id.split(f"{kind}:")[1].split("/")[0] if f"{kind}:" in ocd_id else ""
+    return seg.replace("_", " ").replace("~", "'").title()
+
+
 def _office_display(chamber: str, ocd_id: str) -> str:
     tail = ocd_id.split("/")[-1]
     state = ocd_id.split("state:")[1].split("/")[0].upper() if "state:" in ocd_id else "?"
@@ -187,6 +199,15 @@ def _office_display(chamber: str, ocd_id: str) -> str:
         return f"{state} State Senate · District {seat}"
     if chamber == "lower":
         return f"{state} State House · District {seat}"
+    # WO-22 local levels. The body's own name comes from the ocd path, so a new
+    # county needs no code here: .../county:sumner/council_district:3 and
+    # .../place:hendersonville/ward:1 both read back their parent's name.
+    if chamber == "county_commission":
+        return f"{_local_name(ocd_id, 'county')} County Commission · District {seat}"
+    if chamber == "board_of_aldermen":
+        return f"{_local_name(ocd_id, 'place')} Board of Aldermen · Ward {seat}"
+    if "/place:" in ocd_id and chamber is None:
+        return f"Mayor of {_local_name(ocd_id, 'place')}"
     return f"{state} · {seat}"
 
 
@@ -198,6 +219,10 @@ def _office_display(chamber: str, ocd_id: str) -> str:
 # absence, never a fabricated zero. Ideology stays federal-only (DW-NOMINATE).
 FEDERAL_CHAMBERS = {"house", "senate"}
 STATE_CHAMBERS = {"upper", "lower"}
+# Map layers that get a pins feed and a style feed. MUST stay in step with
+# web/src/lib/data.ts:PIN_FEEDS and web/src/map.ts:LAYERS — a layer served here
+# but absent there is data the client never fetches, and the reverse is a 404.
+SERVED_LAYERS = ("cd", "states", "sldu", "sldl", "county", "place")
 
 
 def _state_from_ocd(ocd_id: str) -> str | None:
@@ -258,6 +283,7 @@ def _current_holders(con) -> list[dict]:
                t.meta->>'first_took_office' AS first_took_office,
                t.meta->>'image'            AS image_url,
                t.meta->>'source_url'       AS source_url,
+               t.meta->>'source_key'       AS source_key,
                t.meta->>'contact'          AS state_contact_json,
                t.meta->>'social'           AS state_social_json,
                i.score  AS ideology_score,
@@ -683,6 +709,17 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
             f"https://bioguide.congress.gov/search/bio/{bio}" if bio else SOURCES["unitedstates_legislators"].base_url,
             manifest)
         links = [{"type": "bioguide", "url": f"https://bioguide.congress.gov/search/bio/{bio}"}] if bio else []
+    elif h.get("source_key"):
+        # WO-22: a local officeholder. Without this branch they fall through to
+        # the state branch below and their identity is stamped "openstates" — a
+        # source that has never heard of them. A false source on a published
+        # fact is exactly what rule #1 exists to prevent, so the locality that
+        # published the roster is named instead, and its own grade rides along
+        # from the source registry.
+        src = h.get("source_url")
+        identity_prov = _provenance(h["source_key"],
+                                    src or SOURCES[h["source_key"]].base_url, manifest)
+        links = [{"type": "official", "url": src}] if src else []
     else:
         src = h.get("source_url")
         identity_prov = _provenance("openstates", src or "https://openstates.org/", manifest)
@@ -1033,10 +1070,18 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                               rc_meta, contributors, committee_ids)
 
     # --- style feeds + pins, grouped by chamber -> map layer ---
-    chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl"}
-    by_layer: dict[str, list[dict]] = {"cd": [], "states": [], "sldu": [], "sldl": []}
+    # A holder whose chamber isn't mapped here gets NO pin and NO stylefeed row —
+    # they'd exist only as a dossier nothing links to. Adding a level of
+    # government means adding it here, and to SERVED_LAYERS below.
+    chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl",
+                     "county_commission": "county", "board_of_aldermen": "place"}
+    by_layer: dict[str, list[dict]] = {layer: [] for layer in SERVED_LAYERS}
     for h in holders:
         layer = chamber_layer.get(h["chamber"])
+        # WO-22: a mayor holds an executive office with no chamber; the division
+        # itself (a place) is the layer.
+        if layer is None and h["chamber"] is None and "/place:" in h["ocd_id"]:
+            layer = "place"
         if layer:
             by_layer[layer].append(h)
 
@@ -1055,8 +1100,12 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     states_feed = stylefeeds.build_senate_delegation_feed(
         [{"ocd_id": h["ocd_id"], "party": h["party"],
           "is_vacant_marker": bool(h["is_vacant_marker"])} for h in senate])
+    # Every served layer gets a feed. Local layers currently carry party "U"
+    # (not published), which stylefeeds renders with the neutral fill — the map
+    # shows WHERE a government exists without asserting a party it never stated.
     stylefeeds.publish({"cd": cd_feed, "states": states_feed,
-                        "sldu": feed(by_layer["sldu"]), "sldl": feed(by_layer["sldl"])},
+                        **{layer: feed(by_layer[layer])
+                           for layer in SERVED_LAYERS if layer not in ("cd", "states")}},
                        out / "stylefeeds")
 
     def pins(rows):
@@ -1070,7 +1119,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                  "photo_url": h.get("image_url") or photo.get(h.get("bioguide")),
                  "party": h["party"]} for h in rows]
     (out / "pins").mkdir(parents=True, exist_ok=True)
-    for layer in ("cd", "states", "sldu", "sldl"):
+    for layer in SERVED_LAYERS:
         (out / "pins" / f"{layer}.json").write_text(json.dumps(pins(by_layer[layer]), separators=(",", ":")))
 
     # --- people search index (WO-5): flat name index for the topbar search, so a

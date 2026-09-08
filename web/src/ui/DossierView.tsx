@@ -450,7 +450,17 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }:
   const tabs: { id: DossierTab; label: string }[] = [{ id: "overview", label: STRINGS.tabOverview }];
   if (legislative) tabs.push({ id: "record", label: STRINGS.tabRecord });
   if (legislative && legislative.committees.length > 0) tabs.push({ id: "committees", label: STRINGS.tabCommittees });
-  tabs.push({ id: "money", label: STRINGS.tabMoney }, { id: "connections", label: STRINGS.tabConnections });
+  // WO-22: Money and Connections used to be unconditional. Both are computed
+  // from federal/state records (FEC, STOCK Act, roll calls, committees), so for a
+  // county commissioner they were permanently-empty chrome — which contradicts
+  // this file's own rule that unpublished tabs are HIDDEN, not disabled. They are
+  // now gated like the rest: shown when the dossier actually carries them, or
+  // when the official is one of the federal/state members those pipelines cover.
+  const financiallyCovered = !!dossier.money || !!legislative;
+  if (financiallyCovered) {
+    tabs.push({ id: "money", label: STRINGS.tabMoney },
+              { id: "connections", label: STRINGS.tabConnections });
+  }
   if (hasSocial) tabs.push({ id: "social", label: STRINGS.tabSocial });
 
   // A deep link to a hidden tab clamps to overview WITHOUT rewriting the hash —

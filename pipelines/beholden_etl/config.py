@@ -24,6 +24,12 @@ GRADE_REASONS: dict[str, str] = {
     # C — official document that required OCR; anchored verification passed and
     #     the document reconciled. The text layer is ours, the document is theirs.
     "official_document_ocr": "C",
+    # B — an official government WEB PAGE with structured markup (microformats,
+    #     one post per officeholder), parsed deterministically and reconciled
+    #     against the body's own seat count. Below a bulk feed because we parse
+    #     a document the government publishes for humans, not a dataset it
+    #     publishes for machines — a real difference the reader should see.
+    "official_web_roster": "B",
     # D — derived or inferred: the fact is our reasoning over official inputs,
     #     not a transcription of them.
     "derived_geometry": "D",      # e.g. district polygons dissolved from precincts
@@ -94,6 +100,14 @@ SOURCES: dict[str, Source] = {
     # source (see jobs/fetch._SLA_KEY), so the SLA here governs the coverage
     # dashboard only. New contributions post daily; summaries recalc in-step.
     "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36),
+    # WO-22 local pilot. ONE REGISTRY ROW PER LOCALITY, deliberately: there is no
+    # national local roster, so coverage, freshness and grade are only meaningful
+    # per government. Rosters change at elections, not nightly — a 7-day SLA
+    # keeps the dashboard honest without re-fetching a static page every night.
+    "sumner_county": Source("sumner_county", "https://sumnercountytn.gov", 24 * 7,
+                            grade_reason="official_web_roster"),
+    "hendersonville": Source("hendersonville", "https://www.hvilletn.org", 24 * 7,
+                             grade_reason="official_web_roster"),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)

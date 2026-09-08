@@ -5,20 +5,13 @@
  *  represents a place; same sections in the same order for every point (symmetric
  *  by construction). */
 import { useState } from "react";
+import { LEVEL_ORDER, LEVEL_TITLES } from "../lib/levels";
 import type { Pin, StackEntry } from "../types";
 import { ocdShortLabel } from "../lib/data";
 import { divisionHash } from "../router";
 import { Avatar, PartyChip } from "./bits";
 
-const LEVEL_TITLES: Record<string, string> = {
-  cd: "U.S. House",
-  states: "U.S. Senate",
-  sldu: "State Senate",
-  sldl: "State House",
-  county: "County",
-};
 // Federal first, then state chambers, then local — the same order for every point.
-const LEVEL_ORDER: Record<string, number> = { cd: 0, states: 1, sldu: 2, sldl: 3, county: 4 };
 
 /** The smallest (most local) division under the point carries the shareable
  *  #/d/ link — restoring it re-selects that division and re-derives the ballot. */

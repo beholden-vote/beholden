@@ -44,6 +44,7 @@ from pathlib import Path
 from .. import rawlake
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, STATE_VOTES_SLUGS, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
+from ..sources import tn_local                                  # WO-22 (local rosters)
 from ..sources import openstates_votes                           # WO-17 (state votes/bills)
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 from ..sources import wikidata                                   # WO-15 (education)
@@ -473,6 +474,11 @@ _FETCHERS = {
     "house_clerk": fetch_house_clerk,
     "wa_pdc": fetch_wa_pdc,
     "wikidata": fetch_wikidata,      # WO-15: education, needs the legislators snapshot
+    # WO-22: one fetcher per locality. Each lands the official page verbatim and
+    # runs its completeness gate before the snapshot counts as good, so a
+    # reshaped page fails the run that saw it rather than the next one.
+    "sumner_county": tn_local.fetch_sumner_county,
+    "hendersonville": tn_local.fetch_hendersonville,
 }
 # Manifest source-key -> the config.SOURCES key whose SLA governs its freshness.
 # wa_pdc (registered in config.SOURCES since WO-19) is never freshness-skipped:

@@ -15,7 +15,15 @@ CREATE TABLE persons (
 
 CREATE TABLE person_identifiers (
   person_id   UUID NOT NULL REFERENCES persons(person_id) ON DELETE CASCADE,
-  id_scheme   TEXT NOT NULL CHECK (id_scheme IN ('bioguide','fec','icpsr','openstates','ballotpedia')),
+  -- WO-22: national schemes are a closed enum; local ones are namespaced under
+  -- 'local:<locality>' instead. There is no national identifier authority below
+  -- the state level, so each county/city mints its own keyspace — enumerating
+  -- them here would mean a migration per locality, and this pilot is the first
+  -- of ~95 TN counties alone. The prefix keeps the constraint meaningful (a typo
+  -- like 'bioguid' still fails) without pretending local ids are registrable.
+  id_scheme   TEXT NOT NULL CHECK (
+                id_scheme IN ('bioguide','fec','icpsr','openstates','ballotpedia')
+                OR id_scheme LIKE 'local:%'),
   id_value    TEXT NOT NULL,
   is_primary  BOOLEAN NOT NULL DEFAULT true,
   PRIMARY KEY (id_scheme, id_value)
