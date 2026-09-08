@@ -2087,6 +2087,22 @@ def test_publish_writes_last_good_pointer_dry_run(tmp_path):
     assert all(k.startswith("raw/latest/") for k in keys)
 
 
+def test_build_publishes_robots_txt_disallowing_the_enumerable_paths(slice_dirs):
+    """data.beholden.vote is an R2 custom domain, so its crawl policy has to BE
+    an object at the bucket root — build writes it, publish uploads dist/data
+    verbatim. /dossiers/ and /graph/ are the only paths a crawler can walk into
+    tens of thousands of requests (the ids come from search/people.json), and
+    /raw/ is the reproducibility lake, not a serving surface. Everything else
+    stays crawlable: these are public records."""
+    robots = (slice_dirs / "data" / "robots.txt").read_text()
+    assert "Disallow: /dossiers/" in robots
+    assert "Disallow: /graph/" in robots
+    assert "Disallow: /raw/" in robots
+    assert "Allow: /" in robots
+    assert "Disallow: /pins/" not in robots
+    assert "Disallow: /search/" not in robots
+
+
 # --- WO-12 cited drill-down data ---------------------------------------------
 def test_question_and_description_rule():
     """`question` keeps the WO-1 first-non-blank rule; `description` carries the
