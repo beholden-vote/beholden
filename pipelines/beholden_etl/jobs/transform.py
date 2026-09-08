@@ -624,7 +624,7 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         ("hendersonville", tn_local.hendersonville_rows,
          tn_local.check_hendersonville_roster, HENDERSONVILLE_TERM_START),
     ):
-        roster_f = raw_dir / key / "roster.json"
+        roster_f = raw / key / "roster.json"
         if not roster_f.exists():
             continue
         rows = json.loads(roster_f.read_text(encoding="utf-8"))

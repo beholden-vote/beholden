@@ -3004,7 +3004,12 @@ def local_dirs(tmp_path_factory):
                                     "source_url": "https://example.gov/", "count": 1}
     (raw / "manifest.json").write_text(json.dumps(manifest))
     db = str(tmp / "wh.duckdb")
-    transform.run(raw_dir=raw, db_path=db)
+    # raw_dir as a STR on purpose. transform.run is typed `str | Path` and the
+    # CLI (`python -m beholden_etl.jobs.transform`) passes the str default, but
+    # every fixture here passed a Path — so a `raw_dir / key` in new code type-
+    # checked, passed the whole suite, and only blew up in the nightly run.
+    # Keeping one fixture on the CLI's actual calling convention closes that.
+    transform.run(raw_dir=str(raw), db_path=db)
     build.run(db_path=db, out_dir=tmp / "data", raw_dir=raw)
     return tmp
 
