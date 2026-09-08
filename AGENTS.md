@@ -80,7 +80,9 @@ npm run build                          # production build
 # Tests / lint (run before committing pipeline changes)
 cd pipelines && pytest && ruff check .
 ```
-CI runs ruff, pytest, and contract validation on PRs — keep them green.
+CI (`.github/workflows/ci.yml`) runs ruff + pytest and the web typecheck/build on
+every PR and every push to `main` — keep them green. Contract validation is a
+pytest test (`test_every_dossier_is_contract_valid`), not a separate step.
 
 ## Conventions
 - **Python:** ruff defaults. **SQL:** canonical DDL lives in `db/migrations`; DuckDB
@@ -88,7 +90,9 @@ CI runs ruff, pytest, and contract validation on PRs — keep them green.
 - **Data contracts are law.** A data-touching change must conform to
   [`docs/DATA-CONTRACTS.md`](docs/DATA-CONTRACTS.md); PRs should link the relevant
   section. A new source = registry entry in `config.py` + methodology entry +
-  coverage-dashboard row + freshness SLA. CI rejects unregistered sources.
+  coverage-dashboard row + freshness SLA. An unregistered source cannot publish:
+  `build._provenance` raises on a source with no registry entry and no explicit
+  grade reason, and CI runs that path.
 - **Money/legal copy** (net worth, late-filing flags) comes from the approved string
   table only — never composed inline.
 - **Operational privacy (enforced):** commits use the project identity

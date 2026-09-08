@@ -1,0 +1,57 @@
+name: ci
+# The gate AGENTS.md and CONTRIBUTING.md have always described. Until now no
+# workflow ran on pull requests at all, so every rule this project treats as
+# non-negotiable — no provenance, no publish; fail closed; registered sources
+# only — was enforced solely by whoever remembered to run pytest locally. The
+# tests that encode those rules already exist; they just had nothing running
+# them. This runs them.
+#
+# Also runs on pushes to main, because branches merge locally as often as
+# through a PR and a green PR does not prove a green merge result.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes an older one on the same ref; nothing here deploys, so
+# cancelling an in-flight run costs nothing but CI minutes saved.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    name: pipeline (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # 3.12 matches etl-nightly, so CI exercises the interpreter that actually
+      # publishes. pyproject requires >=3.11.
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -e "./pipelines[dev]"
+      # Rule set is pinned in pipelines/pyproject.toml, not left to whatever the
+      # installed ruff defaults to — see the comment there.
+      - run: ruff check pipelines/
+      # The suite is offline by construction: synthetic fixtures, no network, no
+      # API keys. That is what lets it gate a PR from a fork.
+      - run: PYTHONPATH=pipelines pytest pipelines/tests -q
+
+  web:
+    name: web (typecheck + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with: {node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json}
+      - run: cd web && npm ci
+      # Same command deploy-web runs (vite build runs tsc first), so a type error
+      # fails here on the PR rather than after it has already landed on main and
+      # taken the deploy down with it.
+      - run: cd web && npm run build

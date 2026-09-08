@@ -8,15 +8,19 @@
    asymmetrically by party. See PRD §2 and §9.
 
 ## Workflow
-- Branch from `main`; PRs require green CI (ruff, pytest, dbt tests, contract validation).
+- Branch from `main`; PRs require green CI — `.github/workflows/ci.yml` runs ruff +
+  pytest (which includes contract validation) and the web typecheck/build.
 - Data-touching PRs must link the relevant contract section (docs/DATA-CONTRACTS.md).
 - New data source = registry entry (pipelines config) + methodology entry +
-  coverage-dashboard row + freshness SLA. CI rejects unregistered sources.
+  coverage-dashboard row + freshness SLA, plus a default credibility grade reason
+  (data-contracts §1.1). An unregistered source cannot publish — the dossier
+  builder raises rather than stamping an ungraded, unattributed fact.
 - Copy that touches money or legal-adjacent surfaces (net worth, late-filing flags)
   comes from the approved string table only — never composed inline.
 
 ## Style
-Python: ruff defaults. SQL: canonical DDL lives in db/migrations; DuckDB shims are
+Python: ruff, rule set pinned in `pipelines/pyproject.toml` (not left to the
+installed ruff's defaults, which have widened between releases). SQL: canonical DDL lives in db/migrations; DuckDB shims are
 applied at load, never hand-forked. Frontend: no runtime data joins the contracts
 don't define.
 
