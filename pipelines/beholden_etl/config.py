@@ -2,12 +2,66 @@
 requires a methodology entry and a coverage-dashboard row (enforced in CI)."""
 from dataclasses import dataclass
 
+# ── Credibility grades (WO-28) ───────────────────────────────────────────────
+# A published grade tells the reader HOW a fact was obtained, so a dossier that
+# mixes a bulk API with an OCR'd scan doesn't render as uniformly trustworthy.
+#
+# THE LINE THAT MAKES THIS DEFENSIBLE: a grade describes the extraction METHOD,
+# never a failed validation. A control-total mismatch means the numbers are
+# WRONG, not low-confidence — it still halts the pipeline and stays quarantined
+# (rule #2, fail closed). If a failing gate could be downgraded instead of
+# halted, the scale would launder bad data and rule #2 would be dead. Grades
+# make us more permissive about SOURCE QUALITY, never about CORRECTNESS.
+#
+# A reason implies its grade — they are one registry, not two fields that can
+# drift apart, so "grade A, extracted by OCR" is unrepresentable by construction.
+GRADE_REASONS: dict[str, str] = {
+    # A — official structured source, deterministic, no model in the path.
+    "official_structured": "A",   # bulk API/CSV/YAML, or a link-out to an official filing
+    # B — official document, born-digital text; deterministic parse + anchored
+    #     verification, reconciling against a control total the document carries.
+    "official_document_text": "B",
+    # C — official document that required OCR; anchored verification passed and
+    #     the document reconciled. The text layer is ours, the document is theirs.
+    "official_document_ocr": "C",
+    # B — an official government WEB PAGE with structured markup (microformats,
+    #     one post per officeholder), parsed deterministically and reconciled
+    #     against the body's own seat count. Below a bulk feed because we parse
+    #     a document the government publishes for humans, not a dataset it
+    #     publishes for machines — a real difference the reader should see.
+    "official_web_roster": "B",
+    # D — derived or inferred: the fact is our reasoning over official inputs,
+    #     not a transcription of them.
+    "derived_geometry": "D",      # e.g. district polygons dissolved from precincts
+    "inferred_from_roster": "D",  # e.g. per-member positions from "unanimous" + present roster
+    "crowd_edited": "D",          # e.g. Wikidata — official-adjacent, not official
+}
+GRADES = ("A", "B", "C", "D")
+
+
+def grade_for(grade_reason: str) -> str:
+    """Grade implied by a reason. Unregistered reason => fail closed, because an
+    ungraded fact would render as though it were as good as a bulk API row."""
+    try:
+        return GRADE_REASONS[grade_reason]
+    except KeyError:
+        raise ValueError(
+            f"unregistered grade_reason {grade_reason!r} — add it to "
+            "config.GRADE_REASONS with its grade, and to the /methodology anchor"
+        ) from None
+
+
 @dataclass(frozen=True)
 class Source:
     key: str                 # provenance enum value
     base_url: str
     freshness_sla_hours: int # alert threshold, mirrors PRD G2
     requires_api_key: bool = False
+    # Default credibility reason for facts from this source. A source may emit a
+    # LOWER grade per fact (build._provenance takes an override) — e.g. minutes
+    # that are grade B for a printed roll call and D for an inferred position —
+    # but it may never emit one without a registered reason.
+    grade_reason: str = "official_structured"
 
 # freshness_sla_hours is BOTH the coverage-dashboard alert threshold AND (WO-10) the
 # incremental re-fetch threshold: a hydrated snapshot younger than its SLA is reused
@@ -35,13 +89,25 @@ SOURCES: dict[str, Source] = {
     # envelope points at THIS source key (never unitedstates_legislators), and
     # the dossier carries a verbatim caveat alongside it — labeled trust, not
     # silent equivalence with official sources. Rarely changes -> a 30-day SLA.
-    "wikidata": Source("wikidata", "https://www.wikidata.org", 24 * 30),
+    # WO-28: grade D. The education block already shipped a verbatim credibility
+    # caveat; the grade makes that same judgement machine-readable and filterable
+    # instead of prose the reader has to notice.
+    "wikidata": Source("wikidata", "https://www.wikidata.org", 24 * 30,
+                       grade_reason="crowd_edited"),
     # WO-9/WO-19: WA PDC bulk campaign finance (Tier A trusted extraction,
     # license Public Domain). Two Socrata feeds fetched as one coherent pair
     # (itemized + summary control totals) — fetch never freshness-skips this
     # source (see jobs/fetch._SLA_KEY), so the SLA here governs the coverage
     # dashboard only. New contributions post daily; summaries recalc in-step.
     "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36),
+    # WO-22 local pilot. ONE REGISTRY ROW PER LOCALITY, deliberately: there is no
+    # national local roster, so coverage, freshness and grade are only meaningful
+    # per government. Rosters change at elections, not nightly — a 7-day SLA
+    # keeps the dashboard honest without re-fetching a static page every night.
+    "sumner_county": Source("sumner_county", "https://sumnercountytn.gov", 24 * 7,
+                            grade_reason="official_web_roster"),
+    "hendersonville": Source("hendersonville", "https://www.hvilletn.org", 24 * 7,
+                             grade_reason="official_web_roster"),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)

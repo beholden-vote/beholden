@@ -16,7 +16,10 @@ async function fetchJSON<T>(path: string): Promise<T | null> {
 /** layer feed id -> (ocd_id -> pins at that division). Senate = 2 per state. */
 export type PinIndex = Map<string, Map<string, Pin[]>>;
 
-const PIN_FEEDS = ["states", "cd", "sldu", "sldl"] as const;
+// WO-22: county joins the feed list now that county PEOPLE publish. `place`
+// waits for its tiles (WO-21) — the pins are built, but with no place layer on
+// the map nothing could hit-test them, so fetching them would be dead weight.
+const PIN_FEEDS = ["states", "cd", "sldu", "sldl", "county"] as const;
 
 export async function loadPins(): Promise<PinIndex> {
   const index: PinIndex = new Map();
@@ -137,5 +140,15 @@ export function ocdShortLabel(ocdId: string): string {
   if (cd) return `${state}-${cd}`;
   if (sldu) return `${state} Senate ${sldu.toUpperCase()}`;
   if (sldl) return `${state} House ${sldl.toUpperCase()}`;
+  // WO-22 local divisions. A bare county/place shows its own name; a seat inside
+  // one shows the seat, which is what the reader is looking at in the stack.
+  const seat = /\/(council_district|ward):([\w-]+)/.exec(ocdId);
+  const local = /\/(?:county|parish|borough|place):([\w~-]+)/.exec(ocdId)?.[1];
+  const pretty = local ? local.replace(/_/g, " ").replace(/~/g, "'")
+    .replace(/\w/g, (c) => c.toUpperCase()) : null;
+  if (seat && pretty) {
+    return seat[1] === "ward" ? `${pretty} Ward ${seat[2]}` : `${pretty} District ${seat[2]}`;
+  }
+  if (pretty) return pretty;
   return state;
 }

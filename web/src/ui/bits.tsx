@@ -4,6 +4,7 @@ import type { Dossier, Provenance } from "../types";
 import { PARTY_COLORS } from "../map";
 import { STRINGS } from "../strings";
 import { formatDate } from "../lib/data";
+import { isBelowMinGrade, useMinGrade } from "./gradeFilter";
 
 export function PartyChip({ code, display }: { code: string; display?: string }) {
   return (
@@ -23,24 +24,49 @@ export function Avatar({ url, name, size = 64 }: { url: string | null | undefine
   );
 }
 
+/** The credibility grade for a section (WO-28). Neutral by design: one mono
+ *  letter in the same ink/line palette for every grade — no red/green ramp, no
+ *  party hues. A grade is a fact about our pipeline, and facts render in mono. */
+function GradeChip({ provenance }: { provenance: Provenance }) {
+  const { grade } = provenance;
+  if (!grade) return null;                    // pre-grade feed; see types.ts
+  const label = STRINGS.gradeLabels[grade] ?? grade;
+  return (
+    <span className="grade-chip" title={`${STRINGS.gradeChipTitle} — ${label}`}
+          aria-label={`${STRINGS.gradeChipTitle}: ${grade}. ${label}`}>
+      {grade}
+    </span>
+  );
+}
+
 /** Every section is cited or it doesn't ship: the provenance line is part of
- *  the section shell, not an optional extra (rule #1). */
+ *  the section shell, not an optional extra (rule #1). WO-28 puts the grade
+ *  chip and the grade filter in this same shell for the same reason — a
+ *  section cannot render uncited, ungraded, or unfiltered by forgetting to
+ *  opt in at the call site. */
 export function Section({ title, provenance, children }: {
   title: string; provenance?: Provenance; children: ReactNode;
 }) {
+  const minGrade = useMinGrade();
+  // A hidden section still renders its head and says why it's hidden — the
+  // reader must never be handed a silently shorter dossier (see gradeFilter).
+  const hidden = isBelowMinGrade(provenance?.grade, minGrade);
   return (
     <section className="panel-section">
       <div className="section-head">
         <h3>{title}</h3>
         {provenance && (
-          <a className="source-tag" href={provenance.source_url} target="_blank" rel="noopener noreferrer"
-             title={`Source: ${provenance.source}`}>
-            {provenance.source} ↗
-          </a>
+          <span className="section-tags">
+            <GradeChip provenance={provenance} />
+            <a className="source-tag" href={provenance.source_url} target="_blank" rel="noopener noreferrer"
+               title={`Source: ${provenance.source}`}>
+              {provenance.source} ↗
+            </a>
+          </span>
         )}
       </div>
-      {children}
-      {provenance && (
+      {hidden ? <EmptyNote>{STRINGS.gradeHiddenNote}</EmptyNote> : children}
+      {provenance && !hidden && (
         <p className="retrieved">
           {STRINGS.retrievedLabel} {formatDate(provenance.retrieved_at) ?? provenance.retrieved_at}
         </p>

@@ -288,6 +288,21 @@
   border: 1px solid #4a5a2e; background: #1c2410; padding: 3px 7px; white-space: nowrap;
 }
 .source-tag:hover { border-color: var(--sig); }
+
+/* WO-28 credibility grade. Deliberately NEUTRAL: one treatment for all four
+   grades, in the ink/line palette only. No red/green ramp and no party hues —
+   a grade describes how WE obtained a fact, and must never read as a verdict on
+   the official or the locality (Rule 0). Mono, because it is a fact. */
+.grade-chip {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.04em; color: var(--mut); text-transform: uppercase;
+  border: 1px solid var(--line-2); background: var(--surf2);
+  padding: 3px 6px; white-space: nowrap;
+}
+.section-tags { display: inline-flex; align-items: center; gap: 6px; }
+.grade-chip-inline { margin-right: 6px; }
+.grade-filter { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
+.grade-filter .layer-row span { display: inline-flex; align-items: center; }
 .retrieved { color: var(--dim); font-family: var(--font-mono); font-size: 10px; margin: 10px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
 
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; margin: 0; font-size: 13px; }
@@ -490,7 +505,6 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .layer-group-label { display: block; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sig); margin: 7px 0 3px; }
 .layer-group:nth-of-type(2) .layer-group-label { color: var(--mut); }
 .layer-group:nth-of-type(3) .layer-group-label { color: var(--dim); }
-.layer-soon { display: block; font-size: 11px; color: var(--dim); font-style: italic; padding: 2px 0; }
 
 /* "you are here" marker (DOM marker; approx = coarse IP, exact = geolocation) */
 .you-marker {

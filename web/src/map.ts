@@ -70,7 +70,9 @@ const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 // zoom controller drives what's actually shown (this is only the starting point);
 // in MANUAL mode the user's stored per-layer choices win.
 export const DEFAULT_VISIBLE: Record<LayerId, boolean> = {
-  states: true, cd: true, sldu: false, sldl: false, county: false,
+  // WO-22: counties ship people now, so the layer is on by default like the
+  // federal ones. It still only appears from z7 with an 8->9 fade (LAYERS).
+  states: true, cd: true, sldu: false, sldl: false, county: true,
 };
 
 /** Layer-visibility mode: "auto" = zoom-driven, "manual" = explicit per-layer. */

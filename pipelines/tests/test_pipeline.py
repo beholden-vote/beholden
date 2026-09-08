@@ -12,10 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from beholden_etl import store
+from beholden_etl import config, store
 from beholden_etl.build import dossiers
 from beholden_etl.jobs import build, transform
+from beholden_etl import divisions
 from beholden_etl.sources import legislators
+from beholden_etl.sources import tn_local
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -1933,7 +1935,10 @@ def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monke
     # every source fetcher ran (wa_pdc's stub returns a fragment here; the real
     # fetcher returns None when disabled — covered separately below).
     assert calls == {"unitedstates_legislators", "congress.gov", "voteview",
-                     "fec", "openstates", "house_clerk", "wa_pdc", "wikidata"}
+                     "fec", "openstates", "house_clerk", "wa_pdc", "wikidata",
+                     # WO-22: one fetcher per locality, so coverage and freshness
+                     # stay meaningful per government rather than per "local".
+                     "sumner_county", "hendersonville"}
     for meta in manifest["sources"].values():
         assert meta["count"] == 1 and "retrieved_at" in meta
     timings = manifest["fetch_timings"]
@@ -2852,3 +2857,310 @@ def test_fetch_openstates_votes_crawls_and_per_state_failure_skips(tmp_path, mon
     assert doc["state"] == "tn" and record["id"] in doc["bills"]
     assert doc["created_since"] == "2025-01-01"      # current-biennium bound
     assert not (raw / "openstates" / "votes" / "wa.json").exists()
+
+
+# --- WO-28 credibility grades ----------------------------------------------
+# The scale exists so a dossier mixing a bulk API with an OCR'd scan does not
+# render as uniformly trustworthy. Its integrity rests on one boundary, asserted
+# below: a grade describes the extraction METHOD, never a failed validation.
+
+def _all_provenance(dossier: dict):
+    """Every provenance envelope in a dossier, at any nesting depth."""
+    found = []
+    def walk(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("provenance"), dict):
+                found.append(node["provenance"])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(dossier)
+    return found
+
+
+def test_every_published_section_carries_a_grade(slice_dirs):
+    """An ungraded section would render indistinguishably from a bulk-API one,
+    so the grade is required on every envelope — not just the section-level ones
+    the validator walks explicitly."""
+    files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
+    assert files
+    seen = 0
+    for f in files:
+        for prov in _all_provenance(json.loads(f.read_text())):
+            assert prov["grade"] in config.GRADES, prov
+            assert prov["grade"] == config.GRADE_REASONS[prov["grade_reason"]], prov
+            seen += 1
+    assert seen > 0
+
+
+def test_ungraded_section_fails_validation(slice_dirs):
+    """Same treatment as a null retrieved_at: no grade, no publish."""
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    del d["identity"]["provenance"]["grade"]
+    with pytest.raises(dossiers.ProvenanceError, match="missing provenance"):
+        dossiers.validate(d)
+
+
+def test_grade_must_match_its_reason(slice_dirs):
+    """THE laundering test. A hand-written envelope cannot claim a strong grade
+    for a weak method — the pair is checked, not just the grade's membership in
+    the enum. Without this, 'grade A, extracted by OCR' would validate."""
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    d["identity"]["provenance"]["grade_reason"] = "official_document_ocr"   # implies C
+    with pytest.raises(dossiers.ProvenanceError, match="implies"):
+        dossiers.validate(d)
+
+
+def test_unregistered_grade_reason_fails_closed(slice_dirs):
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    d["identity"]["provenance"]["grade_reason"] = "vibes"
+    with pytest.raises(dossiers.ProvenanceError, match="unregistered grade_reason"):
+        dossiers.validate(d)
+    with pytest.raises(ValueError, match="unregistered grade_reason"):
+        config.grade_for("vibes")
+
+
+def test_every_registered_reason_maps_to_a_real_grade():
+    """The reason registry is the single source of truth for the scale; a typo
+    here would publish a grade the client has no label or filter option for."""
+    for reason, grade in config.GRADE_REASONS.items():
+        assert grade in config.GRADES, reason
+
+
+def test_bulk_official_sources_are_grade_a(slice_dirs):
+    """congress.gov / voteview / FEC / OpenStates are deterministic bulk feeds
+    with no model in the extraction path — the top of the scale."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    assert jane["identity"]["provenance"]["grade"] == "A"
+    assert jane["ideology"]["provenance"]["grade"] == "A"
+    # A computed metric stays grade A: the grade describes how the underlying
+    # facts were OBTAINED; methodology_id is what says the number is ours.
+    assert jane["ideology"]["provenance"]["methodology_id"] == "dw-nominate"
+
+
+def test_wikidata_education_is_graded_crowd_edited(slice_dirs):
+    """The education block already shipped a verbatim credibility caveat; WO-28
+    makes that same judgement machine-readable so it can be filtered, not just
+    read. Grade D sits alongside the note, it does not replace it."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    edu = jane["identity"]["education"]
+    assert edu["provenance"]["grade"] == "D"
+    assert edu["provenance"]["grade_reason"] == "crowd_edited"
+    assert edu["credibility_note"]          # the human-readable caveat still renders
+
+
+def test_provenance_refuses_ungraded_unregistered_source():
+    """A source outside the registry has no default grade. Publishing it as
+    though it were bulk official data is exactly the mistake grading exists to
+    prevent, so build refuses rather than guessing."""
+    manifest = {"sources": {"mystery": {"retrieved_at": RETRIEVED_AT}}}
+    with pytest.raises(dossiers.ProvenanceError, match="not in the registry"):
+        build._provenance("mystery", "https://example.gov/", manifest)
+    # ...but an explicit, registered reason is enough to publish it honestly.
+    prov = build._provenance("mystery", "https://example.gov/", manifest,
+                             grade_reason="official_document_ocr")
+    assert prov["grade"] == "C"
+
+
+# --- WO-22 local tier: Sumner County + Hendersonville, TN --------------------
+# Local government is where the source data is worst, so the gates matter most
+# here. Fixtures are synthetic rosters in the SHAPE the official pages publish;
+# the parsers themselves are exercised against small verbatim markup samples.
+
+SUMNER_ROSTER = [
+    {"full_name": f"Commissioner {n}", "district": n,
+     "email": f"c{n}@sumnercountytn.gov", "photo_url": None,
+     "source_record_url": f"https://sumnercountytn.gov/commissioner-{n}/"}
+    for n in range(1, 25)
+]
+HVILLE_ROSTER = (
+    [{"full_name": "Pat Mayor", "role_title": "Mayor", "ward": None,
+      "email": "mayor@hvilletn.org", "phone": "6155550100", "photo_url": None,
+      "source_record_url": tn_local.HENDERSONVILLE_URL}]
+    + [{"full_name": f"Alder {w}{s}", "role_title": f"Alderman - Ward {w}", "ward": w,
+        "email": f"a{w}{s}@hvilletn.org", "phone": None, "photo_url": None,
+        "source_record_url": tn_local.HENDERSONVILLE_URL}
+       for w in range(1, 7) for s in ("a", "b")]
+)
+
+
+@pytest.fixture(scope="module")
+def local_dirs(tmp_path_factory):
+    """Federal fixture + both local rosters, through the real transform/build.
+    Separate from slice_dirs so the 37 local officeholders don't perturb the
+    federal/state counts every other test asserts on."""
+    tmp = tmp_path_factory.mktemp("local")
+    raw = tmp / "raw"
+    (raw / "unitedstates_legislators").mkdir(parents=True)
+    (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
+    for key, roster in (("sumner_county", SUMNER_ROSTER), ("hendersonville", HVILLE_ROSTER)):
+        (raw / key).mkdir(parents=True)
+        (raw / key / "roster.json").write_text(json.dumps(roster))
+    manifest = json.loads(json.dumps(MANIFEST))
+    for key in ("sumner_county", "hendersonville"):
+        manifest["sources"][key] = {"retrieved_at": RETRIEVED_AT,
+                                    "source_url": "https://example.gov/", "count": 1}
+    (raw / "manifest.json").write_text(json.dumps(manifest))
+    db = str(tmp / "wh.duckdb")
+    transform.run(raw_dir=raw, db_path=db)
+    build.run(db_path=db, out_dir=tmp / "data", raw_dir=raw)
+    return tmp
+
+
+def _local_dossiers(local_dirs):
+    return [json.loads(f.read_text()) for f in (local_dirs / "data" / "dossiers").glob("*.json")]
+
+
+def _by_role(local_dirs, role):
+    return [d for d in _local_dossiers(local_dirs)
+            if d["identity"]["office"]["role"] == role]
+
+
+def test_local_slug_matches_tile_stamper():
+    """THE join-key invariant. divisions.py builds the ocd_id the ETL publishes;
+    stamp_ocd_ids.py stamps the one on the polygon. They are separate
+    implementations (the stamper runs standalone in the tiles workflow, with no
+    package on its path), and a divergence does not raise — it silently leaves a
+    county uncolored. So the two are pinned together across exactly the
+    punctuated names where a naive slug would differ."""
+    stamper = _load_stamper()
+    for name in ["Sumner", "St. Clair", "Miami-Dade", "Prince George's",
+                 "O'Brien", "Del Norte", "St. Mary's", "DeKalb"]:
+        built = divisions.county_ocd("TN", name).split("county:")[1]
+        assert built == stamper.county_slug(name), name
+
+
+def test_county_and_place_ocd_shape():
+    assert divisions.county_ocd("TN", "Sumner") == "ocd-division/country:us/state:tn/county:sumner"
+    assert divisions.place_ocd("TN", "Hendersonville") == \
+        "ocd-division/country:us/state:tn/place:hendersonville"
+    # AK/LA are not "county:" in the canonical registry, and the stamper agrees.
+    assert "/borough:denali" in divisions.county_ocd("AK", "Denali")
+    assert "/parish:orleans" in divisions.county_ocd("LA", "Orleans")
+    # '01' and 1 are one seat — a source relabelling its own districts must not
+    # split a single district into two divisions.
+    county = divisions.county_ocd("TN", "Sumner")
+    assert divisions.commission_district_ocd(county, "01") == \
+        divisions.commission_district_ocd(county, 1)
+
+
+def test_sumner_roster_gate_rejects_a_missing_seat():
+    """A roster's control total is the body's own seat count. A page that
+    reshapes and yields 23 of 24 districts must halt, not publish a county
+    government with one district silently unrepresented."""
+    with pytest.raises(tn_local.RosterError, match=r"missing districts \[7\]"):
+        tn_local.check_sumner_roster([r for r in SUMNER_ROSTER if r["district"] != 7])
+
+
+def test_sumner_roster_gate_rejects_a_duplicate_seat():
+    dupe = SUMNER_ROSTER[:-1] + [dict(SUMNER_ROSTER[0])]
+    with pytest.raises(tn_local.RosterError, match="duplicated"):
+        tn_local.check_sumner_roster(dupe)
+
+
+def test_hendersonville_gate_rejects_wrong_ward_count():
+    with pytest.raises(tn_local.RosterError, match="wrong number of aldermen"):
+        tn_local.check_hendersonville_roster(
+            [r for r in HVILLE_ROSTER if r["role_title"] != "Alderman - Ward 3"])
+
+
+def test_hendersonville_gate_rejects_two_mayors():
+    with pytest.raises(tn_local.RosterError, match="2 mayor"):
+        tn_local.check_hendersonville_roster(HVILLE_ROSTER + [dict(HVILLE_ROSTER[0])])
+
+
+def test_parsers_read_the_official_markup():
+    """Small verbatim samples of each site's markup: the city publishes h-card
+    microformat, the county one WordPress post per commissioner. Neither parse
+    guesses at layout, which is why this is grade B rather than scraped."""
+    sumner = tn_local.parse_sumner(
+        '<div class="elementor-widget-theme-post-title">'
+        '<h3 class="x"><a href="https://sumnercountytn.gov/mark-harrison/">Mark Harrison</a></h3>'
+        '<div class="elementor-widget-theme-post-excerpt">'
+        '<div class="elementor-widget-container">\t3rd District\t</div></div>'
+        '<p><a href="mailto:mark.harrison@sumnercountytn.gov">e</a></p>')
+    assert sumner == [{"full_name": "Mark Harrison", "district": 3,
+                       "email": "mark.harrison@sumnercountytn.gov", "photo_url": None,
+                       "source_record_url": "https://sumnercountytn.gov/mark-harrison/"}]
+
+    hville = tn_local.parse_hendersonville(
+        '<li class="widgetItem h-card">'
+        '<h4 class="widgetTitle field p-name">\n\t\tMark Burgdorf\n\t</h4>'
+        '<div class="field p-job-title">Alderman - Ward 1</div>'
+        '<div class="field u-email"><a href="mailto:mburgdorf@hvilletn.org">Email</a></div>'
+        '<div class="field p-tel">Phone: <a href="tel:6159576264">615-957-6264</a></div></li>')
+    assert hville[0]["full_name"] == "Mark Burgdorf"
+    assert hville[0]["ward"] == 1 and hville[0]["email"] == "mburgdorf@hvilletn.org"
+
+
+def test_local_officials_get_pins_and_a_stylefeed(local_dirs):
+    """The blocker this WO existed to clear: build's chamber->layer map was a
+    hardcoded 4-tuple, so a county officeholder produced a dossier that no pin
+    and no polygon ever pointed at."""
+    county = json.loads((local_dirs / "data" / "pins" / "county.json").read_text())
+    place = json.loads((local_dirs / "data" / "pins" / "place.json").read_text())
+    assert len(county) == 24
+    assert len(place) == 13                     # 1 mayor + 6 wards x 2 aldermen
+    feed = json.loads((local_dirs / "data" / "stylefeeds" / "county.json").read_text())
+    assert len(feed) == 24
+    d3 = next(p for p in county if p["ocd_id"].endswith("council_district:3"))
+    assert d3["office"] == "Sumner County Commission · District 3"
+    mayor = next(p for p in place if p["chamber"] is None)
+    assert mayor["office"] == "Mayor of Hendersonville"
+
+
+def test_local_identity_cites_the_locality_not_openstates(local_dirs):
+    """A local officeholder used to fall through to the state branch and get
+    stamped 'openstates' — a source that has never heard of them. A false source
+    on a published fact is the failure rule #1 exists to prevent."""
+    for d in _by_role(local_dirs, "County Commissioner"):
+        prov = d["identity"]["provenance"]
+        assert prov["source"] == "sumner_county"
+        assert prov["source_url"].startswith("https://sumnercountytn.gov/")
+    for role in ("Mayor", "Alderman"):
+        for d in _by_role(local_dirs, role):
+            assert d["identity"]["provenance"]["source"] == "hendersonville"
+
+
+def test_local_facts_are_graded_b(local_dirs):
+    """An official roster published as a web page, parsed deterministically and
+    reconciled against the body's seat count: better than OCR, below a bulk feed.
+    WO-28's scale is what lets this publish at all rather than waiting for an
+    API these governments will never ship."""
+    for role in ("County Commissioner", "Mayor", "Alderman"):
+        for d in _by_role(local_dirs, role):
+            prov = d["identity"]["provenance"]
+            assert prov["grade"] == "B"
+            assert prov["grade_reason"] == "official_web_roster"
+
+
+def test_local_party_is_not_published_never_nonpartisan(local_dirs):
+    """Neither source states a party, so neither do we. 'NP' would assert
+    nonpartisanship about races that may well be partisan — a fabricated fact,
+    and the same failure class as an invented retrieved_at."""
+    for d in _by_role(local_dirs, "County Commissioner"):
+        assert d["identity"]["party"] == {"code": "U", "display": "Not published"}
+
+
+def test_local_dossiers_publish_identity_only(local_dirs):
+    """No county roll calls, ideology, or FEC money exist yet. Absent sections
+    stay absent rather than rendering as fabricated zeroes, and identity-only is
+    contract-valid."""
+    for d in _by_role(local_dirs, "County Commissioner"):
+        assert "legislative" not in d and "ideology" not in d
+        dossiers.validate(d)
+
+
+def test_local_contact_comes_from_the_official_page(local_dirs):
+    d = _by_role(local_dirs, "Mayor")[0]
+    assert d["identity"]["contact"]["email"] == "mayor@hvilletn.org"
+
+
+def test_served_layers_all_publish_pins(local_dirs):
+    """build.SERVED_LAYERS is mirrored by hand in web/src/lib/data.ts:PIN_FEEDS.
+    A layer served here but missing there is data the client never fetches; the
+    reverse is a 404 on every page load."""
+    for layer in build.SERVED_LAYERS:
+        assert (local_dirs / "data" / "pins" / f"{layer}.json").exists(), layer

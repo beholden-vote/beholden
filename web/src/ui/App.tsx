@@ -13,30 +13,17 @@ import { Avatar, EmptyNote, PartyChip } from "./bits";
 import { DossierView } from "./DossierView";
 import { Ballot } from "./Ballot";
 import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
+import { GradeFilterProvider, loadMinGrade, saveMinGrade, type Grade } from "./gradeFilter";
+import { LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS } from "../lib/levels";
 import {
   parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
   parseMethodologyHash, methodologyHash,
   type Route, type DossierTab,
 } from "../router";
 
-const LEVEL_TITLES: Record<string, string> = {
-  cd: "U.S. House",
-  states: "U.S. Senate",
-  sldu: "State Senate",
-  sldl: "State House",
-  county: "County",
-};
 // Federal first, then state chambers, then local (county) — the same order for
 // every point on the map.
-const LEVEL_ORDER: Record<string, number> = { cd: 0, states: 1, sldu: 2, sldl: 3, county: 4 };
 
-// Panel sections mirror the layer control's level axis (Federal / State / Local;
-// City reserved for later). Entries are bucketed by layer into these sections.
-const PANEL_SECTIONS: { level: string; layers: LayerId[] }[] = [
-  { level: "Federal", layers: ["cd", "states"] },
-  { level: "State", layers: ["sldu", "sldl"] },
-  { level: "Local", layers: ["county"] },
-];
 
 const LAYER_PREFS_KEY = "beholden:layers";
 const LAYER_PREFS_VERSION = 2;
@@ -127,7 +114,7 @@ function StackSection({ level, entries, onOpen }: {
               {entry.layer === "sldu" || entry.layer === "sldl"
                 ? "State-legislature profiles arrive with the state data layer."
                 : entry.layer === "county"
-                ? "County officials arrive with the local data layer."
+                ? "Beholden covers county officials in pilot counties only. This county isn't covered yet."
                 : "No officeholder published for this division yet."}
             </EmptyNote>
           ) : (
@@ -160,6 +147,10 @@ export function App({ mapRef, handleRef }: {
   const [people, setPeople] = useState<PersonSearchRow[]>([]);   // name matches (WO-5)
   const [activeIdx, setActiveIdx] = useState(-1);                // keyboard nav across suggestions
   const [prefs, setPrefs] = useState<LayerPrefs>(loadLayerPrefs);
+  // WO-28 source-quality floor. Persisted like layer prefs; defaults to "D"
+  // (show everything) so grading informs trust without hiding records.
+  const [minGrade, setMinGrade] = useState<Grade>(loadMinGrade);
+  const changeMinGrade = (g: Grade) => { setMinGrade(g); saveMinGrade(g); };
   const layerVis = prefs.visible;
   const [info, setInfo] = useState<InfoState | null>(hashToInfo);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -434,7 +425,7 @@ export function App({ mapRef, handleRef }: {
   };
 
   return (
-    <>
+    <GradeFilterProvider value={minGrade}>
       <div className="topbar">
         <div className="brand">
           <span className="brand-name">Beholden</span>
@@ -536,12 +527,13 @@ export function App({ mapRef, handleRef }: {
       )}
 
       <LayerControl visible={layerVis} auto={prefs.mode === "auto"}
-                    onToggle={toggleLayer} onAuto={setAuto} />
+                    onToggle={toggleLayer} onAuto={setAuto}
+                    minGrade={minGrade} onMinGrade={changeMinGrade} />
       <Footer onOpen={openInfo} />
       {info && (
         <InfoOverlay page={info.page} anchor={info.anchor} onClose={closeInfo}
                      onOpenInfo={(p) => openInfo(p)} />
       )}
-    </>
+    </GradeFilterProvider>
   );
 }

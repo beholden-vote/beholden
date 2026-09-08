@@ -19,7 +19,7 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, pipeline_version
+from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
@@ -28,7 +28,11 @@ from .transform import DEFAULT_DB
 from .. import store
 
 PARTY_DISPLAY = {"D": "Democratic", "R": "Republican", "I": "Independent",
-                 "L": "Libertarian", "G": "Green", "NP": "Nonpartisan"}
+                 "L": "Libertarian", "G": "Green", "NP": "Nonpartisan",
+                 # WO-22: "U" means the SOURCE does not publish a party. It is
+                 # deliberately distinct from "NP" (Nonpartisan), which would be
+                 # a claim about the office that many local sources never make.
+                 "U": "Not published"}
 IDEOLOGY_SCOPE = f"{CONGRESS}th Congress"
 
 
@@ -124,7 +128,8 @@ def _education_map(raw_dir: Path) -> dict[str, list[dict]]:
 
 
 def _provenance(source: str, source_url: str, manifest: dict,
-                methodology_id: str | None = None) -> dict:
+                methodology_id: str | None = None,
+                grade_reason: str | None = None) -> dict:
     """Provenance envelope for a section. FAILS CLOSED (rule #1): if the fetch
     manifest can't vouch for when `source` was retrieved, we refuse to invent a
     timestamp — a fabricated retrieved_at is worse than no publish.
@@ -134,16 +139,33 @@ def _provenance(source: str, source_url: str, manifest: dict,
     'donor-rollups'). It stays None for sections that are verbatim source facts
     with no Beholden-computed metric; a metric-bearing section points it at the
     matching /methodology anchor so "how is this computed?" is answerable from
-    the UI. The values here MUST match the anchor ids the methodology page ships."""
+    the UI. The values here MUST match the anchor ids the methodology page ships.
+
+    `grade_reason` (WO-28) overrides the source's default credibility reason for
+    THIS section — one source legitimately emits several grades (minutes are
+    grade B for a printed roll call, D for a position inferred from a present
+    roster). Omit it and the section inherits the source registry's default.
+
+    Note the division of labour with methodology_id: the grade says how the fact
+    was OBTAINED, methodology_id says how it was COMPUTED. A DW-NOMINATE score is
+    grade A — the underlying votes are bulk official records — and carries a
+    methodology anchor because the number itself is ours."""
     meta = manifest.get("sources", {}).get(source, {})
     retrieved_at = meta.get("retrieved_at")
     if not retrieved_at:
         raise dossiers.ProvenanceError(
             f"manifest has no retrieved_at for source '{source}' — refusing to "
             "fabricate freshness (no provenance, no publish)")
+    registered = SOURCES.get(source)
+    reason = grade_reason or (registered.grade_reason if registered else None)
+    if not reason:
+        raise dossiers.ProvenanceError(
+            f"source '{source}' is not in the registry and no grade_reason was "
+            "given — refusing to publish an ungraded fact (WO-28)")
     return {"source": source, "source_url": source_url,
             "retrieved_at": retrieved_at,
-            "pipeline_version": pipeline_version(), "methodology_id": methodology_id}
+            "pipeline_version": pipeline_version(), "methodology_id": methodology_id,
+            "grade": grade_for(reason), "grade_reason": reason}
 
 
 # WO-8: methodology anchor ids per computed metric. Each MUST match a section id
@@ -155,6 +177,14 @@ METHODOLOGY_KEY_VOTES = "key-votes"        # key-vote selection formula (key_vot
 METHODOLOGY_AGREEMENT = "co-voting"        # party_agreement_pct (key_votes.py)
 METHODOLOGY_DONORS = "donor-rollups"       # FEC by_employer top contributors (fec.py)
 METHODOLOGY_DONORS_STATE = "state-donor-rollups"  # WO-19: WA PDC employer rollups (below)
+
+
+def _local_name(ocd_id: str, kind: str) -> str:
+    """Human name of the county/place segment of an ocd id ('st_clair' ->
+    'St. Clair'). The slug is lossy by design (the registry's rule collapses
+    punctuation), so this is a display convenience only — never a join key."""
+    seg = ocd_id.split(f"{kind}:")[1].split("/")[0] if f"{kind}:" in ocd_id else ""
+    return seg.replace("_", " ").replace("~", "'").title()
 
 
 def _office_display(chamber: str, ocd_id: str) -> str:
@@ -169,6 +199,15 @@ def _office_display(chamber: str, ocd_id: str) -> str:
         return f"{state} State Senate · District {seat}"
     if chamber == "lower":
         return f"{state} State House · District {seat}"
+    # WO-22 local levels. The body's own name comes from the ocd path, so a new
+    # county needs no code here: .../county:sumner/council_district:3 and
+    # .../place:hendersonville/ward:1 both read back their parent's name.
+    if chamber == "county_commission":
+        return f"{_local_name(ocd_id, 'county')} County Commission · District {seat}"
+    if chamber == "board_of_aldermen":
+        return f"{_local_name(ocd_id, 'place')} Board of Aldermen · Ward {seat}"
+    if "/place:" in ocd_id and chamber is None:
+        return f"Mayor of {_local_name(ocd_id, 'place')}"
     return f"{state} · {seat}"
 
 
@@ -180,6 +219,10 @@ def _office_display(chamber: str, ocd_id: str) -> str:
 # absence, never a fabricated zero. Ideology stays federal-only (DW-NOMINATE).
 FEDERAL_CHAMBERS = {"house", "senate"}
 STATE_CHAMBERS = {"upper", "lower"}
+# Map layers that get a pins feed and a style feed. MUST stay in step with
+# web/src/lib/data.ts:PIN_FEEDS and web/src/map.ts:LAYERS — a layer served here
+# but absent there is data the client never fetches, and the reverse is a 404.
+SERVED_LAYERS = ("cd", "states", "sldu", "sldl", "county", "place")
 
 
 def _state_from_ocd(ocd_id: str) -> str | None:
@@ -240,6 +283,7 @@ def _current_holders(con) -> list[dict]:
                t.meta->>'first_took_office' AS first_took_office,
                t.meta->>'image'            AS image_url,
                t.meta->>'source_url'       AS source_url,
+               t.meta->>'source_key'       AS source_key,
                t.meta->>'contact'          AS state_contact_json,
                t.meta->>'social'           AS state_social_json,
                i.score  AS ideology_score,
@@ -665,6 +709,17 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
             f"https://bioguide.congress.gov/search/bio/{bio}" if bio else SOURCES["unitedstates_legislators"].base_url,
             manifest)
         links = [{"type": "bioguide", "url": f"https://bioguide.congress.gov/search/bio/{bio}"}] if bio else []
+    elif h.get("source_key"):
+        # WO-22: a local officeholder. Without this branch they fall through to
+        # the state branch below and their identity is stamped "openstates" — a
+        # source that has never heard of them. A false source on a published
+        # fact is exactly what rule #1 exists to prevent, so the locality that
+        # published the roster is named instead, and its own grade rides along
+        # from the source registry.
+        src = h.get("source_url")
+        identity_prov = _provenance(h["source_key"],
+                                    src or SOURCES[h["source_key"]].base_url, manifest)
+        links = [{"type": "official", "url": src}] if src else []
     else:
         src = h.get("source_url")
         identity_prov = _provenance("openstates", src or "https://openstates.org/", manifest)
@@ -1015,10 +1070,18 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                               rc_meta, contributors, committee_ids)
 
     # --- style feeds + pins, grouped by chamber -> map layer ---
-    chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl"}
-    by_layer: dict[str, list[dict]] = {"cd": [], "states": [], "sldu": [], "sldl": []}
+    # A holder whose chamber isn't mapped here gets NO pin and NO stylefeed row —
+    # they'd exist only as a dossier nothing links to. Adding a level of
+    # government means adding it here, and to SERVED_LAYERS below.
+    chamber_layer = {"house": "cd", "senate": "states", "upper": "sldu", "lower": "sldl",
+                     "county_commission": "county", "board_of_aldermen": "place"}
+    by_layer: dict[str, list[dict]] = {layer: [] for layer in SERVED_LAYERS}
     for h in holders:
         layer = chamber_layer.get(h["chamber"])
+        # WO-22: a mayor holds an executive office with no chamber; the division
+        # itself (a place) is the layer.
+        if layer is None and h["chamber"] is None and "/place:" in h["ocd_id"]:
+            layer = "place"
         if layer:
             by_layer[layer].append(h)
 
@@ -1037,8 +1100,12 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     states_feed = stylefeeds.build_senate_delegation_feed(
         [{"ocd_id": h["ocd_id"], "party": h["party"],
           "is_vacant_marker": bool(h["is_vacant_marker"])} for h in senate])
+    # Every served layer gets a feed. Local layers currently carry party "U"
+    # (not published), which stylefeeds renders with the neutral fill — the map
+    # shows WHERE a government exists without asserting a party it never stated.
     stylefeeds.publish({"cd": cd_feed, "states": states_feed,
-                        "sldu": feed(by_layer["sldu"]), "sldl": feed(by_layer["sldl"])},
+                        **{layer: feed(by_layer[layer])
+                           for layer in SERVED_LAYERS if layer not in ("cd", "states")}},
                        out / "stylefeeds")
 
     def pins(rows):
@@ -1052,7 +1119,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                  "photo_url": h.get("image_url") or photo.get(h.get("bioguide")),
                  "party": h["party"]} for h in rows]
     (out / "pins").mkdir(parents=True, exist_ok=True)
-    for layer in ("cd", "states", "sldu", "sldl"):
+    for layer in SERVED_LAYERS:
         (out / "pins" / f"{layer}.json").write_text(json.dumps(pins(by_layer[layer]), separators=(",", ":")))
 
     # --- people search index (WO-5): flat name index for the topbar search, so a

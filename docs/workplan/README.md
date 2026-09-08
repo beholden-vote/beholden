@@ -82,12 +82,13 @@ sequentially — the WOs touch the same files.
 | 19 | WA PDC reconciliation fix + surface in Money tab | P (independent) | open |
 | 20 | State-money pilot wave (3–5 best-portal states) | P (after 19) | open |
 | 21 | Place geometry (TIGER incorporated-places tiles) | T | open |
-| 22 | Local officials beachhead (top metros + one full state) | P (rolling) | open |
+| 22 | Local officials beachhead (top metros + one full state) | P (rolling) | **first locality merged** — Sumner County + Hendersonville, TN (37 officeholders, grade B) |
 | 23 | In-app bill pages + full voting-record artifacts | P+F (federal now; state after 17) | open |
 | 24 | Voting-bloc analysis (descriptive, symmetric) | P+F (after 23) | open |
 | 25 | Donor networks deeper (multi-cycle, PAC flows) | P (independent) | open |
 | 26 | State lobbying registries (WA/CA/TX pilot) | P (after 19) | open |
 | 27 | Senate eFD filing links (chamber parity) | P (independent) | open |
+| 28 | Credibility grades on the provenance envelope | P+F (independent) | merged |
 
 **WO-1…16 merged (2026-07-06).** WO-11…16 were the depth round: dossier tabs, cited
 drill-downs, an interactive connections graph, per-level map fills, and the
@@ -102,6 +103,24 @@ year qualifiers, resolved via our stored wikidata_qid) under a DEDICATED wikidat
 envelope with a verbatim crowd-edited credibility note rendered wherever it appears —
 the official source (Bioguide) is bot-walled, and the user accepted labeled Wikidata
 over omission. Ballotpedia/VoteSmart rejected (restrictive licensing).
+
+**WO-28 (credibility grades) unblocked the local tier.** Every provenance envelope now carries a
+grade for HOW a fact was obtained (`A` bulk official … `D` derived/inferred) plus a reader-facing
+filter, defaulting to show everything. The boundary that keeps it defensible: a grade describes
+extraction METHOD, never a failed validation — data that fails a gate is still withheld and
+quarantined, never downgraded and published (rule #2 is untouched). Before it, most county and
+municipal facts were unpublishable under an all-or-nothing rule; after it, an official roster parsed
+from a government web page ships honestly at grade B. `test_grade_must_match_its_reason` pins the
+(grade, reason) pair so an envelope can never claim `A` for an OCR'd fact.
+
+**WO-22 first locality merged.** Sumner County, TN (24 commissioners) and Hendersonville, TN (mayor +
+12 aldermen). Both governments publish structured markup — an h-card microformat directory and one
+WordPress post per commissioner — so neither parse guesses at layout. The fail-closed gate is the
+body's own seat count: 24 districts exactly once, 1 mayor + 6 wards x 2 aldermen, checked at fetch
+AND transform. Party is `"U"` (not published), never `"NP"`, because neither source states one.
+Remaining for this locality: Sumner's roll-call votes (its minutes carry named electronic-vote
+tables with their own YES/NO/ABS control totals), commission-district geometry (no national source;
+Census publishes none), and local campaign finance (county-filed, image-only scans).
 
 **WO-17…27 are Round 3** — state depth, local beachhead, and new connection types. Full
 context, external-landscape verdicts (aggregators dead; OpenStates v3 GO; LegiScan

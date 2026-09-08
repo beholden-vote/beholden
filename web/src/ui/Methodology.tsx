@@ -25,8 +25,8 @@ import type { InfoPage } from "./chrome";
 /** Sections of this page, in order — the id is the in-page anchor a dossier links
  *  to (e.g. #methodology/key-votes scrolls here). */
 const SECTION_IDS = [
-  "dw-nominate", "key-votes", "co-voting", "donor-rollups", "state-donor-rollups",
-  "shared-donors", "sources",
+  "source-quality", "dw-nominate", "key-votes", "co-voting", "donor-rollups",
+  "state-donor-rollups", "shared-donors", "sources",
 ] as const;
 
 export function Methodology({ anchor, onOpenInfo }: {
@@ -53,6 +53,60 @@ export function Methodology({ anchor, onOpenInfo }: {
         data — no hand-picking, no per-member or per-party tuning. Each formula below
         is transcribed from the code that ships it, so any published figure is
         reproducible from the public record.
+      </p>
+
+      {/* ---- WO-28 credibility grades ---- */}
+      <h2 id="source-quality">Source quality grades</h2>
+      <p>
+        Records differ in how they reach us. A congressional roll call arrives as a
+        bulk data feed; a county commission's roll call may only exist inside a PDF
+        of the meeting minutes. Both are official, but we should not present them as
+        if we obtained them the same way — so every fact carries a grade describing
+        how it was obtained.
+      </p>
+      <dl className="kv">
+        <dt>A</dt>
+        <dd>
+          Official structured source — a bulk data feed, API, or a direct link to an
+          official filing. Read deterministically, with no model in the path.
+        </dd>
+        <dt>B</dt>
+        <dd>
+          Official document with machine-readable text. Parsed by fixed rules and
+          checked against a total the document itself states.
+        </dd>
+        <dt>C</dt>
+        <dd>
+          Official document whose text we recovered by OCR, then verified against the
+          document and reconciled against its own stated totals.
+        </dd>
+        <dt>D</dt>
+        <dd>
+          Derived or inferred — the fact is our reasoning over official records rather
+          than a transcription of them, such as a district boundary assembled from
+          precinct data, or a member's position taken from a vote the minutes record
+          only as unanimous.
+        </dd>
+      </dl>
+      <p>
+        <strong>A grade describes our method, never the official.</strong> A low grade
+        means the record was harder for us to read — it is not a finding about the
+        person, the office, or the locality. Records held to a lower standard are
+        never presented as equivalent to bulk official data, and equally, a county
+        that publishes scanned minutes is not thereby less legitimate than one that
+        publishes a data feed.
+      </p>
+      <p>
+        Grades are also not a way to publish doubtful numbers. Data that fails a
+        quality check — itemized amounts that do not sum to the total on the filing,
+        a vote whose named tally does not match its own count — is withheld entirely
+        and shown as an absence. It is never downgraded and published anyway. The
+        scale reflects how a record was obtained; correctness is not on the scale.
+      </p>
+      <p>
+        You can hide grades below a threshold under Layers · Source quality. The
+        default shows everything, and a hidden section always says that it is hidden
+        rather than quietly disappearing.
       </p>
 
       {/* ---- DW-NOMINATE ideology ---- */}

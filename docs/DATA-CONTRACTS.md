@@ -15,12 +15,33 @@ Every object served to the client embeds, at the section level:
     "source_url": "https://...",          // deep link to the official record
     "retrieved_at": "2026-07-02T09:14:00Z",
     "pipeline_version": "2026.27.1",     // git tag of ETL release
-    "methodology_id": "networth-band-v1" // nullable; links to /methodology#id
+    "methodology_id": "networth-band-v1", // nullable; links to /methodology#id
+    "grade": "A",                        // enum A|B|C|D — see §1.1
+    "grade_reason": "official_structured" // registered reason implying the grade
   }
 }
 ```
 
 Rule: **no provenance, no publish.** The dossier builder rejects sections missing this envelope.
+
+### 1.1 Credibility grades
+
+`grade` says how a fact was **obtained**; `methodology_id` says how it was **computed**. A DW-NOMINATE score is grade `A` (its inputs are bulk official records) *and* carries a methodology anchor (the number is ours).
+
+| Grade | Reason (registered enum) | Meaning |
+|---|---|---|
+| `A` | `official_structured` | Bulk feed, API, or a link to an official filing. Deterministic, no model in the path. |
+| `B` | `official_document_text` | Official document, born-digital text. Fixed-rule parse, verified, reconciled against a control total the document carries. |
+| `C` | `official_document_ocr` | Official document whose text was recovered by OCR, then anchor-verified and reconciled. |
+| `D` | `derived_geometry`, `inferred_from_roster`, `crowd_edited` | Derived or inferred — our reasoning over official inputs, not a transcription. |
+
+Rules:
+
+1. **A grade describes extraction method, never a failed validation.** Data that fails a quality gate is withheld and quarantined, *never* downgraded and published. A control-total mismatch means the numbers are wrong, not low-confidence — the fail-closed rule is unchanged by grading.
+2. **The pair is validated, not just the grade.** `grade` must equal the grade its `grade_reason` implies (`config.GRADE_REASONS`), so an envelope cannot claim `A` for an OCR'd fact.
+3. **A source may emit several grades.** Minutes are `B` for a printed roll call and `D` for a position inferred from a present roster. The source registry supplies the default; the builder takes a per-section override.
+4. **Ungraded is a publish failure**, treated exactly as a null `retrieved_at`.
+5. **Grades are presentation-neutral (Rule 0).** They must not correlate with party, and must never render as a verdict on an official or a locality. Grade symmetry is covered by the quarterly neutral-presentation audit.
 
 ---
 
@@ -376,9 +397,11 @@ Pin layer: `/pins/{layer}.json` — `[{ person_id, ocd_id, lat, lng (division ce
 
 ## 6. Source Registry (enum)
 
-`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
+`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `wikidata` · `wa_pdc` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
 
-Adding a source = adding an enum value + a methodology entry + a freshness SLA row in the coverage dashboard. No unregistered source may appear in a provenance envelope (enforced by dossier-builder validation).
+**Local sources are registered per locality** (WO-22): `sumner_county` · `hendersonville`. There is no national roster of local officials, so coverage, freshness and grade are only meaningful per government — one registry row, one coverage row, one SLA each. Local person identifiers are namespaced `local:<locality>` rather than enumerated in the `person_identifiers.id_scheme` CHECK, because no identifier authority exists below the state level.
+
+Adding a source = adding an enum value + a methodology entry + a freshness SLA row in the coverage dashboard + **a default `grade_reason` (§1.1)**. No unregistered source may appear in a provenance envelope, and no source may publish without a registered grade reason (both enforced by dossier-builder validation).
 
 ---
 
