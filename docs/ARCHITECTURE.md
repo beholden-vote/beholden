@@ -92,11 +92,40 @@ beholden/
 
 | Trigger | Add | Notes |
 |---|---|---|
-| Public API (P1) ships | **Neon or Supabase Postgres** (both have free tiers with pgvector) loaded from the same DuckDB models; thin read API on **Cloudflare Workers** (100k req/day free) | Contracts are already the API — the static JSON and the API serve identical documents. |
+| Public API (P1) ships | **Neon or Supabase Postgres** (both have free tiers with pgvector) loaded from the same DuckDB models; thin read API on **Cloudflare Workers** (100k req/day free), on its **own hostname** — see the constraint below | Contracts are already the API — the static JSON and the API serve identical documents. |
 | Semantic search demand | **Cloudflare Vectorize** or pgvector on the P1 Postgres | Embeddings already computed in pipeline. |
 | Actions cron too coarse / complex backfills | **Temporal Cloud** or self-hosted worker | Adapters already isolate sources; orchestration swaps cleanly. |
 | Traffic makes Pages file limits awkward | Move all dossiers to R2 behind the same domain | Path structure unchanged; clients never notice. |
 | Local officials (Phase 3) | Licensed feed adapter + `place`/`county` divisions | Schema already accepts arbitrary OCD depth. |
+
+### 5.1 The constraint: never put a Worker in front of `data.beholden.vote`
+
+This is the one scale-up move that looks obvious and is wrong, so it is written
+down rather than rediscovered.
+
+`data.beholden.vote` is a custom domain bound **directly** to the R2 bucket. There is
+no compute in that path, which is precisely why the site costs the same whether ten
+people or ten million arrive. Routing it through a Worker — to add auth, metering,
+per-request logic, anything — ends that property, for three compounding reasons:
+
+- **Workers bill cache hits.** A request served from the Worker's cache is charged at
+  the same per-request rate as one that runs the code. There is no "it's cached, so
+  it's free" tier.
+- **A map load is not one request.** A cold load fires ~10 JSON reads, a run of PMTiles
+  byte-range requests, and a tail of font `.pbf`s — call it 50–100 requests against the
+  data host per visitor. The free allowance of 100k requests/day is therefore exhausted
+  somewhere around **1,500 daily map loads**, which is a traffic level the current
+  architecture does not even notice.
+- **It converts traffic into spend.** Today a traffic spike costs nothing; behind a
+  Worker it is a bill, which makes the site's cost a function of how many people care
+  about it. For a civic transparency project that is exactly the wrong incentive, and
+  it hands anyone with a loop a denial-of-wallet lever.
+
+Anything needing compute — a read API, metered bulk downloads, keys, payments —
+belongs on a **separate hostname** that only that traffic touches. The free surface
+stays a bare bucket behind a CDN. Abuse control on the free surface belongs at zone
+level (rate-limiting rules, AI Crawl Control, `robots.txt` published as a bucket
+object by the build stage), all of which run before any billable compute.
 
 ## 6. Why this is still "bleeding edge"
 
