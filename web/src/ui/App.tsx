@@ -13,6 +13,7 @@ import { Avatar, EmptyNote, PartyChip } from "./bits";
 import { DossierView } from "./DossierView";
 import { Ballot } from "./Ballot";
 import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
+import { GradeFilterProvider, loadMinGrade, saveMinGrade, type Grade } from "./gradeFilter";
 import {
   parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
   parseMethodologyHash, methodologyHash,
@@ -160,6 +161,10 @@ export function App({ mapRef, handleRef }: {
   const [people, setPeople] = useState<PersonSearchRow[]>([]);   // name matches (WO-5)
   const [activeIdx, setActiveIdx] = useState(-1);                // keyboard nav across suggestions
   const [prefs, setPrefs] = useState<LayerPrefs>(loadLayerPrefs);
+  // WO-28 source-quality floor. Persisted like layer prefs; defaults to "D"
+  // (show everything) so grading informs trust without hiding records.
+  const [minGrade, setMinGrade] = useState<Grade>(loadMinGrade);
+  const changeMinGrade = (g: Grade) => { setMinGrade(g); saveMinGrade(g); };
   const layerVis = prefs.visible;
   const [info, setInfo] = useState<InfoState | null>(hashToInfo);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -434,7 +439,7 @@ export function App({ mapRef, handleRef }: {
   };
 
   return (
-    <>
+    <GradeFilterProvider value={minGrade}>
       <div className="topbar">
         <div className="brand">
           <span className="brand-name">Beholden</span>
@@ -536,12 +541,13 @@ export function App({ mapRef, handleRef }: {
       )}
 
       <LayerControl visible={layerVis} auto={prefs.mode === "auto"}
-                    onToggle={toggleLayer} onAuto={setAuto} />
+                    onToggle={toggleLayer} onAuto={setAuto}
+                    minGrade={minGrade} onMinGrade={changeMinGrade} />
       <Footer onOpen={openInfo} />
       {info && (
         <InfoOverlay page={info.page} anchor={info.anchor} onClose={closeInfo}
                      onOpenInfo={(p) => openInfo(p)} />
       )}
-    </>
+    </GradeFilterProvider>
   );
 }

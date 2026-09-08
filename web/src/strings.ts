@@ -107,5 +107,36 @@ export const STRINGS = {
   // Provenance
   sourceLabel: "Source",
   retrievedLabel: "retrieved",
+
+  // Credibility grades (WO-28) — DESCRIPTIVE OF METHOD, NEVER OF THE OFFICIAL.
+  // A grade says how Beholden obtained a fact, not how trustworthy the person
+  // is. Copy is identical for every official and every locality (Rule 0); a
+  // county whose records are scanned rather than exported must never read as
+  // though its officials were less legitimate. A failed quality gate is NOT a
+  // low grade — that data is withheld entirely and shows as an honest absence.
+  gradeFilterTitle: "Source quality",
+  gradeFilterHint:
+    "Every fact is graded by how it was obtained. Hiding a grade never hides a problem — records that fail a quality check are withheld entirely, not downgraded.",
+  gradeLabels: {
+    A: "Official structured source",
+    B: "Official document, machine-readable text",
+    C: "Official document, text recovered by OCR",
+    D: "Derived or inferred from official records",
+  } as Record<string, string>,
+  // Filter options are phrased as THRESHOLDS ("and above"), because picking a
+  // grade sets the weakest grade still shown — labelling them with the grade's
+  // own name would read as "show only B".
+  gradeFilterOptions: {
+    A: "Bulk official data only",
+    B: "Official documents and above",
+    C: "Include scanned documents",
+    D: "Show everything",
+  } as Record<string, string>,
+  gradeChipTitle: "Source quality grade",
+  // Shown IN PLACE OF a hidden section — the reader is always told something
+  // exists and why it is not rendered. A filtered dossier is never a silently
+  // shorter one.
+  gradeHiddenNote:
+    "Hidden by your source-quality filter — adjust it under Layers · Source quality.",
   provenanceTagline: "Every fact on this screen traces to an official source.",
 } as const;

@@ -7,6 +7,14 @@ export interface Provenance {
   retrieved_at: string;
   pipeline_version: string;
   methodology_id: string | null;
+  /** WO-28 credibility grade: how the fact was OBTAINED (methodology_id covers
+   *  how it was computed). "A" bulk official source … "D" derived or inferred.
+   *  Required by the pipeline validator; optional here only so a client pinned
+   *  to this major version keeps rendering feeds published before the grade
+   *  landed (schema changes are additive within a major version). */
+  grade?: "A" | "B" | "C" | "D";
+  /** Registered reason implying the grade, e.g. "official_document_ocr". */
+  grade_reason?: string;
 }
 
 export interface Pin {

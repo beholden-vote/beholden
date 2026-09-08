@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from beholden_etl import store
+from beholden_etl import config, store
 from beholden_etl.build import dossiers
 from beholden_etl.jobs import build, transform
 from beholden_etl.sources import legislators
@@ -2852,3 +2852,108 @@ def test_fetch_openstates_votes_crawls_and_per_state_failure_skips(tmp_path, mon
     assert doc["state"] == "tn" and record["id"] in doc["bills"]
     assert doc["created_since"] == "2025-01-01"      # current-biennium bound
     assert not (raw / "openstates" / "votes" / "wa.json").exists()
+
+
+# --- WO-28 credibility grades ----------------------------------------------
+# The scale exists so a dossier mixing a bulk API with an OCR'd scan does not
+# render as uniformly trustworthy. Its integrity rests on one boundary, asserted
+# below: a grade describes the extraction METHOD, never a failed validation.
+
+def _all_provenance(dossier: dict):
+    """Every provenance envelope in a dossier, at any nesting depth."""
+    found = []
+    def walk(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("provenance"), dict):
+                found.append(node["provenance"])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+    walk(dossier)
+    return found
+
+
+def test_every_published_section_carries_a_grade(slice_dirs):
+    """An ungraded section would render indistinguishably from a bulk-API one,
+    so the grade is required on every envelope — not just the section-level ones
+    the validator walks explicitly."""
+    files = list((slice_dirs / "data" / "dossiers").glob("*.json"))
+    assert files
+    seen = 0
+    for f in files:
+        for prov in _all_provenance(json.loads(f.read_text())):
+            assert prov["grade"] in config.GRADES, prov
+            assert prov["grade"] == config.GRADE_REASONS[prov["grade_reason"]], prov
+            seen += 1
+    assert seen > 0
+
+
+def test_ungraded_section_fails_validation(slice_dirs):
+    """Same treatment as a null retrieved_at: no grade, no publish."""
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    del d["identity"]["provenance"]["grade"]
+    with pytest.raises(dossiers.ProvenanceError, match="missing provenance"):
+        dossiers.validate(d)
+
+
+def test_grade_must_match_its_reason(slice_dirs):
+    """THE laundering test. A hand-written envelope cannot claim a strong grade
+    for a weak method — the pair is checked, not just the grade's membership in
+    the enum. Without this, 'grade A, extracted by OCR' would validate."""
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    d["identity"]["provenance"]["grade_reason"] = "official_document_ocr"   # implies C
+    with pytest.raises(dossiers.ProvenanceError, match="implies"):
+        dossiers.validate(d)
+
+
+def test_unregistered_grade_reason_fails_closed(slice_dirs):
+    d = _dossier_named(slice_dirs, "Jane Rep")
+    d["identity"]["provenance"]["grade_reason"] = "vibes"
+    with pytest.raises(dossiers.ProvenanceError, match="unregistered grade_reason"):
+        dossiers.validate(d)
+    with pytest.raises(ValueError, match="unregistered grade_reason"):
+        config.grade_for("vibes")
+
+
+def test_every_registered_reason_maps_to_a_real_grade():
+    """The reason registry is the single source of truth for the scale; a typo
+    here would publish a grade the client has no label or filter option for."""
+    for reason, grade in config.GRADE_REASONS.items():
+        assert grade in config.GRADES, reason
+
+
+def test_bulk_official_sources_are_grade_a(slice_dirs):
+    """congress.gov / voteview / FEC / OpenStates are deterministic bulk feeds
+    with no model in the extraction path — the top of the scale."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    assert jane["identity"]["provenance"]["grade"] == "A"
+    assert jane["ideology"]["provenance"]["grade"] == "A"
+    # A computed metric stays grade A: the grade describes how the underlying
+    # facts were OBTAINED; methodology_id is what says the number is ours.
+    assert jane["ideology"]["provenance"]["methodology_id"] == "dw-nominate"
+
+
+def test_wikidata_education_is_graded_crowd_edited(slice_dirs):
+    """The education block already shipped a verbatim credibility caveat; WO-28
+    makes that same judgement machine-readable so it can be filtered, not just
+    read. Grade D sits alongside the note, it does not replace it."""
+    jane = _dossier_named(slice_dirs, "Jane Rep")
+    edu = jane["identity"]["education"]
+    assert edu["provenance"]["grade"] == "D"
+    assert edu["provenance"]["grade_reason"] == "crowd_edited"
+    assert edu["credibility_note"]          # the human-readable caveat still renders
+
+
+def test_provenance_refuses_ungraded_unregistered_source():
+    """A source outside the registry has no default grade. Publishing it as
+    though it were bulk official data is exactly the mistake grading exists to
+    prevent, so build refuses rather than guessing."""
+    manifest = {"sources": {"mystery": {"retrieved_at": RETRIEVED_AT}}}
+    with pytest.raises(dossiers.ProvenanceError, match="not in the registry"):
+        build._provenance("mystery", "https://example.gov/", manifest)
+    # ...but an explicit, registered reason is enough to publish it honestly.
+    prov = build._provenance("mystery", "https://example.gov/", manifest,
+                             grade_reason="official_document_ocr")
+    assert prov["grade"] == "C"

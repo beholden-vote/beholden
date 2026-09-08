@@ -19,7 +19,7 @@ import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, pipeline_version
+from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
@@ -124,7 +124,8 @@ def _education_map(raw_dir: Path) -> dict[str, list[dict]]:
 
 
 def _provenance(source: str, source_url: str, manifest: dict,
-                methodology_id: str | None = None) -> dict:
+                methodology_id: str | None = None,
+                grade_reason: str | None = None) -> dict:
     """Provenance envelope for a section. FAILS CLOSED (rule #1): if the fetch
     manifest can't vouch for when `source` was retrieved, we refuse to invent a
     timestamp — a fabricated retrieved_at is worse than no publish.
@@ -134,16 +135,33 @@ def _provenance(source: str, source_url: str, manifest: dict,
     'donor-rollups'). It stays None for sections that are verbatim source facts
     with no Beholden-computed metric; a metric-bearing section points it at the
     matching /methodology anchor so "how is this computed?" is answerable from
-    the UI. The values here MUST match the anchor ids the methodology page ships."""
+    the UI. The values here MUST match the anchor ids the methodology page ships.
+
+    `grade_reason` (WO-28) overrides the source's default credibility reason for
+    THIS section — one source legitimately emits several grades (minutes are
+    grade B for a printed roll call, D for a position inferred from a present
+    roster). Omit it and the section inherits the source registry's default.
+
+    Note the division of labour with methodology_id: the grade says how the fact
+    was OBTAINED, methodology_id says how it was COMPUTED. A DW-NOMINATE score is
+    grade A — the underlying votes are bulk official records — and carries a
+    methodology anchor because the number itself is ours."""
     meta = manifest.get("sources", {}).get(source, {})
     retrieved_at = meta.get("retrieved_at")
     if not retrieved_at:
         raise dossiers.ProvenanceError(
             f"manifest has no retrieved_at for source '{source}' — refusing to "
             "fabricate freshness (no provenance, no publish)")
+    registered = SOURCES.get(source)
+    reason = grade_reason or (registered.grade_reason if registered else None)
+    if not reason:
+        raise dossiers.ProvenanceError(
+            f"source '{source}' is not in the registry and no grade_reason was "
+            "given — refusing to publish an ungraded fact (WO-28)")
     return {"source": source, "source_url": source_url,
             "retrieved_at": retrieved_at,
-            "pipeline_version": pipeline_version(), "methodology_id": methodology_id}
+            "pipeline_version": pipeline_version(), "methodology_id": methodology_id,
+            "grade": grade_for(reason), "grade_reason": reason}
 
 
 # WO-8: methodology anchor ids per computed metric. Each MUST match a section id

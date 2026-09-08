@@ -3,6 +3,8 @@
  *  methodology page). */
 import { lazy, Suspense } from "react";
 import { PARTY_COLORS, VACANT_FILL, type LayerId } from "../map";
+import { STRINGS } from "../strings";
+import { GRADES, type Grade } from "./gradeFilter";
 
 // WO-8: the methodology page's content loads only when an info overlay opens on
 // it (dynamic import keeps the formula copy out of the main bundle, matching the
@@ -61,11 +63,41 @@ function Legend({ showSplit }: { showSplit: boolean }) {
   );
 }
 
-export function LayerControl({ visible, auto, onToggle, onAuto }: {
+/** Source-quality filter (WO-28). Sits in the layer dock because it is the same
+ *  kind of control — what the reader chooses to see — and because the hidden-
+ *  section note points here by name.
+ *
+ *  Rule 0: the options are listed in fixed order with identical treatment, and
+ *  the copy describes OUR extraction method, never the official. Default is
+ *  "show all" — grading exists to inform trust, not to bury records. */
+function GradeFilter({ minGrade, onMinGrade }: {
+  minGrade: Grade; onMinGrade: (g: Grade) => void;
+}) {
+  return (
+    <div className="layer-group grade-filter">
+      <span className="layer-group-label">{STRINGS.gradeFilterTitle}</span>
+      {GRADES.map((g) => (
+        <label className="layer-row" key={g}>
+          <input type="radio" name="grade-filter" checked={minGrade === g}
+                 onChange={() => onMinGrade(g)} />
+          <span>
+            <span className="grade-chip grade-chip-inline">{g}</span>
+            {STRINGS.gradeFilterOptions[g]}
+          </span>
+        </label>
+      ))}
+      <span className="layer-ctl-hint">{STRINGS.gradeFilterHint}</span>
+    </div>
+  );
+}
+
+export function LayerControl({ visible, auto, onToggle, onAuto, minGrade, onMinGrade }: {
   visible: Record<LayerId, boolean>;
   auto: boolean;
   onToggle: (id: LayerId, v: boolean) => void;
   onAuto: (v: boolean) => void;
+  minGrade: Grade;
+  onMinGrade: (g: Grade) => void;
 }) {
   return (
     <div className="layer-ctl" role="group" aria-label="Map layers">
@@ -92,6 +124,7 @@ export function LayerControl({ visible, auto, onToggle, onAuto }: {
           )}
         </div>
       ))}
+      <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
       <Legend showSplit={!!visible.states} />
       <span className="layer-ctl-hint">
         {auto ? "State districts show as you zoom in." : "Manual — Auto by zoom is off."}
