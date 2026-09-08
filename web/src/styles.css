@@ -300,9 +300,15 @@
   padding: 3px 6px; white-space: nowrap;
 }
 .section-tags { display: inline-flex; align-items: center; gap: 6px; }
-.grade-chip-inline { margin-right: 6px; }
 .grade-filter { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 8px; }
-.grade-filter .layer-row span { display: inline-flex; align-items: center; }
+.grade-row { display: flex; align-items: center; gap: 8px; }
+.grade-row .layer-group-label { margin: 0; white-space: nowrap; }
+.grade-select {
+  flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink); background: var(--surf2); border: 1px solid var(--line-2);
+  border-radius: 0; padding: 3px 6px;
+}
+.grade-select:focus-visible { outline: 2px solid var(--sig); outline-offset: 1px; }
 .retrieved { color: var(--dim); font-family: var(--font-mono); font-size: 10px; margin: 10px 0 0; text-transform: uppercase; letter-spacing: 0.04em; }
 
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; margin: 0; font-size: 13px; }

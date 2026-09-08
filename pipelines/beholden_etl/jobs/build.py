@@ -223,6 +223,34 @@ STATE_CHAMBERS = {"upper", "lower"}
 # web/src/lib/data.ts:PIN_FEEDS and web/src/map.ts:LAYERS — a layer served here
 # but absent there is data the client never fetches, and the reverse is a 404.
 SERVED_LAYERS = ("cd", "states", "sldu", "sldl", "county", "place")
+# Layers whose polygons are colored by party. LOCAL LAYERS ARE DELIBERATELY
+# EXCLUDED: neither local source publishes a party (every holder is "U", not
+# published), so a fill would either invent one or paint the one covered county
+# in the "Nonpartisan" legend color — asserting a fact about the office that the
+# county never stated. Local counties stay outline-only; the panel does the work.
+STYLED_LAYERS = ("cd", "states", "sldu", "sldl")
+
+
+def _tile_ocd(ocd_id: str) -> str:
+    """The ocd_id of the POLYGON a holder should be found under.
+
+    A pin is only reachable if its ocd_id byte-matches a key stamped on a tile
+    (the tiles are the point-in-polygon index — arch §1.8). Local seats live
+    BELOW the finest polygon we ship: a commissioner's division is
+    .../county:sumner/council_district:3, but the county tile carries
+    .../county:sumner. Keying the pin on the seat means clicking Sumner County
+    finds nothing at all, which is exactly how this shipped and broke.
+
+    So a local pin is keyed on its county/place ancestor until that seat's own
+    geometry exists (commission districts and wards have no national source; see
+    the local expansion plan). The holder keeps their real division on the
+    dossier — office.ocd_id and the office display still name District 3 — this
+    only decides which polygon they hang off of.
+    """
+    for seat in ("/council_district:", "/ward:"):
+        if seat in ocd_id:
+            return ocd_id.split(seat)[0]
+    return ocd_id
 
 
 def _state_from_ocd(ocd_id: str) -> str | None:
@@ -1105,13 +1133,18 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     # shows WHERE a government exists without asserting a party it never stated.
     stylefeeds.publish({"cd": cd_feed, "states": states_feed,
                         **{layer: feed(by_layer[layer])
-                           for layer in SERVED_LAYERS if layer not in ("cd", "states")}},
+                           for layer in STYLED_LAYERS if layer not in ("cd", "states")},
+                        # Explicitly empty rather than absent: this overwrites any
+                        # previously published local feed instead of leaving a stale
+                        # one served from the CDN.
+                        **{layer: {} for layer in SERVED_LAYERS
+                           if layer not in STYLED_LAYERS}},
                        out / "stylefeeds")
 
     def pins(rows):
         # Display fields the map UI needs for hover/stack views, so the client
         # never fans out dossier fetches just to label a polygon (contract §3).
-        return [{"person_id": h["person_id"], "ocd_id": h["ocd_id"],
+        return [{"person_id": h["person_id"], "ocd_id": _tile_ocd(h["ocd_id"]),
                  "full_name": h["full_name"],
                  "office": _office_display(h["chamber"], h["ocd_id"]),
                  "chamber": h["chamber"], "vacant": bool(h["is_vacant_marker"]),

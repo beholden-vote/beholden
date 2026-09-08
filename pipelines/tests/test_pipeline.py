@@ -3108,9 +3108,7 @@ def test_local_officials_get_pins_and_a_stylefeed(local_dirs):
     place = json.loads((local_dirs / "data" / "pins" / "place.json").read_text())
     assert len(county) == 24
     assert len(place) == 13                     # 1 mayor + 6 wards x 2 aldermen
-    feed = json.loads((local_dirs / "data" / "stylefeeds" / "county.json").read_text())
-    assert len(feed) == 24
-    d3 = next(p for p in county if p["ocd_id"].endswith("council_district:3"))
+    d3 = next(p for p in county if p["office"].endswith("District 3"))
     assert d3["office"] == "Sumner County Commission · District 3"
     mayor = next(p for p in place if p["chamber"] is None)
     assert mayor["office"] == "Mayor of Hendersonville"
@@ -3169,3 +3167,53 @@ def test_served_layers_all_publish_pins(local_dirs):
     reverse is a 404 on every page load."""
     for layer in build.SERVED_LAYERS:
         assert (local_dirs / "data" / "pins" / f"{layer}.json").exists(), layer
+
+
+def test_every_pin_is_keyed_to_a_polygon_we_ship(local_dirs):
+    """A pin is only reachable if its ocd_id byte-matches a key stamped on a
+    tile — the tiles ARE the point-in-polygon index. This shipped broken: local
+    pins were keyed on the commission district (.../county:sumner/
+    council_district:3) while the county tile carries .../county:sumner, so
+    clicking Sumner County found nobody. Counting pins passed; nothing checked
+    they were findable.
+
+    The levels we stamp are states/cd/sldu/sldl/county — none of them has a seat
+    segment below it, so no published pin may carry one."""
+    stamper = _load_stamper()
+    stamped_levels = {"states", "cd", "sldu", "sldl", "county"}
+    assert stamped_levels <= set(build.SERVED_LAYERS) | {"states"}
+    for layer in build.SERVED_LAYERS:
+        rows = json.loads((local_dirs / "data" / "pins" / f"{layer}.json").read_text())
+        for pin in rows:
+            for seat in ("/council_district:", "/ward:"):
+                assert seat not in pin["ocd_id"], (
+                    f"{layer} pin {pin['full_name']} is keyed on a seat "
+                    f"({pin['ocd_id']}) that no tile carries — it can never be "
+                    f"clicked")
+    # ...and the county key is exactly what the tile stamper produces.
+    county = json.loads((local_dirs / "data" / "pins" / "county.json").read_text())
+    expected = f"ocd-division/country:us/state:tn/county:{stamper.county_slug('Sumner')}"
+    assert {p["ocd_id"] for p in county} == {expected}
+    assert len(county) == 24            # all 24 commissioners hang off the county
+
+
+def test_all_commissioners_reachable_from_one_county_polygon(local_dirs):
+    """Until commission-district geometry exists, the county polygon is the
+    finest boundary we ship, so clicking it must surface the whole delegation
+    rather than an arbitrary one of them. Each still names its own seat."""
+    county = json.loads((local_dirs / "data" / "pins" / "county.json").read_text())
+    seats = sorted(int(p["office"].rsplit("District ", 1)[1]) for p in county)
+    assert seats == list(range(1, 25))
+    # The dossier keeps the real division even though the pin is keyed higher.
+    pid = county[0]["person_id"]
+    d = json.loads((local_dirs / "data" / "dossiers" / f"{pid}.json").read_text())
+    assert "/council_district:" in d["identity"]["office"]["ocd_id"]
+
+
+def test_local_layers_publish_no_party_fill(local_dirs):
+    """Neither local source publishes a party, so no local polygon may be
+    colored by one. An empty feed (not an absent file) so a stale feed from an
+    earlier release is overwritten rather than left served by the CDN."""
+    for layer in ("county", "place"):
+        feed = json.loads((local_dirs / "data" / "stylefeeds" / f"{layer}.json").read_text())
+        assert feed == {}, layer

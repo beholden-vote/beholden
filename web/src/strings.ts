@@ -115,8 +115,11 @@ export const STRINGS = {
   // though its officials were less legitimate. A failed quality gate is NOT a
   // low grade — that data is withheld entirely and shows as an honest absence.
   gradeFilterTitle: "Source quality",
+  // Kept short because it sits in the floating map dock. The full scale is on
+  // /methodology#source-quality. The half that must never be cut is the second
+  // clause: without it, a filter reads as a way to make problems disappear.
   gradeFilterHint:
-    "Every fact is graded by how it was obtained. Hiding a grade never hides a problem — records that fail a quality check are withheld entirely, not downgraded.",
+    "Graded by how it was obtained. Records failing a quality check are withheld, never downgraded.",
   gradeLabels: {
     A: "Official structured source",
     B: "Official document, machine-readable text",

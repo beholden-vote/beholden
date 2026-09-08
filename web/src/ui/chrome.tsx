@@ -58,29 +58,32 @@ function Legend({ showSplit }: { showSplit: boolean }) {
   );
 }
 
-/** Source-quality filter (WO-28). Sits in the layer dock because it is the same
- *  kind of control — what the reader chooses to see — and because the hidden-
- *  section note points here by name.
+/** Source-quality filter (WO-28).
  *
- *  Rule 0: the options are listed in fixed order with identical treatment, and
- *  the copy describes OUR extraction method, never the official. Default is
- *  "show all" — grading exists to inform trust, not to bury records. */
+ *  A native <select>, not a radio list: four radios plus an explanatory
+ *  paragraph nearly doubled the height of the layer dock, and the dock floats
+ *  over the map — every row it grows is map the reader can't see. The full
+ *  explanation of the scale lives on the methodology page; what has to stay
+ *  visible here is the one line that stops the filter being misread as a way to
+ *  hide problems.
+ *
+ *  Rule 0: options are fixed-order with identical treatment, and every label
+ *  describes OUR extraction method, never the official. Default shows all.
+ */
 function GradeFilter({ minGrade, onMinGrade }: {
   minGrade: Grade; onMinGrade: (g: Grade) => void;
 }) {
   return (
     <div className="layer-group grade-filter">
-      <span className="layer-group-label">{STRINGS.gradeFilterTitle}</span>
-      {GRADES.map((g) => (
-        <label className="layer-row" key={g}>
-          <input type="radio" name="grade-filter" checked={minGrade === g}
-                 onChange={() => onMinGrade(g)} />
-          <span>
-            <span className="grade-chip grade-chip-inline">{g}</span>
-            {STRINGS.gradeFilterOptions[g]}
-          </span>
-        </label>
-      ))}
+      <label className="grade-row">
+        <span className="layer-group-label">{STRINGS.gradeFilterTitle}</span>
+        <select className="grade-select" value={minGrade}
+                onChange={(e) => onMinGrade(e.target.value as Grade)}>
+          {GRADES.map((g) => (
+            <option key={g} value={g}>{g} · {STRINGS.gradeFilterOptions[g]}</option>
+          ))}
+        </select>
+      </label>
       <span className="layer-ctl-hint">{STRINGS.gradeFilterHint}</span>
     </div>
   );
