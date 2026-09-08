@@ -3217,3 +3217,80 @@ def test_local_layers_publish_no_party_fill(local_dirs):
     for layer in ("county", "place"):
         feed = json.loads((local_dirs / "data" / "stylefeeds" / f"{layer}.json").read_text())
         assert feed == {}, layer
+
+
+# --- WO-30: the redistribution gate on the paid bulk artifact -----------------
+def _prov(source):
+    """A minimally valid provenance envelope naming `source`."""
+    return {"provenance": {"source": source, "source_url": "https://x", "grade": "A",
+                           "retrieved_at": "2026-09-08T00:00:00+00:00",
+                           "pipeline_version": "t", "grade_reason": "official_structured"}}
+
+
+def test_bulk_gate_admits_only_fully_redistributable_documents():
+    """The money/licensing path. A document enters the paid artifact only when
+    EVERY source it cites is marked redistributable in the registry — one
+    undetermined source anywhere in the document withholds the whole thing.
+
+    Selling access to a fact is a different act from publishing it for free, and
+    TRUSTED-EXTRACTION §8 says a source with incompatible terms does not ship.
+    So the gate is AND across sources, not OR, and an unregistered source counts
+    as a refusal rather than an unknown worth risking."""
+    from beholden_etl.jobs import bulk
+
+    assert bulk.is_redistributable({"identity": _prov("congress.gov")})
+    # federal money + roster together, both US Government works
+    assert bulk.is_redistributable({"identity": _prov("congress.gov"),
+                                    "money": _prov("fec")})
+    # one undetermined source anywhere withholds the document
+    assert not bulk.is_redistributable({"identity": _prov("congress.gov"),
+                                        "ideology": _prov("voteview")})
+    assert not bulk.is_redistributable({"identity": _prov("openstates")})
+    # a source nobody registered has promised nothing
+    assert not bulk.is_redistributable({"identity": _prov("some_scraped_site")})
+    # a document citing nothing proves nothing
+    assert not bulk.is_redistributable({"identity": {"name": "x"}})
+
+
+def test_bulk_gate_finds_provenance_at_any_depth():
+    """The gate walks the document rather than reading known section names, so a
+    section added later cannot smuggle an unlicensed source past it by virtue of
+    being new. Here the offending envelope is nested two levels down inside a
+    list — exactly where money.disclosures.filings lives."""
+    from beholden_etl.jobs import bulk
+
+    doc = {"identity": _prov("congress.gov"),
+           "money": {"disclosures": {"filings": [_prov("openstates")]}}}
+    assert not bulk.is_redistributable(doc)
+
+
+def test_bulk_manifest_digests_match_the_bytes_actually_written(tmp_path):
+    """A buyer decides whether to re-pull by comparing the manifest's sha256, so
+    a manifest that does not describe the bytes on disk is worse than no
+    manifest. Also pins byte-for-byte reproducibility: same inputs, same digest,
+    so an unchanged night does not look like a new release."""
+    import hashlib
+    from beholden_etl.jobs import bulk
+
+    data = tmp_path / "data"
+    (data / "dossiers").mkdir(parents=True)
+    (data / "graph" / "neighborhood").mkdir(parents=True)
+    for i in range(3):
+        (data / "dossiers" / f"p{i}.json").write_text(
+            json.dumps({"person_id": f"p{i}", "identity": _prov("congress.gov")}))
+    # withheld: cites an undetermined source
+    (data / "dossiers" / "p9.json").write_text(
+        json.dumps({"person_id": "p9", "identity": _prov("openstates")}))
+
+    manifest = bulk.run(data_dir=data, out_dir=tmp_path / "bulk", dry_run=True)
+    art = next(a for a in manifest["artifacts"] if a["key"].endswith("dossiers.ndjson.gz"))
+    blob = (tmp_path / "bulk" / "dossiers.ndjson.gz").read_bytes()
+
+    assert art["count"] == 3                       # p9 withheld by the gate
+    assert art["bytes"] == len(blob)
+    assert art["sha256"] == hashlib.sha256(blob).hexdigest()
+    assert "openstates" not in manifest["redistributable_sources"]
+
+    # Deterministic: a second identical run reproduces the digest exactly.
+    again = bulk.run(data_dir=data, out_dir=tmp_path / "bulk2", dry_run=True)
+    assert again["artifacts"][0]["sha256"] == art["sha256"]

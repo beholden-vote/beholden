@@ -70,6 +70,13 @@ jobs:
         run: make build   # dossiers/ stylefeeds/ pins/ coverage.json
       - name: Publish
         run: make publish # serving JSON -> R2 bucket root; raw lake -> R2 /raw/{date}/
+      - name: Build bulk artifact (WO-30)
+        # AFTER publish, never before: the artifact must not be able to describe
+        # data that failed to land. No-ops into a dry run when R2_BULK_BUCKET is
+        # unset, so this step is inert until the private bucket exists.
+        env:
+          R2_BULK_BUCKET: ${{ vars.R2_BULK_BUCKET }}
+        run: make bulk
       - name: Tag pipeline version
         # Best-effort bookkeeping only — every published fact already carries
         # PIPELINE_VERSION in its provenance envelope regardless of this tag.

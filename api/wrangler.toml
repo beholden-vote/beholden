@@ -1,0 +1,28 @@
+# api.beholden.vote — the ONLY Worker in Beholden, and deliberately deletable.
+#
+# It must never be routed at data.beholden.vote. That host is a custom domain
+# bound straight to the R2 bucket with no compute in the path, which is the
+# entire reason traffic there is free; Workers bill cache hits, and a cold map
+# load is 50-100 requests. See docs/ARCHITECTURE.md §5.1.
+name = "beholden-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+# NOT a secret, and it cannot be one: x402 prints the payment address inside
+# every 402 response body as accepts[].payTo. Putting it in `wrangler secret`
+# would imply a confidentiality this value can never have.
+PAY_TO = "0x0000000000000000000000000000000000000000"   # TODO: real wallet before deploy
+FACILITATOR = "https://x402.org/facilitator"
+NETWORK = "base-sepolia"                                 # TODO: "base" for real money
+
+[[r2_buckets]]
+binding = "BULK"
+# A bucket with NO custom domain: the Worker is the only route to it. A prefix
+# inside the public `beholden` bucket would be one path change away from giving
+# the product away.
+bucket_name = "beholden-private"
+
+[[routes]]
+pattern = "api.beholden.vote"
+custom_domain = true

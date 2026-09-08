@@ -122,6 +122,17 @@ Remaining for this locality: Sumner's roll-call votes (its minutes carry named e
 tables with their own YES/NO/ABS control totals), commission-district geometry (no national source;
 Census publishes none), and local campaign finance (county-filed, image-only scans).
 
+**WO-30 (metered bulk access) is open and deliberately not merged.** A separate hostname,
+`api.beholden.vote`, sells the bulk artifact via HTTP 402 / x402 while every fact stays free one
+object at a time at `data.beholden.vote` — it sells packaging, never facts. The architectural
+constraint it exists inside is now written down as [`ARCHITECTURE.md`](../ARCHITECTURE.md) §5.1: a
+Worker must never front the data host, because Workers bill cache hits and a cold map load is
+50–100 requests. What blocks the merge is not code but licensing: `redistributable` on each source
+defaults to `False`, and outside the unambiguous US Government works nothing has a recorded
+determination — so the artifact is currently **empty by design**. OpenStates is the decisive one
+(~7,400 of ~7,928 dossiers). See [`WO-30`](WO-30-metered-bulk-api.md) and
+[`DATA-LICENSE.md`](../DATA-LICENSE.md).
+
 **WO-17…27 are Round 3** — state depth, local beachhead, and new connection types. Full
 context, external-landscape verdicts (aggregators dead; OpenStates v3 GO; LegiScan
 licensing-risky), locked user decisions, and per-WO scope live in
