@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dossier, Pin, StackEntry } from "../types";
 import { DEFAULT_VISIBLE } from "../map";
-import type { BeholdenMap, RawStackHit, LayerId, LayerMode } from "../map";
+import type { BeholdenMap, RawStackHit, LayerId, LayerMode, DivisionProps } from "../map";
 import {
   loadDossier, loadPins, loadPeopleIndex, ocdShortLabel,
   type PinIndex, type PersonSearchRow,
@@ -12,9 +12,11 @@ import { geocode, geolocate, suggest, type Place } from "../lib/lookup";
 import { Avatar, EmptyNote, PartyChip } from "./bits";
 import { DossierView } from "./DossierView";
 import { Ballot } from "./Ballot";
-import { Footer, InfoOverlay, LayerControl, type InfoPage } from "./chrome";
+import { Footer, InfoOverlay, LayerControl, LevelToast, type InfoPage } from "./chrome";
 import { GradeFilterProvider, loadMinGrade, saveMinGrade, type Grade } from "./gradeFilter";
-import { LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS } from "../lib/levels";
+import {
+  LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS, GATES, gateForZoom, type Gate,
+} from "../lib/levels";
 import {
   parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
   parseMethodologyHash, methodologyHash,
@@ -24,6 +26,10 @@ import {
 // Federal first, then state chambers, then local (county) — the same order for
 // every point on the map.
 
+
+/** How long the "you crossed into a new level" marker stays up. Long enough to
+ *  read four words, short enough not to sit over the map you just zoomed into. */
+const LEVEL_TOAST_MS = 2400;
 
 const LAYER_PREFS_KEY = "beholden:layers";
 const LAYER_PREFS_VERSION = 2;
@@ -83,6 +89,69 @@ function layerOfOcd(ocdId: string): LayerId | null {
 
 export interface AppHandle {
   onMapSelect: (hits: RawStackHit[], lngLat: { lng: number; lat: number }) => void;
+  onZoomLevel: (zoom: number) => void;
+}
+
+/** A human name for the division you clicked, built only from what the tile
+ *  actually carries (spike/stamp_ocd_ids.py §feature_props).
+ *
+ *  States and counties ship a real `name`. Districts do not and never will —
+ *  a congressional district has no name, only a number — so theirs is composed
+ *  from `state` + `district_num`, which is formatting, not invention. Nothing
+ *  here reaches for a fact the tile doesn't hold: no population, no area, no
+ *  demographics. Those would need a source, and an unsourced fact doesn't ship.
+ */
+function divisionName(layer: LayerId, props: DivisionProps, ocdId: string): string {
+  const st = props.state ?? /state:(\w\w)/.exec(ocdId)?.[1]?.toUpperCase() ?? "";
+  const n = props.district_num;
+  if (layer === "states") return props.name ?? st;
+  if (layer === "cd") {
+    if (props.at_large) return `${st} at-large congressional district`;
+    return n ? `${st}-${n} congressional district` : "Congressional district";
+  }
+  if (layer === "sldu") return n ? `${st} Senate district ${n}` : `${st} Senate district`;
+  if (layer === "sldl") return n ? `${st} House district ${n}` : `${st} House district`;
+  if (layer === "county") {
+    // TIGER ships the bare name ("Sumner"); the OCD path knows whether this
+    // state calls them counties, parishes or boroughs.
+    const kind = /\/(county|parish|borough):/.exec(ocdId)?.[1] ?? "county";
+    const word = kind.charAt(0).toUpperCase() + kind.slice(1);
+    return props.name ? `${props.name} ${word}` : ocdShortLabel(ocdId);
+  }
+  return ocdShortLabel(ocdId);
+}
+
+/** The area you clicked, above the people who represent it.
+ *
+ *  Answers "what is this place?" before "who runs it?" — clicking a polygon is
+ *  a question about a place, and the panel used to answer only the second half.
+ *  The meta line is deliberately thin: identifiers we publish (FIPS/GEOID, the
+ *  OCD id) plus counts derived from our own pins. Everything on it is either a
+ *  tile attribute or arithmetic over data already on screen.
+ */
+function DivisionCard({ entry }: { entry: StackEntry }) {
+  const name = divisionName(entry.layer, entry.props ?? {}, entry.ocdId);
+  const geoid = entry.props?.geoid;
+  const seats = entry.pins.length;
+  const vacant = entry.pins.filter((p) => p.vacant).length;
+  // No party breakdown here on purpose: every row below already carries its own
+  // party chip, and the one code that would need explaining ("U" — the source
+  // publishes no party, which most local governments don't) reads as a party
+  // rather than an absence. Seats and vacancies are counts; parties are chips.
+  return (
+    <div className="division-card">
+      <h3 className="division-name">{name}</h3>
+      <p className="division-meta mono">
+        <span>{LEVEL_TITLES[entry.layer] ?? entry.layer}</span>
+        {geoid && <span title="Census GEOID / FIPS code">FIPS {geoid}</span>}
+        <span>{seats === 1 ? "1 seat" : `${seats} seats`}</span>
+        {vacant > 0 && <span className="division-vacant">{vacant} vacant</span>}
+      </p>
+      <p className="division-ocd mono" title="Open Civic Data division identifier">
+        {entry.ocdId}
+      </p>
+    </div>
+  );
 }
 
 /** One collapsible level section (Federal / State) in the representation stack.
@@ -105,10 +174,7 @@ function StackSection({ level, entries, onOpen }: {
       </button>
       {open && entries.map((entry) => (
         <div className="stack-level" key={`${entry.layer}:${entry.ocdId}`}>
-          <h3>
-            {LEVEL_TITLES[entry.layer] ?? entry.layer}
-            <span className="stack-div">{ocdShortLabel(entry.ocdId)}</span>
-          </h3>
+          <DivisionCard entry={entry} />
           {entry.pins.length === 0 ? (
             <EmptyNote>
               {entry.layer === "sldu" || entry.layer === "sldl"
@@ -121,8 +187,17 @@ function StackSection({ level, entries, onOpen }: {
             entry.pins.map((pin) => (
               <button className="person-row" key={pin.person_id} onClick={() => onOpen(pin)}>
                 <Avatar url={pin.photo_url} name={pin.full_name ?? "?"} size={40} />
-                <span className="person-name">
-                  {pin.vacant ? "Vacant seat" : pin.full_name ?? "View profile"}
+                {/* Name over office. The office line matters most at the local
+                    level, where "Mayor of Hendersonville" or "Sumner County
+                    Commission · District 3" is the whole reason the row is
+                    here — a bare name tells you nothing about what they run.
+                    The pipeline has always published it; the row just never
+                    showed it. */}
+                <span className="person-id-cell">
+                  <span className="person-name">
+                    {pin.vacant ? "Vacant seat" : pin.full_name ?? "View profile"}
+                  </span>
+                  {pin.office && <span className="person-office">{pin.office}</span>}
                 </span>
                 <PartyChip code={pin.party} />
                 <span className="person-go">→</span>
@@ -153,6 +228,10 @@ export function App({ mapRef, handleRef }: {
   const changeMinGrade = (g: Grade) => { setMinGrade(g); saveMinGrade(g); };
   const layerVis = prefs.visible;
   const [info, setInfo] = useState<InfoState | null>(hashToInfo);
+  // Level of government the current zoom is showing, and the transient marker
+  // shown when we cross into it.
+  const [gate, setGate] = useState<Gate>(GATES[0]);
+  const [toast, setToast] = useState<Gate | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<number | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
@@ -203,7 +282,10 @@ export function App({ mapRef, handleRef }: {
 
   const entriesFromHits = useCallback((hits: RawStackHit[]): StackEntry[] =>
     hits
-      .map((h) => ({ layer: h.layer, ocdId: h.ocdId, pins: pins?.get(h.layer)?.get(h.ocdId) ?? [] }))
+      .map((h) => ({
+        layer: h.layer, ocdId: h.ocdId, props: h.props,
+        pins: pins?.get(h.layer)?.get(h.ocdId) ?? [],
+      }))
       .sort((a, b) => (LEVEL_ORDER[a.layer] ?? 9) - (LEVEL_ORDER[b.layer] ?? 9)),
   [pins]);
 
@@ -216,7 +298,26 @@ export function App({ mapRef, handleRef }: {
     else setPanel({ kind: "stack", entries });
   }, [entriesFromHits, openDossier]);
 
-  useEffect(() => { handleRef.current = { onMapSelect }; }, [onMapSelect, handleRef]);
+  // Which level of government the current zoom is showing. The map reports raw
+  // zoom on every frame; we keep only the GATE, so state updates happen on the
+  // handful of crossings rather than on every wheel tick.
+  const onZoomLevel = useCallback((zoom: number) => {
+    const next = gateForZoom(zoom);
+    setGate((prev) => (prev.id === next.id ? prev : next));
+  }, []);
+
+  useEffect(() => { handleRef.current = { onMapSelect, onZoomLevel }; },
+    [onMapSelect, onZoomLevel, handleRef]);
+
+  // Announce a crossing, then let it go. Skips the first render: arriving at
+  // "Federal" is the starting state, not a transition worth interrupting for.
+  const firstGate = useRef(true);
+  useEffect(() => {
+    if (firstGate.current) { firstGate.current = false; return; }
+    setToast(gate);
+    const t = window.setTimeout(() => setToast(null), LEVEL_TOAST_MS);
+    return () => window.clearTimeout(t);
+  }, [gate]);
 
   // Open a division's representation from a #/d/{ocd_id} deep-link. Zero-server:
   // we resolve the division's pins straight from the pin index (no coordinate /
@@ -526,9 +627,11 @@ export function App({ mapRef, handleRef }: {
         </aside>
       )}
 
+      <LevelToast gate={toast} />
       <LayerControl visible={layerVis} auto={prefs.mode === "auto"}
                     onToggle={toggleLayer} onAuto={setAuto}
-                    minGrade={minGrade} onMinGrade={changeMinGrade} />
+                    minGrade={minGrade} onMinGrade={changeMinGrade}
+                    activeGate={gate.id} />
       <Footer onOpen={openInfo} />
       {info && (
         <InfoOverlay page={info.page} anchor={info.anchor} onClose={closeInfo}

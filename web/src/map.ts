@@ -10,6 +10,9 @@ import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
+import type { DivisionProps } from "./types";
+
+export type { DivisionProps };
 
 const VINTAGE = "2025";
 
@@ -136,9 +139,13 @@ function applyFeed(map: maplibregl.Map, source: string, sourceLayer: string, fee
   }
 }
 
-/** What the UI receives on click: rendered divisions under the point, top-first. */
-export interface RawStackHit { layer: LayerId; ocdId: string }
+/** What the UI receives on click: rendered divisions under the point, top-first.
+ *  `props` is the clicked polygon's own tile attributes, so the panel can say
+ *  WHERE you clicked and not only who represents it. */
+export interface RawStackHit { layer: LayerId; ocdId: string; props: DivisionProps }
 export type SelectHandler = (hits: RawStackHit[], lngLat: { lng: number; lat: number }) => void;
+/** Fired when zooming crosses into a different level of government. */
+export type LevelHandler = (zoom: number) => void;
 
 export interface BeholdenMap {
   map: maplibregl.Map;
@@ -156,7 +163,8 @@ export interface BeholdenMap {
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
 }
 
-export function initMap(container: HTMLElement, onSelect: SelectHandler): BeholdenMap {
+export function initMap(container: HTMLElement, onSelect: SelectHandler,
+                        onZoomLevel?: LevelHandler): BeholdenMap {
   const map = new maplibregl.Map({
     container,
     style: { version: 8, sources: {},
@@ -170,6 +178,15 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
     attributionControl: { compact: true },
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+
+  // Report zoom so the UI can name the level of government now on screen. Fires
+  // on every zoom frame; the UI derives the gate and ignores anything that
+  // doesn't change it, which keeps the "you crossed into State" announcement
+  // tied to the crossing rather than to the scroll wheel.
+  if (onZoomLevel) {
+    map.on("zoom", () => onZoomLevel(map.getZoom()));
+    map.once("load", () => onZoomLevel(map.getZoom()));
+  }
 
   // Per-layer visibility. Hidden layers also drop out of hover/click hit-testing
   // (queryRenderedFeatures ignores visibility:none), so toggling a level off
@@ -394,7 +411,10 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler): Behold
       const layer = f.layer.id.replace(/-fill$/, "") as LayerId;
       if (f.id == null || seen.has(layer)) continue;   // one hit per level
       seen.add(layer);
-      hits.push({ layer, ocdId: String(f.id) });
+      // The polygon's own attributes travel with the hit so the panel can name
+      // the division ("Sumner County", "TN-5") rather than only the officials
+      // standing in it. Tile properties, not a lookup — no extra request.
+      hits.push({ layer, ocdId: String(f.id), props: (f.properties ?? {}) as DivisionProps });
       const ref = { source: f.source, sourceLayer: f.sourceLayer!, id: String(f.id) };
       map.setFeatureState(ref, { selected: true });
       selected.push(ref);
