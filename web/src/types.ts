@@ -17,6 +17,19 @@ export interface Provenance {
   grade_reason?: string;
 }
 
+/** Tile-contract properties on a division polygon (data-contracts v1 §5, emitted
+ *  by spike/stamp_ocd_ids.py §feature_props). Which keys are present depends on
+ *  the level: states and counties carry a real `name`; districts carry `state` +
+ *  `district_num` instead, because a congressional district has no name. */
+export interface DivisionProps {
+  name?: string;
+  state?: string;
+  geoid?: string;
+  district_num?: string;
+  at_large?: boolean;
+  chamber?: string;
+}
+
 export interface Pin {
   person_id: string;
   ocd_id: string;
@@ -174,4 +187,8 @@ export interface StackEntry {
   layer: "states" | "cd" | "sldu" | "sldl" | "county";
   ocdId: string;
   pins: Pin[];
+  /** Tile attributes of the clicked polygon (name / geoid / district_num).
+   *  Absent when the entry came from a #/d/ deep link rather than a click —
+   *  there is no polygon in that path, so the panel falls back to the ocd_id. */
+  props?: DivisionProps;
 }

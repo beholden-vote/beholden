@@ -21,6 +21,7 @@ const handleRef: { current: AppHandle | null } = { current: null };
 mapRef.current = initMap(
   document.getElementById("root")!,
   (hits: RawStackHit[], lngLat) => handleRef.current?.onMapSelect(hits, lngLat),
+  (zoom: number) => handleRef.current?.onZoomLevel(zoom),
 );
 
 createRoot(document.getElementById("ui")!).render(

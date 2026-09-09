@@ -1,13 +1,18 @@
 /** Map chrome: the layer control, the footer, and the info overlays
  *  (why Beholden exists, privacy, the source registry, and — WO-8 — the public
  *  methodology page). */
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { PARTY_COLORS, VACANT_FILL, type LayerId } from "../map";
 import { STRINGS } from "../strings";
 import { GRADES, type Grade } from "./gradeFilter";
 // Layers sorted by level of government — the axis users actually think in.
 // Shared with the stack panel so the two can never disagree (lib/levels.ts).
-import { PANEL_SECTIONS as LEVEL_GROUPS } from "../lib/levels";
+import { GATES, PANEL_SECTIONS as LEVEL_GROUPS, type Gate, type GateId } from "../lib/levels";
+
+/** How long the layer dock stays open with no interaction before folding away.
+ *  Long enough to read the rail and click a checkbox without being rushed;
+ *  short enough that an accidental open doesn't sit on the map. */
+const IDLE_COLLAPSE_MS = 6000;
 
 // WO-8: the methodology page's content loads only when an info overlay opens on
 // it (dynamic import keeps the formula copy out of the main bundle, matching the
@@ -89,40 +94,148 @@ function GradeFilter({ minGrade, onMinGrade }: {
   );
 }
 
-export function LayerControl({ visible, auto, onToggle, onAuto, minGrade, onMinGrade }: {
+/** The level-of-government rail: the descent federal → state → county → city,
+ *  with the level currently on screen marked.
+ *
+ *  This is the piece that makes zooming legible. The fades were always there;
+ *  what was missing was any statement of what they mean, so a layer appearing
+ *  read as noise. Each row carries its own gate zoom, so the rail doubles as
+ *  "how much further do I have to zoom to reach my city council".
+ *
+ *  City is listed and visibly unavailable rather than omitted. We publish a
+ *  mayor and a board of aldermen today; what we lack is boundary geometry to
+ *  draw them on. Omitting the row would imply we cover nothing there, which is
+ *  a worse lie than showing an honest "not mapped yet".
+ */
+function LevelRail({ activeId, auto }: { activeId: GateId; auto: boolean }) {
+  return (
+    <div className="level-rail" aria-label="Levels of government">
+      {GATES.map((g) => {
+        const active = auto && g.id === activeId;
+        const unmapped = g.minzoom === null;
+        return (
+          <div key={g.id}
+               className={`level-step${active ? " is-active" : ""}${unmapped ? " is-unmapped" : ""}`}
+               aria-current={active ? "true" : undefined}>
+            <span className="level-step-dot" aria-hidden="true" />
+            <span className="level-step-label">{g.label}</span>
+            <span className="level-step-zoom mono">
+              {unmapped ? "not mapped yet" : g.minzoom === 0 ? "always" : `z${g.minzoom}+`}
+            </span>
+            <span className="level-step-blurb">{g.blurb}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Map layers, collapsible.
+ *
+ *  Collapsed by default and auto-collapsing after a pause, because this panel
+ *  sits ON the map: every row it occupies is country the reader came here to
+ *  look at, and most sessions never touch a layer toggle at all. Controls you
+ *  configure once should not hold territory permanently.
+ *
+ *  The collapsed state is not a bare "Layers" button — it carries the current
+ *  level, so the one thing a reader always wants ("which government am I
+ *  looking at?") survives the collapse. That is what makes collapsing free
+ *  rather than a loss.
+ *
+ *  Auto-collapse never fires while the pointer is inside or focus is within:
+ *  a panel that folds itself away mid-interaction is worse than one that never
+ *  folds. It also never fires on the very first render — only after the reader
+ *  has opened it themselves.
+ */
+export function LayerControl({
+  visible, auto, onToggle, onAuto, minGrade, onMinGrade, activeGate,
+}: {
   visible: Record<LayerId, boolean>;
   auto: boolean;
   onToggle: (id: LayerId, v: boolean) => void;
   onAuto: (v: boolean) => void;
   minGrade: Grade;
   onMinGrade: (g: Grade) => void;
+  activeGate: GateId;
 }) {
+  const [open, setOpen] = useState(false);
+  const holdRef = useRef(false);            // pointer inside / focus within
+  const timerRef = useRef<number | undefined>(undefined);
+  const gate = GATES.find((g) => g.id === activeGate) ?? GATES[0];
+
+  // Re-arm the idle countdown on every interaction; cancel it while held.
+  const rearm = useCallback(() => {
+    window.clearTimeout(timerRef.current);
+    if (!open || holdRef.current) return;
+    timerRef.current = window.setTimeout(() => setOpen(false), IDLE_COLLAPSE_MS);
+  }, [open]);
+
+  useEffect(() => {
+    rearm();
+    return () => window.clearTimeout(timerRef.current);
+  }, [rearm]);
+
+  const hold = (held: boolean) => { holdRef.current = held; rearm(); };
+
   return (
-    <div className="layer-ctl" role="group" aria-label="Map layers">
-      <span className="layer-ctl-title">Layers</span>
-      {/* Master toggle: ON = zoom decides which levels show; touching any per-layer
-          box below drops to manual (the parent flips `auto` off). */}
-      <label className="layer-auto">
-        <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
-        <span>Auto by zoom</span>
-      </label>
-      {LEVEL_GROUPS.map((g) => (
-        <div className="layer-group" key={g.level}>
-          <span className="layer-group-label">{g.level}</span>
-          {g.layers.map((id) => (
-            <label className="layer-row" key={id}>
-              <input type="checkbox" checked={!!visible[id]}
-                     onChange={(e) => onToggle(id, e.target.checked)} />
-              <span>{LAYER_LABELS[id]}</span>
-            </label>
-          ))}
+    <div className={`layer-ctl${open ? " is-open" : " is-collapsed"}`}
+         onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}
+         onFocusCapture={() => hold(true)} onBlurCapture={() => hold(false)}
+         onPointerDown={rearm} onKeyDown={rearm}>
+      <button type="button" className="layer-ctl-toggle" aria-expanded={open}
+              aria-controls="layer-ctl-body" onClick={() => setOpen((v) => !v)}>
+        <span className="layer-ctl-caret" aria-hidden="true">{open ? "▾" : "▸"}</span>
+        <span className="layer-ctl-title">Layers</span>
+        {/* The always-visible answer to "what am I looking at". In manual mode
+            the zoom no longer decides, so claiming a level would be a lie. */}
+        <span className="layer-ctl-level mono">{auto ? gate.label : "Manual"}</span>
+      </button>
+
+      <div className="layer-ctl-body" id="layer-ctl-body" hidden={!open}>
+        <LevelRail activeId={activeGate} auto={auto} />
+        {/* Master toggle: ON = zoom decides which levels show; touching any per-layer
+            box below drops to manual (the parent flips `auto` off). */}
+        <label className="layer-auto">
+          <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
+          <span>Auto by zoom</span>
+        </label>
+        {LEVEL_GROUPS.map((g) => (
+          <div className="layer-group" key={g.level}>
+            <span className="layer-group-label">{g.level}</span>
+            {g.layers.map((id) => (
+              <label className="layer-row" key={id}>
+                <input type="checkbox" checked={!!visible[id]}
+                       onChange={(e) => onToggle(id, e.target.checked)} />
+                <span>{LAYER_LABELS[id]}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
+        <Legend showSplit={!!visible.states} />
+        <span className="layer-ctl-hint">
+          {auto ? "State and county layers show as you zoom in." : "Manual — Auto by zoom is off."}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Transient "you crossed into a new level" marker.
+ *
+ *  The collapsed dock already states the level; this exists for the MOMENT of
+ *  change, which is otherwise silent — polygons simply appear. Announced
+ *  politely for screen readers, since the visual cue is a fade nobody hears.
+ */
+export function LevelToast({ gate }: { gate: Gate | null }) {
+  return (
+    <div className="level-toast-wrap" aria-live="polite" aria-atomic="true">
+      {gate && (
+        <div className="level-toast" key={gate.id}>
+          <span className="level-toast-label">{gate.label}</span>
+          <span className="level-toast-blurb">{gate.blurb}</span>
         </div>
-      ))}
-      <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
-      <Legend showSplit={!!visible.states} />
-      <span className="layer-ctl-hint">
-        {auto ? "State and county layers show as you zoom in." : "Manual — Auto by zoom is off."}
-      </span>
+      )}
     </div>
   );
 }
