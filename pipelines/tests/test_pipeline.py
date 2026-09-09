@@ -2103,6 +2103,26 @@ def test_build_publishes_robots_txt_disallowing_the_enumerable_paths(slice_dirs)
     assert "Disallow: /search/" not in robots
 
 
+def test_robots_txt_has_exactly_one_wildcard_group(slice_dirs):
+    """The bug this pins: the served file once carried TWO `User-agent: *`
+    groups, because Cloudflare's managed robots.txt PREPENDS to the origin file
+    rather than replacing it. Parsers that merge same-agent groups honoured our
+    Disallow lines; parsers that take only the first matching group — an equally
+    valid reading — saw Cloudflare's `Allow: /` and never reached ours. Half the
+    crawlers obeyed a rule we believed was universal.
+
+    One group, or the rules below it are optional."""
+    for path in (slice_dirs / "data" / "robots.txt",
+                 REPO / "web" / "public" / "robots.txt"):
+        lines = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines()]
+        groups = [ln for ln in lines if ln.lower() == "user-agent: *"]
+        assert len(groups) == 1, f"{path.name}: {len(groups)} wildcard groups, want 1"
+        # Directives must FOLLOW the group they belong to, not precede it.
+        first = lines.index("User-agent: *")
+        assert not any(ln.startswith(("Disallow:", "Allow:")) for ln in lines[:first]), \
+            f"{path.name}: a rule appears before any User-agent line"
+
+
 class _FakeR2:
     """Stand-in for the boto3 S3 client. Capitalised kwargs mirror boto3's real
     signature, which is what publish calls it with. HEAD answers from a preloaded

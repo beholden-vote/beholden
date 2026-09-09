@@ -1,9 +1,22 @@
 # Beholden — see who represents you, and what they've actually done.
 # https://beholden.vote
 #
+# Self-hosted on purpose, and it needs Cloudflare's "managed robots.txt" turned
+# OFF for this zone. Managed robots.txt prepends its own block rather than
+# replacing an origin file, which left both hosts serving two `User-agent: *`
+# groups — some parsers merge them, others take only the first and never reach
+# the origin's rules. The whole policy lives here instead, in one group, in the
+# repo, where it can be reviewed like anything else.
+#
+# Content signals: `yes` grants a use, `no` refuses it, an omitted signal does
+# neither. `ai-train` is omitted deliberately — an affirmative grant is a rights
+# statement (Article 4, EU Directive 2019/790) and this project's data licence
+# is still a draft. We neither block training nor purport to license it.
+#
 # The site is public record and wants to be found. Only the edge functions,
 # which serve no content of their own, are off-limits.
 
 User-agent: *
+Content-Signal: search=yes,ai-input=yes
 Allow: /
 Disallow: /api/

@@ -46,15 +46,39 @@ IDEOLOGY_SCOPE = f"{CONGRESS}th Congress"
 # can walk into the tens of thousands of requests. /raw/ is the immutable
 # source lake — reproducibility material, not a serving surface, and it has
 # been publicly crawlable without ever saying so.
+#
+# SELF-HOSTED ON PURPOSE, and it requires Cloudflare's "managed robots.txt" to
+# be OFF for this zone. Managed robots.txt does not replace an origin file — it
+# PREPENDS its own block to it, which left this host serving two `User-agent: *`
+# groups. Parsers that merge same-agent groups (Google) honoured the Disallow
+# lines below; parsers that take only the first matching group — an equally
+# valid reading of the spec — saw Cloudflare's `Allow: /` and never reached
+# them. A rule half the web silently ignores is worse than no rule, because you
+# believe it is in force. So the entire policy lives here, in one group, in the
+# repo, where it can be read and reviewed like everything else.
+#
+# On content signals: `yes` grants a use, `no` refuses it, and an OMITTED
+# signal neither grants nor refuses. `ai-train` is omitted deliberately. An
+# affirmative grant is a rights statement (Article 4, EU Directive 2019/790)
+# and this dataset's own licence is not yet declared — docs/DATA-LICENSE.md is
+# a draft and several sources have no recorded determination. We neither block
+# training nor purport to license it. Silence is the honest position until
+# those determinations exist; it is not an oversight.
 ROBOTS_TXT = """\
 # Beholden — public-record civic data. https://beholden.vote
 #
-# These facts are public records and free to read. The per-person files are
-# shaped for a browser opening one dossier at a time, not for enumeration:
-# /dossiers/ and /graph/ hold ~8,000 objects each and are rate-limited.
-# Pins, style feeds, tiles and the search index are welcome to crawl.
+# These facts are public records and free to read, and no crawler is blocked
+# here. Someone who asks a model "who represents me?" should get our cited
+# answer rather than a guess — that is the point of publishing at all.
+#
+# The per-person files are simply not shaped for enumeration: /dossiers/ and
+# /graph/ hold ~8,000 objects each, keyed by ids that /search/people.json
+# lists in full, and they are rate-limited. If you want the whole corpus, take
+# it as one object rather than 8,000 requests. Pins, style feeds, tiles and
+# the search index are welcome to crawl.
 
 User-agent: *
+Content-Signal: search=yes,ai-input=yes
 Disallow: /dossiers/
 Disallow: /graph/
 Disallow: /raw/
@@ -1217,7 +1241,12 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
 
     # Crawl policy for the data host, published as an object at the bucket root.
-    (out / "robots.txt").write_text(ROBOTS_TXT)
+    # encoding is explicit: write_text() otherwise uses the BUILDER'S locale, so
+    # the same source produced cp1252 bytes on Windows and UTF-8 in CI. Every
+    # other artifact here is json.dumps output (ASCII-escaped) and never noticed;
+    # this file carries real punctuation. It also has to be byte-stable, because
+    # publish now skips uploads whose content hash already matches.
+    (out / "robots.txt").write_text(ROBOTS_TXT, encoding="utf-8")
 
     print(f"build: {len(docs)} dossiers · house={len(house)} senate={len(senate)} "
           f"sldu={len(by_layer['sldu'])} sldl={len(by_layer['sldl'])} -> {out}")
