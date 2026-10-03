@@ -421,7 +421,7 @@ Everything in this section is **additive** — no v1 field is removed or renamed
 normative for that work order. A subsection describes shipped behaviour only once its
 status line says **shipped**; until then it is the target, not a description of production.
 
-### 8.1 Stamps, and what "unchanged" means — WO-33 · *target*
+### 8.1 Stamps, and what "unchanged" means — WO-33 · **shipped**
 
 Three values in a served document record *when* rather than *what*:
 
@@ -711,7 +711,7 @@ GEOID: `place_ocd(st, name, geoid)`.
 The tile table in §5 also omits `tiles/us-counties-{vintage}.pmtiles` (layer `counties`:
 `ocd_id`, `state`, `name`, `geoid`) and the non-interactive context archive; both ship.
 
-### 8.6 Client routes — WO-35 · *target*
+### 8.6 Client routes — WO-35 · **shipped**
 
 Hash routes, extending the existing `#/p/` and `#/d/` scheme. Ids are written with
 `encodeURIComponent`, as today.
