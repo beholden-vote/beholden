@@ -7,6 +7,7 @@ import { personHash, voteHash } from "../../router";
 import { STRINGS } from "../../strings";
 import { EmptyNote, PartyChip, Section } from "../bits";
 import type { RecordViewProps } from "../nav/registry";
+import { Reps } from "./Reps";
 import { Wait, useHeadingFocus } from "./bits";
 
 function Member({ m }: { m: BillMember }) {
@@ -72,6 +73,8 @@ export default function BillView({ route, onTitle }: RecordViewProps<"bill">) {
           </>
         )}
       </Section>
+
+      <Reps target={{ kind: "bill", billId: bill.bill_id }} />
 
       <Section title="Roll calls">
         <table className="vr-table">

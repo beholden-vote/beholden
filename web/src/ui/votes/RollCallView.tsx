@@ -8,6 +8,7 @@ import { billHash, personHash } from "../../router";
 import { STRINGS } from "../../strings";
 import { EmptyNote, PartyChip, Section } from "../bits";
 import type { RecordViewProps } from "../nav/registry";
+import { Reps } from "./Reps";
 import { Position, Wait, useHeadingFocus } from "./bits";
 
 const PAGE = 100;
@@ -77,6 +78,8 @@ export default function RollCallView({ route, onTitle }: RecordViewProps<"vote">
           </table>
         </Section>
       )}
+
+      <Reps target={{ kind: "vote", rollCall: rc }} />
 
       <Section title="Positions">
         {rc.positions.length === 0 ? <EmptyNote>{STRINGS.rollNoPositions}</EmptyNote> : (

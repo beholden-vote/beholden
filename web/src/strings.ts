@@ -234,4 +234,7 @@ export const STRINGS = {
   sponsorNone: "No sponsor is listed.",
   cosponsorsNone: "No current cosponsors.",
   repsTitle: "How your representatives voted",
+  repsNoPlace: "Choose a place to see how your representatives voted. Nothing about it is stored in the address.",
+  repsNone: "No recorded position.",
+  repsNoFederal: "No federal representatives are published for this place.",
 } as const;
