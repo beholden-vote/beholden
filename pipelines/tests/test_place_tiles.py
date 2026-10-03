@@ -17,6 +17,7 @@ import sys
 import pytest
 
 from beholden_etl import divisions
+from beholden_etl.sources import tn_local
 from test_pipeline import REPO, _load_stamper
 
 
@@ -128,6 +129,8 @@ def test_the_stamped_example_from_the_contract():
     assert feat["properties"] == {
         "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
         "geoid": "4737640", "state": "TN", "name": "Hendersonville", "kind": "city"}
+    # ...and it is the id the one published city roster pins its officials to.
+    assert feat["properties"]["ocd_id"] == divisions.place_ocd("TN", tn_local.HENDERSONVILLE_PLACE_NAME)
 
 
 def test_a_place_feature_that_is_not_what_we_think_stops_the_build():
