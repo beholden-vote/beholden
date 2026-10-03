@@ -148,4 +148,59 @@ export const STRINGS = {
   gradeHiddenNote:
     "Hidden by your source-quality filter — adjust it under Layers · Source quality.",
   provenanceTagline: "Every fact on this screen traces to an official source.",
+
+  // ---- Reader shell (WO-35) --------------------------------------------------
+  // The place view: the same list, in the same order, for every point on the
+  // map and every official in it (Rule 0).
+  placeLede:
+    "Everyone who represents this place, federal to local. Open anyone for their full cited dossier.",
+  // A #/d/ link names one division and carries no point, so the levels that
+  // cannot be derived from the id are not listed. Say so rather than let a
+  // short list read as the whole answer.
+  placeLinkNote:
+    "Opened from a link to one division, so only its own offices and the statewide ones are listed. Search an address to see every level.",
+  placeLoading: "Loading officials…",
+  placeCopyLink: "Copy link to this place",
+  placeCopied: "Link copied",
+  placeCopyManual: "Copy this link",
+  termEnds: "Term ends",
+  rowContact: "Contact",
+  rowContactLoading: "Loading contact details…",
+  rowContactNone: "No contact details are published for this official.",
+  rowContactFailed: "Contact details could not be loaded. Check your connection and try again.",
+
+  // Arrival and the remembered place. PRIVACY-ADJACENT: these lines tell the
+  // reader what the page knows about where they are and what it keeps. They are
+  // a public promise and must stay true to ui/place/remembered.ts and to the
+  // Privacy page (ui/chrome.tsx) -- change all three together or none.
+  approxBadge: "Approximate",
+  approxNote:
+    "An estimate from your internet connection. The statewide offices are right; a district may differ at your actual address.",
+  fixLocate: "Use my exact location",
+  fixAddress: "Type an address",
+  promptTitle: "Find who represents you",
+  promptNote: "We could not place you automatically.",
+  savedBadge: "Your place",
+  savedNote:
+    "Saved in this browser, on this device only, so your next visit opens here. It is never sent anywhere.",
+  forgetPlace: "Forget this place",
+  notSavedNote: "This place is not saved on this device.",
+  nothingThere: "No districts found at that point — try an address inside the United States.",
+  locateDenied: "Location permission denied — type your address instead.",
+  locateFailed: "Couldn't get your location — type your address instead.",
+
+  // A dossier link that leads nowhere.
+  dossierLoading: "Loading dossier…",
+  notFoundTitle: "No dossier at this link",
+  notFoundBody:
+    "Nothing is published at this address. A dossier is removed when its holder leaves office, so this official may no longer be serving — or the link may be incomplete.",
+  notFoundOffline: "Your device also appears to be offline, which would have the same effect.",
+  notFoundAction: "Back to the map",
+
+  // Panel chrome.
+  viewLoading: "Loading…",
+  panelClose: "Close panel",
+  sheetHandle: "Panel height",
+  sheetHandleHint: "Up and Down arrow keys resize the panel.",
+  sheetStops: { peek: "collapsed", half: "half", full: "full" } as Record<string, string>,
 } as const;
