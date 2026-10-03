@@ -100,14 +100,8 @@ SOURCES: dict[str, Source] = {
     # source (see jobs/fetch._SLA_KEY), so the SLA here governs the coverage
     # dashboard only. New contributions post daily; summaries recalc in-step.
     "wa_pdc": Source("wa_pdc", "https://data.wa.gov", 36),
-    # WO-22 local pilot. ONE REGISTRY ROW PER LOCALITY, deliberately: there is no
-    # national local roster, so coverage, freshness and grade are only meaningful
-    # per government. Rosters change at elections, not nightly — a 7-day SLA
-    # keeps the dashboard honest without re-fetching a static page every night.
-    "sumner_county": Source("sumner_county", "https://sumnercountytn.gov", 24 * 7,
-                            grade_reason="official_web_roster"),
-    "hendersonville": Source("hendersonville", "https://www.hvilletn.org", 24 * 7,
-                             grade_reason="official_web_roster"),
+    # WO-22 local rosters: one row per locality, GENERATED from the roster spec
+    # list (WO-22b) at the end of this module.
     # WO-34: facts about every county and city. Both vintages are PINNED constants
     # (sources/census_areas.py), so the SLA only governs re-checking an unchanged
     # vintage for errata: ACS quarterly, the Gazetteer yearly. A new vintage is a code
@@ -155,6 +149,17 @@ FEC_CYCLE = 2026     # two-year campaign-finance cycle covering the 119th Congre
 # bypass: when enabled the gate still runs and still halts on any mismatch. Re-enable
 # once the itemized↔summary join is fixed (WO-9 reconciliation follow-up).
 WA_PDC_ENABLED = False
+
+
+# --- WO-22b insertion point: SOURCES rows generated from the roster specs ---
+# ONE REGISTRY ROW PER LOCALITY, deliberately: there is no national local roster,
+# so coverage, freshness and grade are only meaningful per government. Rosters
+# change at elections, not nightly, so each spec carries a 7-day SLA.
+from .sources.roster import specs as _roster_specs  # noqa: E402
+
+SOURCES.update({s.source.source_key: Source(s.source.source_key, s.base_url, s.sla_hours,
+                                            grade_reason=s.grade_reason)
+                for s in _roster_specs()})
 
 
 def pipeline_version() -> str:

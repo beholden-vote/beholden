@@ -20,7 +20,7 @@ from ..sources import fec
 from ..sources import legislators as L
 from ..sources import openstates
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
-from ..sources import tn_local                                  # WO-22 (local rosters)
+from ..sources import roster as local_roster                    # WO-22b (local rosters)
 from ..sources import voteview
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 from ..bulk import crosswalk as bulk_crosswalk                  # WO-19 (filer<->person)
@@ -32,13 +32,6 @@ DEFAULT_DB = "dist/warehouse.duckdb"
 # Convening date of the configured congress (the 119th convened 2025-01-03);
 # used when a term omits a start date. Derived so a CONGRESS bump can't drift.
 _CONGRESS_START = f"{2025 + (CONGRESS - 119) * 2}-01-03"
-
-
-# WO-22: the date each local body's current membership took office, from the
-# county/city election calendar — a real, citable date. Never today's: a term
-# start that moved every night would make every local fact look newly true.
-SUMNER_TERM_START = "2024-09-01"          # TN county terms begin Sept 1 after the August election
-HENDERSONVILLE_TERM_START = "2024-11-18"  # BOMA seated after the November 2024 city election
 
 
 def _dedupe(rows: list[dict], key: str) -> list[dict]:
@@ -634,28 +627,21 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "offices", list(os_offices.values()))
         store.insert(con, "terms", os_terms)
 
-    # ==== WO-22: local rosters (Sumner County + Hendersonville, TN) =============
-    # Reads the landed roster snapshots only — never the network. Each locality
-    # is independent: one absent snapshot leaves that government honest-absent
-    # without touching the other, and neither can affect the federal spine gate
-    # above (which is computed over the congress-legislators list alone).
-    #
-    # The completeness gate runs AGAIN here, on the landed rows, not just at
-    # fetch time: a hydrated last-good snapshot from the raw lake (WO-10) never
-    # passed through this run's fetch, so this is the only place that re-checks
-    # it before it becomes published government.
-    for key, mapper, gate, start in (
-        ("sumner_county", tn_local.sumner_rows, tn_local.check_sumner_roster,
-         SUMNER_TERM_START),
-        ("hendersonville", tn_local.hendersonville_rows,
-         tn_local.check_hendersonville_roster, HENDERSONVILLE_TERM_START),
-    ):
-        roster_f = raw / key / "roster.json"
-        if not roster_f.exists():
-            continue
-        rows = json.loads(roster_f.read_text(encoding="utf-8"))
-        gate(rows)
-        spine = mapper(rows, start)
+    # ==== WO-22b: local rosters, one loop over the spec list =====================
+    # Re-parses each landed page (never the network). The landed page is the last
+    # good roster by construction (roster.fetch lands only what passed its gate),
+    # so a locality whose gate fails now is WITHHELD: logged by name, its last
+    # good roster still served, and the reason carried to its coverage file. Only
+    # RosterError is isolated, inside roster.load; anything else fails the run.
+    manifest_f = raw / "manifest.json"
+    manifest = json.loads(manifest_f.read_text(encoding="utf-8")) if manifest_f.exists() else {}
+    for spec in local_roster.specs():
+        rows, withheld = local_roster.load(spec, raw, manifest)
+        if rows is None:
+            continue                     # nothing good ever landed: honest-absent
+        if withheld:
+            print(f"transform: roster {spec.locality_id} WITHHELD, serving last good: {withheld}")
+        spine = local_roster.spine_rows(spec, rows)
         # divisions before offices before terms: DuckDB still enforces those FKs.
         store.insert(con, "persons", spine["persons"])
         store.insert(con, "person_identifiers", spine["person_identifiers"])
