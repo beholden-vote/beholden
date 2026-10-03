@@ -15,10 +15,20 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y build-essential libsqlite3-dev zlib1g-dev gdal-bin
           git clone --depth 1 https://github.com/felt/tippecanoe && make -C tippecanoe -j"$(nproc)" && sudo make -C tippecanoe install
-      - name: Download TIGER cartographic boundaries (states, CDs, SLDU, SLDL, counties)
+      - name: Download TIGER cartographic boundaries (states, CDs, SLDU, SLDL, counties, places)
         run: make tiles-fetch
       - name: Build PMTiles archives
-        run: make tiles-build   # -> tiles/us-{states,cd,sld,counties,context}-{vintage}.pmtiles
+        run: make tiles-build   # -> tiles/us-{states,cd,sld,counties,places,context}-{vintage}.pmtiles
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with: {python-version: "3.12"}
+      - name: Report archive sizes; hold the places archive to the per-tile budget
+        # Fails before upload, so nothing publishes if a place tile blows the 500 KB
+        # budget. measure_tiles.py only prints its verdict, so the verdict is read here.
+        run: |
+          ls -l us-*.pmtiles
+          pip install --quiet pmtiles
+          python3 spike/measure_tiles.py us-places-*.pmtiles | tee places-budget.txt
+          if grep -q FAIL places-budget.txt; then echo "places archive exceeds the per-tile budget"; exit 1; fi
       - name: Upload to R2
         run: make tiles-publish
         env:
