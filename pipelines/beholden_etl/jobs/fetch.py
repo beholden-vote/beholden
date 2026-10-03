@@ -35,10 +35,12 @@ WO-10 — resilient · incremental · parallel:
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import rawlake
@@ -182,6 +184,146 @@ def fetch_congress_gov(raw: Path, prior: dict) -> dict:
         "member_detail": detail_count}
     if reused:
         meta["legislation_reused"] = reused
+    # --- WO-23a: bill detail + cosponsors for every bill a roll call references.
+    # HONEST-ABSENT, like member-detail: a bill that cannot be fetched has no
+    # bill page tonight and is retried tomorrow. So nothing in this step — not
+    # one bill, not the step itself — may discard the member slice landed above.
+    try:
+        meta.update(fetch_roll_call_bills(client, raw, prior))
+    except Exception as e:
+        print(f"fetch: congress.gov roll-call bills skipped ({type(e).__name__}: {e})")
+    return meta
+
+
+# ---------------------------------------------------------------------------
+# WO-23a: bills that reached a roll call. One landed record per bill, holding
+# the bill-detail response and the full cosponsor list.
+#
+#   resumable   a bill already in the (hydrated) lake is not fetched again
+#   incremental after the backfill, one "bills updated since" sweep says which
+#               landed bills congress.gov has touched; only those are re-fetched
+#   paced       every call goes through the one shared client's rate governor
+#   isolated    a failed bill keeps its last-good record, or stays absent;
+#               everything else the run fetched is kept
+#   bounded     a wall-clock budget and a consecutive-failure breaker stop the
+#               step early instead of letting an outage eat the job's time limit
+# ---------------------------------------------------------------------------
+# The backfill is ~510 bills / ~900 calls (measured against the live roll-call
+# table, 2026-10-03): about 12 minutes at the client's 0.79 s pacing. The budget
+# leaves room for a slow night without ever threatening the job ceiling; what
+# does not fit is simply fetched on the next run.
+ROLL_CALL_BILLS_BUDGET_S = 40 * 60
+ROLL_CALL_BILLS_MAX_FAILURE_STREAK = 10
+# The sweep re-reads this much before the last sweep. congress.gov's list
+# carries a bill's updateDate as a DATE, and the index can trail the update it
+# describes; a day of overlap costs a page or two and means a late-indexed
+# update is seen by the next run instead of never.
+_SWEEP_OVERLAP = timedelta(hours=24)
+
+
+def _roll_call_bill_ids(raw: Path) -> list[str]:
+    """Every distinct bill a roll call of this Congress references, from the
+    landed Voteview roll-call table. Senate nominations ('PN…') share the
+    column and are not bills, so they are left out."""
+    path = raw / "voteview" / f"HS{CONGRESS}_rollcalls.csv"
+    if not path.exists():
+        return []
+    ids = set()
+    for row in csv.DictReader(io.StringIO(path.read_text(encoding="utf-8"))):
+        if str(row.get("congress")) != str(CONGRESS):
+            continue
+        bid = voteview.normalize_bill_id(row.get("bill_number") or "", CONGRESS)
+        if bid and congress_gov.is_bill(bid):
+            ids.add(bid)
+    return sorted(ids)
+
+
+def _fetch_one_bill(client, raw: Path, bill_id: str) -> None:
+    """Land one bill's record, or raise and leave whatever was there untouched.
+    Nothing is written until both responses are in hand and agree."""
+    _, cong, slug, num = bill_id.split("/")
+    detail = client.bill_detail(cong, slug, num)
+    if not (detail.get("type") and detail.get("number") and detail.get("congress")) \
+            or congress_gov.bill_id(detail) != bill_id:
+        raise ValueError(f"bill detail for {bill_id} is not that bill")
+    # The detail carries the cosponsor count; the key is absent when there are
+    # none, which saves the second call for every bill without cosponsors.
+    summary = detail.get("cosponsors") or {}
+    expected = {int(summary.get(k) or 0)
+                for k in ("count", "countIncludingWithdrawnCosponsors")}
+    cosponsors = client.bill_cosponsors(cong, slug, num) if max(expected) else []
+    # Control total. The paginator stops at the first short page, so a truncated
+    # response would otherwise land as a complete-looking list. Either count is
+    # accepted because the list may or may not include withdrawn cosponsors.
+    if len(cosponsors) not in expected:
+        raise ValueError(f"{bill_id}: {len(cosponsors)} cosponsors listed, "
+                         f"bill detail says {sorted(expected)}")
+    _write_json(raw / congress_gov.bill_snapshot_path(bill_id), {
+        "bill_id": bill_id, "fetched_at": _now(), "bill": detail, "cosponsors": cosponsors})
+
+
+def fetch_roll_call_bills(client, raw: Path, prior: dict) -> dict:
+    """Land bill detail + cosponsors for the bills roll calls reference, and
+    return the counters (and the sweep cursor) for the congress.gov manifest row.
+
+    The cursor — when the last complete sweep began — rides in the manifest, so
+    it is hydrated with the lake. It only advances when the sweep succeeded AND
+    every bill the sweep named was refreshed: a bill that failed to refresh is
+    then named again by the next sweep. With no cursor (a full rebuild), nothing
+    vouches for a landed record's age, so every one is re-fetched."""
+    wanted = _roll_call_bill_ids(raw)
+    if not wanted:
+        return {}
+    started, sweep_started = time.monotonic(), _now()
+    landed = {b for b in wanted
+              if rawlake.has_snapshot(raw, congress_gov.bill_snapshot_path(b))}
+    cursor = (rawlake.prior_source(prior, "congress.gov") or {}).get("roll_call_bills_swept_at")
+    stale, sweep_ok = set(landed), True
+    if cursor:
+        try:
+            since = (datetime.fromisoformat(cursor) - _SWEEP_OVERLAP).astimezone(
+                timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            stale = landed & {
+                congress_gov.bill_id(item)
+                for item in client.bills_updated_since(CONGRESS, since)
+                if item.get("type") and item.get("number") and item.get("congress")}
+        except Exception as e:
+            # Landed records stay as they are (last-good) and the cursor does
+            # not move, so the next run sweeps the same window again.
+            stale, sweep_ok = set(), False
+            print(f"fetch: congress.gov bills-updated sweep failed ({type(e).__name__})")
+
+    todo = sorted(stale) + [b for b in wanted if b not in landed]     # refreshes first
+    done: set[str] = set()
+    failed = streak = 0
+    with ThreadPoolExecutor(max_workers=_CONGRESS_MEMBER_WORKERS) as pool:
+        futures = {pool.submit(_fetch_one_bill, client, raw, b): b for b in todo}
+        for fut in as_completed(futures):
+            bill = futures[fut]
+            if fut.cancelled():
+                continue
+            try:
+                fut.result()
+                done.add(bill)
+                streak = 0
+            except Exception as e:
+                failed += 1
+                streak += 1
+                print(f"fetch: congress.gov bill {bill} skipped ({type(e).__name__})")
+            if (len(done) + failed) % 100 == 0:
+                print(f"fetch: roll-call bills {len(done) + failed}/{len(todo)}")
+            if (streak >= ROLL_CALL_BILLS_MAX_FAILURE_STREAK
+                    or time.monotonic() - started > ROLL_CALL_BILLS_BUDGET_S):
+                for pending in futures:
+                    pending.cancel()        # in-flight calls finish; the rest wait for tomorrow
+
+    meta = {"roll_call_bills": len(landed | done), "roll_call_bills_wanted": len(wanted),
+            "roll_call_bills_fetched": len(done), "roll_call_bills_failed": failed}
+    new_cursor = sweep_started if sweep_ok and stale <= done else cursor
+    if new_cursor:
+        meta["roll_call_bills_swept_at"] = new_cursor
+    print(f"fetch: roll-call bills {meta['roll_call_bills']}/{len(wanted)} landed "
+          f"({len(done)} fetched, {failed} failed, {len(todo) - len(done) - failed} deferred)")
     return meta
 
 
