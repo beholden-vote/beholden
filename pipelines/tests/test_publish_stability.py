@@ -596,13 +596,42 @@ def test_stale_deletion_removes_only_managed_keys_absent_locally(tmp_path, bucke
     for key in keep + gone:
         bucket.seed(key)
 
-    publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False)
+    publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False, delete_stale=True)
 
     assert sorted(bucket.deleted) == sorted(gone)
     for key in keep:
         assert key in bucket.objects, f"{key} was deleted"
     assert "dossiers/here.json" in bucket.objects
     assert not any(k.startswith(("raw/", "tiles/", "fonts/")) for k in bucket.deleted)
+
+
+def test_stale_keys_are_listed_on_every_run_and_deleted_only_on_request(tmp_path, bucket, capsys,
+                                                                       monkeypatch):
+    """Deletion is opt-in. A run without --delete-stale reports the exact count
+    under each managed prefix and the keys up to the cap, and removes nothing --
+    not even past the tripwire, which guards a delete and so has nothing to
+    stop here. It is reported instead of raised."""
+    monkeypatch.setattr(publish, "STALE_LIST_CAP", 3)
+    root = _tree(tmp_path, {"dossiers/here.json": b"{}", "pins/cd.json": b"[]"})
+    for i in range(30):                                    # past max(25, 2%)
+        bucket.seed(f"dossiers/gone-{i:02}.json")
+    bucket.seed("pins/retired-layer.json")
+
+    publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False)
+    out = capsys.readouterr().out
+    assert bucket.deleted == []
+    assert "publish: 30 stale under dossiers/ (listed only" in out
+    assert "publish: 1 stale under pins/ (listed only" in out
+    assert "  - dossiers/gone-02.json" in out and "gone-03" not in out
+    assert "… and 27 more" in out
+    assert "  - pins/retired-layer.json" in out
+    assert "TRIPWIRE dossiers/: 30 of 31" in out and "deleted 3" not in out
+
+    bucket.seed("unlisted/x.json")                         # nothing stale -> says so
+    for key in [k for k in bucket.objects if "gone" in k or "retired" in k]:
+        del bucket.objects[key]
+    publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False)
+    assert "no stale objects under any managed prefix" in capsys.readouterr().out
 
 
 def test_managed_prefixes_come_from_the_build_and_never_include_the_protected_ones():
@@ -650,13 +679,20 @@ def test_tripwire_raises_and_deletes_nothing_anywhere(tmp_path, bucket, capsys):
     bucket.seed("pins/retired-layer.json")                 # 1 stale: under its own tripwire
 
     with pytest.raises(RuntimeError, match="tripwire"):
-        publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False)
+        publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False, delete_stale=True)
     assert bucket.deleted == []
     assert "pins/retired-layer.json" in bucket.objects
     assert sorted(bucket.puts) == ["dossiers/here.json", "pins/cd.json"]
-    assert "class-A this run" in capsys.readouterr().out   # the budget line survives the raise
+    out = capsys.readouterr().out
+    assert "class-A this run" in out                       # the budget line survives the raise
+    assert "26 stale under dossiers/ (NOT deleted: tripwire)" in out   # ...and so does the list
 
+    # --allow-mass-delete widens a delete; it is not itself a request to delete.
     publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False, allow_mass_delete=True)
+    assert bucket.deleted == []
+
+    publish.run(data_dir=root, raw_dir=tmp_path / "noraw", dry_run=False, delete_stale=True,
+                allow_mass_delete=True)
     assert len(bucket.deleted) == 27
     assert sorted(bucket.objects) == ["dossiers/here.json", "pins/cd.json"]
 
@@ -668,12 +704,17 @@ def test_dry_run_prints_what_would_be_deleted_and_writes_nothing(tmp_path, bucke
     raw = _raw(tmp_path, {"manifest.json": b'{"generated_at":"2026-09-12T06:00:00+00:00"}'})
     bucket.seed("dossiers/left-office.json")
 
-    publish.run(data_dir=root, raw_dir=raw, dry_run=True)
+    publish.run(data_dir=root, raw_dir=raw, dry_run=True, delete_stale=True)
     out = capsys.readouterr().out
-    assert "would delete dossiers/left-office.json" in out
+    assert "1 stale under dossiers/ (would delete)\n  - dossiers/left-office.json" in out
     assert "would upload dossiers/here.json" in out
     assert bucket.writes() == 0
     assert "dossiers/left-office.json" in bucket.objects
+
+    publish.run(data_dir=root, raw_dir=raw, dry_run=True)   # and without the flag
+    out = capsys.readouterr().out
+    assert "1 stale under dossiers/ (listed only" in out and "would delete" not in out
+    assert bucket.writes() == 0
 
 
 def test_dry_run_without_credentials_needs_no_network(tmp_path, monkeypatch, capsys):

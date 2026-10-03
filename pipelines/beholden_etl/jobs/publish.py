@@ -22,8 +22,9 @@ Class-A operations — PUT, COPY, LIST — are the scarce free-tier resource at
 free. Pass --force-all to write unconditionally.
 
 After the uploads, objects under a managed prefix that this build did not
-produce are deleted — an official who left office must stop being served as an
-incumbent — behind a tripwire that refuses a mass delete.
+produce are LISTED on every run — an official who left office must stop being
+served as an incumbent — and deleted only with --delete-stale, behind a
+tripwire that refuses a mass delete.
 
 Runs in dry-run automatically when R2 credentials are absent (local builds),
 listing what *would* upload without needing the network. With credentials,
@@ -87,6 +88,9 @@ NEVER_DELETE = ("raw/", "tiles/", "fonts/")
 # prefix than max(STALE_FLOOR, STALE_FRACTION of that prefix) raises instead.
 STALE_FLOOR = 25
 STALE_FRACTION = 0.02
+# Stale keys printed per prefix. The count is always exact; the cap only keeps
+# a first run against a bucket nobody has ever swept from flooding the log.
+STALE_LIST_CAP = 200
 
 # ── Write budget ─────────────────────────────────────────────────────────────
 CLASS_A_FREE_PER_MONTH = 1_000_000
@@ -357,6 +361,43 @@ def _delete(client, keys: list[str]) -> None:
             raise RuntimeError(f"publish: stale delete failed: {resp['Errors'][:5]}")
 
 
+def _settle_stale(client, stale: dict[str, list[str]], tripped: list[str], *,
+                  delete: bool, allow_mass_delete: bool, dry_run: bool, tag: str) -> None:
+    """Report the stale keys — always — and delete them only when asked.
+
+    Deletion is opt-in (--delete-stale): listing is free of consequences and
+    deleting is not, so a run says what it WOULD remove until someone has read
+    that list and turned deletion on. The tripwire guards the delete, so it
+    raises only on a run that was going to delete; otherwise it is reported.
+    """
+    blocked = bool(tripped) and not allow_mass_delete
+    if not delete:
+        verb = "listed only: nothing is deleted without --delete-stale"
+    elif blocked:
+        verb = "NOT deleted: tripwire"
+    else:
+        verb = "would delete" if dry_run else "deleting"
+    if not stale:
+        print(f"{tag}: no stale objects under any managed prefix")
+    for prefix, keys in stale.items():
+        print(f"{tag}: {len(keys)} stale under {prefix} ({verb})"
+              + "".join(f"\n  - {k}" for k in keys[:STALE_LIST_CAP])
+              + (f"\n  … and {len(keys) - STALE_LIST_CAP} more"
+                 if len(keys) > STALE_LIST_CAP else ""))
+    doomed = [k for keys in stale.values() for k in keys]
+    if blocked and delete and not dry_run:
+        raise RuntimeError(
+            "publish: stale-object tripwire — " + "; ".join(tripped) + ". Nothing was "
+            "deleted. If the build is right (not a bug that dropped documents), re-run "
+            "with --allow-mass-delete. First stale keys: " + ", ".join(doomed[:10]))
+    for msg in tripped if blocked else ():
+        print(f"{tag}: TRIPWIRE {msg} — a deleting run raises and deletes nothing "
+              "without --allow-mass-delete")
+    if delete and not dry_run:
+        _delete(client, doomed)
+        print(f"{tag}: deleted {len(doomed)} stale object(s)")
+
+
 def _budget_line(class_a: int, tag: str = "publish") -> None:
     monthly = class_a * 30
     print(f"{tag}: class-A this run = {class_a} "
@@ -368,7 +409,8 @@ def _budget_line(class_a: int, tag: str = "publish") -> None:
 
 def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         dry_run: bool | None = None, force_all: bool = False,
-        allow_mass_delete: bool = False, allow_bulk_writes: bool = False) -> int:
+        delete_stale: bool = False, allow_mass_delete: bool = False,
+        allow_bulk_writes: bool = False) -> int:
     data_dir = Path(data_dir)
     serving = [(p, p.relative_to(data_dir).as_posix())              # bucket-root keys
                for p in sorted(data_dir.rglob("*")) if p.is_file()]
@@ -422,14 +464,11 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         stale, tripped, lists = _find_stale(client, serving_keys)
         for _, key in to_put:
             print(f"publish[dry-run] would upload {key}")
-        for key in (k for keys in stale.values() for k in keys):
-            print(f"publish[dry-run] would delete {key}")
-        for msg in tripped:
-            print(f"publish[dry-run] TRIPWIRE {msg} — a real run raises and deletes "
-                  "nothing without --allow-mass-delete")
+        _settle_stale(client, stale, tripped, delete=delete_stale,
+                      allow_mass_delete=allow_mass_delete, dry_run=True, tag="publish[dry-run]")
         print(f"publish[dry-run]: {len(to_put)}/{len(serving)} serving ({skipped} unchanged, "
               f"skipped) + {len(raw)} raw + {len(to_copy)}/{len(mirror)} latest-pointer; "
-              f"{sum(map(len, stale.values()))} stale would be deleted. Nothing written.")
+              f"{sum(map(len, stale.values()))} stale. Nothing written, nothing deleted.")
         _budget_line(writes + lists, "publish[dry-run]")
         return len(serving) + len(raw)
 
@@ -446,19 +485,11 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
           f"-> r2://{R2_BUCKET}/")
 
     # ── Stale objects: last, so everything this run produced is already live
-    # and a tripwire stops only the deletion.
+    # and a tripwire stops only the deletion. Listed always; deleted on request.
     stale, tripped, lists = _find_stale(client, serving_keys)
     _budget_line(writes + lists)
-    doomed = [k for keys in stale.values() for k in keys]
-    if tripped and not allow_mass_delete:
-        raise RuntimeError(
-            "publish: stale-object tripwire — " + "; ".join(tripped) + ". Nothing was "
-            "deleted. If the build is right (not a bug that dropped documents), re-run "
-            "with --allow-mass-delete. First stale keys: " + ", ".join(doomed[:10]))
-    _delete(client, doomed)
-    print(f"publish: deleted {len(doomed)} stale object(s)"
-          + "".join(f"\n  - {k}" for k in doomed[:50])
-          + (f"\n  … and {len(doomed) - 50} more" if len(doomed) > 50 else ""))
+    _settle_stale(client, stale, tripped, delete=delete_stale,
+                  allow_mass_delete=allow_mass_delete, dry_run=False, tag="publish")
     return len(serving) + len(raw)
 
 
@@ -470,12 +501,15 @@ if __name__ == "__main__":
                          "holds the same content (use with a full rebuild)")
     ap.add_argument("--dry-run", action="store_true", default=None,
                     help="write and delete nothing; report what would change")
+    ap.add_argument("--delete-stale", action="store_true",
+                    help="delete objects under a managed prefix that this build did "
+                         "not produce (without it they are only listed)")
     ap.add_argument("--allow-mass-delete", action="store_true",
-                    help="delete stale objects even when their number trips the "
-                         "mass-delete tripwire")
+                    help="with --delete-stale: delete even when the number of stale "
+                         "objects trips the mass-delete tripwire")
     ap.add_argument("--allow-bulk-writes", action="store_true",
                     help=f"permit more than {BULK_WRITE_LIMIT} writes in one run")
     args = ap.parse_args()
     run(dry_run=args.dry_run, force_all=args.force_all,
-        allow_mass_delete=args.allow_mass_delete,
+        delete_stale=args.delete_stale, allow_mass_delete=args.allow_mass_delete,
         allow_bulk_writes=args.allow_bulk_writes)
