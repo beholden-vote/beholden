@@ -149,8 +149,10 @@ export type LevelHandler = (zoom: number) => void;
 
 export interface BeholdenMap {
   map: maplibregl.Map;
-  /** Programmatic selection (search results, tests): fly there, then select. */
-  goTo(lng: number, lat: number, zoom?: number): void;
+  /** Programmatic selection (search results, arrival, tests): fly there, then
+   *  select. `offsetY` (px, negative = up) lands the point above the screen
+   *  centre -- on a phone the bottom sheet covers the lower half of the map. */
+  goTo(lng: number, lat: number, zoom?: number, offsetY?: number): void;
   clearSelection(): void;
   /** Toggle an administrative level on/off (also affects hit-testing). In AUTO
    *  mode this seeds the desired set but zoom still governs sld* fades; call
@@ -425,11 +427,17 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     applyAllVis();
     onSelect(hits, lngLat);
   };
-  map.on("click", (e) => selectAtPoint(e.point, e.lngLat));
+  // Arrival (WO-35) flies somewhere without being asked, so a flight can now be
+  // overtaken -- by a click, or by the address the reader typed meanwhile. Only
+  // the latest request selects; an overtaken one must not land on top of it.
+  let flight = 0;
+  map.on("click", (e) => { flight++; selectAtPoint(e.point, e.lngLat); });
 
-  const goTo = (lng: number, lat: number, zoom = 8) => {
-    map.flyTo({ center: [lng, lat], zoom, duration: 1200 });
+  const goTo = (lng: number, lat: number, zoom = 8, offsetY = 0) => {
+    const mine = ++flight;
+    map.flyTo({ center: [lng, lat], zoom, duration: 1200, offset: [0, offsetY] });
     map.once("idle", () => {
+      if (mine !== flight) return;
       const point = map.project([lng, lat]);
       selectAtPoint(point, { lng, lat });
     });

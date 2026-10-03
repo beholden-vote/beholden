@@ -1,31 +1,33 @@
-/** UI layer over the map: address search, the representation-stack panel
- *  ("who represents this point"), and the drill-down dossier view. */
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Dossier, Pin, StackEntry } from "../types";
+/** The reader shell. Composition only: the map chrome (search, layer dock,
+ *  level toast, footer, info overlays) around ONE panel, which shows whichever
+ *  view the history model says is current.
+ *
+ *    ui/nav/    where the reader is: history, breadcrumb, view registry, search
+ *    ui/place/  a place and everyone who represents it; the remembered place
+ *    ui/sheet/  the panel itself: a drawer when wide, a bottom sheet when narrow
+ *
+ *  What is left here is the wiring between them and the map: which place a map
+ *  click or an address opens, when that pushes history and when it replaces,
+ *  where focus goes, and how the reader arrives.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_VISIBLE } from "../map";
-import type { BeholdenMap, RawStackHit, LayerId, LayerMode, DivisionProps } from "../map";
-import {
-  loadDossier, loadPins, loadPeopleIndex, ocdShortLabel,
-  type PinIndex, type PersonSearchRow,
-} from "../lib/data";
-import { geocode, geolocate, suggest, type Place } from "../lib/lookup";
-import { Avatar, EmptyNote, PartyChip } from "./bits";
-import { DossierView } from "./DossierView";
-import { Ballot } from "./Ballot";
+import type { BeholdenMap, RawStackHit, LayerId, LayerMode } from "../map";
+import { loadPins, type PinIndex } from "../lib/data";
+import { geolocate } from "../lib/lookup";
+import { GATES, gateForZoom, type Gate } from "../lib/levels";
+import { methodologyHash, parseMethodologyHash } from "../router";
+import { STRINGS } from "../strings";
 import { Footer, InfoOverlay, LayerControl, LevelToast, type InfoPage } from "./chrome";
 import { GradeFilterProvider, loadMinGrade, saveMinGrade, type Grade } from "./gradeFilter";
-import {
-  LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS, GATES, gateForZoom, type Gate,
-} from "../lib/levels";
-import {
-  parseHash, isRouteHash, personHash, replaceHash, clearRouteHash,
-  parseMethodologyHash, methodologyHash,
-  type Route, type DossierTab,
-} from "../router";
-
-// Federal first, then state chambers, then local (county) — the same order for
-// every point on the map.
-
+import { Breadcrumb } from "./nav/Breadcrumb";
+import { isOwnPlace, nav, titleOf, useNav, type PlaceOrigin, type View } from "./nav/history";
+import { SearchBar } from "./nav/SearchBar";
+import { PersonView, RecordView } from "./nav/views";
+import { ArrivePrompt, PlaceView } from "./place/PlaceView";
+import { placeTitle } from "./place/divisions";
+import { loadPlace, savePlace } from "./place/remembered";
+import { NARROW, Sheet, type SheetStop } from "./sheet/Sheet";
 
 /** How long the "you crossed into a new level" marker stays up. Long enough to
  *  read four words, short enough not to sit over the map you just zoomed into. */
@@ -34,7 +36,7 @@ const LEVEL_TOAST_MS = 2400;
 const LAYER_PREFS_KEY = "beholden:layers";
 const LAYER_PREFS_VERSION = 2;
 // Versioned prefs blob (WO-2): { version, mode, visible }. v1 was a bare
-// Record<LayerId, boolean> (no mode) — see loadLayerPrefs for the migration.
+// Record<LayerId, boolean> (no mode) -- see loadLayerPrefs for the migration.
 type LayerPrefs = { version: number; mode: LayerMode; visible: Record<LayerId, boolean> };
 
 function loadLayerPrefs(): LayerPrefs {
@@ -59,6 +61,7 @@ function loadLayerPrefs(): LayerPrefs {
   } catch { /* fall through to defaults */ }
   return fallback;
 }
+
 // Info overlays are hash-linkable: the flat #about / #privacy / #sources, plus
 // WO-8's #methodology (and #methodology/<anchor> to open a specific section).
 type InfoState = { page: InfoPage; anchor?: string | null };
@@ -70,173 +73,53 @@ function hashToInfo(): InfoState | null {
   return null;
 }
 
-type PanelState =
-  | { kind: "closed" }
-  | { kind: "stack"; entries: StackEntry[] }
-  | { kind: "ballot"; entries: StackEntry[] }
-  | { kind: "dossier"; dossier: Dossier; tab: DossierTab; from?: StackEntry[] };
-
-// The pin-index feed a division's ocd_id belongs to (its map layer). Used to
-// resolve a #/d/{ocd_id} deep-link to the pins under that division.
-function layerOfOcd(ocdId: string): LayerId | null {
-  if (/\/sldu:/.test(ocdId)) return "sldu";
-  if (/\/sldl:/.test(ocdId)) return "sldl";
-  if (/\/(county|parish|borough):/.test(ocdId)) return "county";
-  if (/\/cd:/.test(ocdId)) return "cd";
-  if (/\/state:[a-z]{2}$/.test(ocdId)) return "states";
-  return null;
-}
-
 export interface AppHandle {
   onMapSelect: (hits: RawStackHit[], lngLat: { lng: number; lat: number }) => void;
   onZoomLevel: (zoom: number) => void;
 }
 
-/** A human name for the division you clicked, built only from what the tile
- *  actually carries (spike/stamp_ocd_ids.py §feature_props).
- *
- *  States and counties ship a real `name`. Districts do not and never will —
- *  a congressional district has no name, only a number — so theirs is composed
- *  from `state` + `district_num`, which is formatting, not invention. Nothing
- *  here reaches for a fact the tile doesn't hold: no population, no area, no
- *  demographics. Those would need a source, and an unsourced fact doesn't ship.
- */
-function divisionName(layer: LayerId, props: DivisionProps, ocdId: string): string {
-  const st = props.state ?? /state:(\w\w)/.exec(ocdId)?.[1]?.toUpperCase() ?? "";
-  const n = props.district_num;
-  if (layer === "states") return props.name ?? st;
-  if (layer === "cd") {
-    if (props.at_large) return `${st} at-large congressional district`;
-    return n ? `${st}-${n} congressional district` : "Congressional district";
-  }
-  if (layer === "sldu") return n ? `${st} Senate district ${n}` : `${st} Senate district`;
-  if (layer === "sldl") return n ? `${st} House district ${n}` : `${st} House district`;
-  if (layer === "county") {
-    // TIGER ships the bare name ("Sumner"); the OCD path knows whether this
-    // state calls them counties, parishes or boroughs.
-    const kind = /\/(county|parish|borough):/.exec(ocdId)?.[1] ?? "county";
-    const word = kind.charAt(0).toUpperCase() + kind.slice(1);
-    return props.name ? `${props.name} ${word}` : ocdShortLabel(ocdId);
-  }
-  return ocdShortLabel(ocdId);
-}
-
-/** The area you clicked, above the people who represent it.
- *
- *  Answers "what is this place?" before "who runs it?" — clicking a polygon is
- *  a question about a place, and the panel used to answer only the second half.
- *  The meta line is deliberately thin: identifiers we publish (FIPS/GEOID, the
- *  OCD id) plus counts derived from our own pins. Everything on it is either a
- *  tile attribute or arithmetic over data already on screen.
- */
-function DivisionCard({ entry }: { entry: StackEntry }) {
-  const name = divisionName(entry.layer, entry.props ?? {}, entry.ocdId);
-  const geoid = entry.props?.geoid;
-  const seats = entry.pins.length;
-  const vacant = entry.pins.filter((p) => p.vacant).length;
-  // No party breakdown here on purpose: every row below already carries its own
-  // party chip, and the one code that would need explaining ("U" — the source
-  // publishes no party, which most local governments don't) reads as a party
-  // rather than an absence. Seats and vacancies are counts; parties are chips.
-  return (
-    <div className="division-card">
-      <h3 className="division-name">{name}</h3>
-      <p className="division-meta mono">
-        <span>{LEVEL_TITLES[entry.layer] ?? entry.layer}</span>
-        {geoid && <span title="Census GEOID / FIPS code">FIPS {geoid}</span>}
-        <span>{seats === 1 ? "1 seat" : `${seats} seats`}</span>
-        {vacant > 0 && <span className="division-vacant">{vacant} vacant</span>}
-      </p>
-      <p className="division-ocd mono" title="Open Civic Data division identifier">
-        {entry.ocdId}
-      </p>
-    </div>
-  );
-}
-
-/** One collapsible level section (Federal / State) in the representation stack.
- *  Default open; the header shows the officeholder count as a mono badge (kept
- *  visible when collapsed so the level's weight reads at a glance). */
-function StackSection({ level, entries, onOpen }: {
-  level: string;
-  entries: StackEntry[];
-  onOpen: (pin: Pin) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const count = entries.reduce((n, e) => n + e.pins.length, 0);
-  return (
-    <section className="stack-section">
-      <button type="button" className="stack-section-head" aria-expanded={open}
-              onClick={() => setOpen((v) => !v)}>
-        <span className="stack-section-caret" aria-hidden>{open ? "▾" : "▸"}</span>
-        <span className="stack-section-label">{level}</span>
-        <span className="stack-section-count">{count}</span>
-      </button>
-      {open && entries.map((entry) => (
-        <div className="stack-level" key={`${entry.layer}:${entry.ocdId}`}>
-          <DivisionCard entry={entry} />
-          {entry.pins.length === 0 ? (
-            <EmptyNote>
-              {entry.layer === "sldu" || entry.layer === "sldl"
-                ? "State-legislature profiles arrive with the state data layer."
-                : entry.layer === "county"
-                ? "Beholden covers county officials in pilot counties only. This county isn't covered yet."
-                : "No officeholder published for this division yet."}
-            </EmptyNote>
-          ) : (
-            entry.pins.map((pin) => (
-              <button className="person-row" key={pin.person_id} onClick={() => onOpen(pin)}>
-                <Avatar url={pin.photo_url} name={pin.full_name ?? "?"} size={40} />
-                {/* Name over office. The office line matters most at the local
-                    level, where "Mayor of Hendersonville" or "Sumner County
-                    Commission · District 3" is the whole reason the row is
-                    here — a bare name tells you nothing about what they run.
-                    The pipeline has always published it; the row just never
-                    showed it. */}
-                <span className="person-id-cell">
-                  <span className="person-name">
-                    {pin.vacant ? "Vacant seat" : pin.full_name ?? "View profile"}
-                  </span>
-                  {pin.office && <span className="person-office">{pin.office}</span>}
-                </span>
-                <PartyChip code={pin.party} />
-                <span className="person-go">→</span>
-              </button>
-            ))
-          )}
-        </div>
-      ))}
-    </section>
-  );
+/** A flight to the reader's OWN place, awaiting the map's answer. The map
+ *  reports every selection the same way; the point is how one of ours is told
+ *  from a click. */
+interface OwnFlight {
+  lng: number; lat: number;
+  origin: PlaceOrigin;
+  /** Refill the map-only entry instead of stepping past it (arrival after a reload). */
+  fill: boolean;
 }
 
 export function App({ mapRef, handleRef }: {
   mapRef: { current: BeholdenMap | null };
   handleRef: { current: AppHandle | null };
 }) {
+  const snap = useNav();
+  const { view, move } = snap;
   const [pins, setPins] = useState<PinIndex | null>(null);
-  const [panel, setPanel] = useState<PanelState>({ kind: "closed" });
   const [busy, setBusy] = useState(false);
-  const [searchMsg, setSearchMsg] = useState<string | null>(null);
-  const [places, setPlaces] = useState<Place[]>([]);
-  const [people, setPeople] = useState<PersonSearchRow[]>([]);   // name matches (WO-5)
-  const [activeIdx, setActiveIdx] = useState(-1);                // keyboard nav across suggestions
+  const [msg, setMsg] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState(false);
+  const [stop, setStop] = useState<SheetStop>("half");
   const [prefs, setPrefs] = useState<LayerPrefs>(loadLayerPrefs);
   // WO-28 source-quality floor. Persisted like layer prefs; defaults to "D"
   // (show everything) so grading informs trust without hiding records.
   const [minGrade, setMinGrade] = useState<Grade>(loadMinGrade);
   const changeMinGrade = (g: Grade) => { setMinGrade(g); saveMinGrade(g); };
-  const layerVis = prefs.visible;
-  const [info, setInfo] = useState<InfoState | null>(hashToInfo);
   // Level of government the current zoom is showing, and the transient marker
   // shown when we cross into it.
   const [gate, setGate] = useState<Gate>(GATES[0]);
   const [toast, setToast] = useState<Gate | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<number | undefined>(undefined);
-  const abortRef = useRef<AbortController | null>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const flight = useRef<OwnFlight | null>(null);
+  /** The "you are here" marker already shows a confirmed point; a late guess must not move it. */
+  const exact = useRef(false);
+  /** The view about to open was not asked for (arrival): it must not take focus. */
+  const unasked = useRef(false);
+  // An info page is opened and closed only by navigations, and every navigation
+  // yields a new snapshot -- so the hash is read once per snapshot.
+  const info = useMemo(hashToInfo, [snap]);
 
-  useEffect(() => { loadPins().then(setPins); }, []);
+  useEffect(() => { void loadPins().then(setPins); }, []);
 
   // Push mode + layer choices to the map and remember them on this device.
   // Order matters: set the mode first (it swaps the sld* fade expressions), then
@@ -250,53 +133,52 @@ export function App({ mapRef, handleRef }: {
     try { localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ok */ }
   }, [prefs, mapRef]);
 
-  // Info pages are hash-linkable (#about / #privacy / #sources / #methodology).
-  useEffect(() => {
-    const onHash = () => setInfo(hashToInfo());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+  /* ---- opening things ---------------------------------------------------- */
+
+  const openPerson = useCallback((personId: string, title?: string) => {
+    nav.push({ kind: "person", personId, tab: "overview", title });
   }, []);
 
-  // Open a dossier by id. `byPin`/`from` are optional context: a map/stack open
-  // carries the pin (for the back-target) — a #/p/ deep-link has neither and
-  // fetches straight from the id. Writes the permalink hash (replaceState),
-  // including the tab segment when opening on a non-default tab (WO-11).
-  const openDossier = useCallback(async (personId: string, from?: StackEntry[], tab: DossierTab = "overview") => {
-    setBusy(true);
-    const dossier = await loadDossier(personId);
-    setBusy(false);
-    if (dossier) {
-      setPanel({ kind: "dossier", dossier, tab, from });
-      replaceHash(personHash(personId, tab));
+  /** Fly to the reader's own place; the map answers through onMapSelect. */
+  const goOwn = useCallback((lng: number, lat: number, origin: PlaceOrigin, fill = false) => {
+    flight.current = { lng, lat, origin, fill };
+    setMsg(null);
+    const m = mapRef.current;
+    exact.current = origin !== "approximate";
+    m?.setUserLocation(lng, lat, exact.current);
+    // A phone's sheet opens over the lower half of the map: land the point in
+    // the band left visible between the search field and the sheet.
+    m?.goTo(lng, lat, 9, window.matchMedia(NARROW).matches ? -0.2 * window.innerHeight : 0);
+  }, [mapRef]);
+
+  const onMapSelect = useCallback((hits: RawStackHit[], at: { lng: number; lat: number }) => {
+    const f = flight.current;
+    const own = f && f.lng === at.lng && f.lat === at.lat ? f : null;
+    if (own) flight.current = null;
+    if (hits.length === 0) {
+      if (!own) nav.close();                                  // a click on open water closes the panel
+      else if (own.origin === "confirmed") setMsg(STRINGS.nothingThere);
+      else setPrompt(true);                                   // no districts under the guess: ask instead
+      return;
     }
-  }, []);
-
-  // Flip the open dossier's tab (WO-11). Mirrors into the hash via replaceState
-  // ONLY — replaceState fires no hashchange (the file's no-loop invariant) and
-  // tab flips must not stack history.
-  const setDossierTab = useCallback((tab: DossierTab) => {
-    if (panel.kind !== "dossier") return;
-    replaceHash(personHash(panel.dossier.person_id, tab));
-    setPanel({ ...panel, tab });
-  }, [panel]);
-
-  const entriesFromHits = useCallback((hits: RawStackHit[]): StackEntry[] =>
-    hits
-      .map((h) => ({
-        layer: h.layer, ocdId: h.ocdId, props: h.props,
-        pins: pins?.get(h.layer)?.get(h.ocdId) ?? [],
-      }))
-      .sort((a, b) => (LEVEL_ORDER[a.layer] ?? 9) - (LEVEL_ORDER[b.layer] ?? 9)),
-  [pins]);
-
-  const onMapSelect = useCallback((hits: RawStackHit[], _lngLat: { lng: number; lat: number }) => {
-    if (hits.length === 0) return setPanel({ kind: "closed" });
-    const entries = entriesFromHits(hits);
-    // One person under the point (just a lone CD rep at low zoom)? Go straight in.
-    const people = entries.flatMap((e) => e.pins);
-    if (people.length === 1 && entries.length === 1) void openDossier(people[0].person_id, entries);
-    else setPanel({ kind: "stack", entries });
-  }, [entriesFromHits, openDossier]);
+    const cur = nav.current();
+    const next: View = {
+      kind: "place", hits, title: placeTitle(hits),
+      origin: own?.origin ?? "map", point: own ? { lng: at.lng, lat: at.lat } : undefined,
+    };
+    // Remembered only when the reader confirmed it -- never the edge's guess.
+    if (own?.origin === "confirmed") savePlace(at);
+    unasked.current = !!own && own.origin !== "confirmed";
+    setPrompt(false);
+    // The next district explored, or a guess corrected, takes the place of the
+    // one on screen. Anything else is a step the Back button can undo.
+    const swap = cur.kind === "place" ? isOwnPlace(cur) === isOwnPlace(next) : cur.kind === "home" && !!own?.fill;
+    if (swap) nav.replace(next); else nav.push(next);
+    // One division with one official under a click (only the U.S. House layer
+    // on, say): go straight in, with the place one step back.
+    const only = !own && hits.length === 1 ? pins?.get(hits[0].layer)?.get(hits[0].ocdId) : undefined;
+    if (only?.length === 1) openPerson(only[0].person_id, only[0].full_name);
+  }, [pins, openPerson]);
 
   // Which level of government the current zoom is showing. The map reports raw
   // zoom on every frame; we keep only the GATE, so state updates happen on the
@@ -319,211 +201,128 @@ export function App({ mapRef, handleRef }: {
     return () => window.clearTimeout(t);
   }, [gate]);
 
-  // Open a division's representation from a #/d/{ocd_id} deep-link. Zero-server:
-  // we resolve the division's pins straight from the pin index (no coordinate /
-  // no map fly needed to render "who represents this division"), and stack them.
-  const openDivision = useCallback((ocdId: string) => {
-    const layer = layerOfOcd(ocdId);
-    const pinsHere = layer ? pins?.get(layer)?.get(ocdId) ?? [] : [];
-    if (!layer) return setPanel({ kind: "closed" });
-    const entries: StackEntry[] = [{ layer, ocdId, pins: pinsHere }];
-    setPanel({ kind: "stack", entries });
-  }, [pins]);
+  /* ---- the reader's own place -------------------------------------------- */
 
-  // Permalink routing (WO-5): #/p/{id} and #/d/{ocd_id}. Runs on load once the
-  // pin index is ready (division links need it), and on every user-driven
-  // hashchange. Flat info hashes are handled by the info-hash effect below and
-  // are ignored here. openDossier's own replaceState never fires hashchange, so
-  // there's no restore loop. We only ACT on route hashes — a plain "#" from
-  // closing an overlay leaves whatever panel is open untouched.
-  const applyRoute = useCallback((route: Route) => {
-    if (route.kind === "person") {
-      const tab: DossierTab = route.tab ?? "overview";
-      // Same-person guard (WO-11, load-bearing): if the panel already shows this
-      // person, ONLY the tab updates — no refetch/remount. Without it, a hand-
-      // edited tab segment would reload the dossier and blow away the open
-      // Connections state for a mere tab flip.
-      if (panel.kind === "dossier" && panel.dossier.person_id === route.personId) {
-        setPanel({ ...panel, tab });
-        return;
-      }
-      void openDossier(route.personId, undefined, tab);
-    } else if (route.kind === "division") openDivision(route.ocdId);
-  }, [panel, openDossier, openDivision]);
-
-  const routedOnLoad = useRef(false);
-  useEffect(() => {
-    // Wait for pins so a division deep-link resolves; a person link needs none,
-    // but running once keeps the entry point single.
-    if (routedOnLoad.current || !pins) return;
-    routedOnLoad.current = true;
-    applyRoute(parseHash());
-  }, [pins, applyRoute]);
-
-  useEffect(() => {
-    const onHash = () => { if (isRouteHash()) applyRoute(parseHash()); };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, [applyRoute]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setInfo(null);
-      setPanel({ kind: "closed" });
-      mapRef.current?.clearSelection();
-      clearRouteHash();   // Escape clears any deep-link back to home (#)
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [mapRef]);
-
-  // Dismiss the suggestion dropdown (both groups) and reset keyboard focus.
-  const clearSuggest = useCallback(() => {
-    setPlaces([]); setPeople([]); setActiveIdx(-1);
-  }, []);
-
-  const flyTo = useCallback((lng: number, lat: number) => {
-    clearSuggest(); setSearchMsg(null);
-    mapRef.current?.setUserLocation(lng, lat, true);   // exact "you are here"
-    mapRef.current?.goTo(lng, lat, 9);
-  }, [mapRef, clearSuggest]);
-
-  // Pick a person from the People suggestions: jump straight to their dossier
-  // (the permalink hash is written by openDossier), clearing the search UI.
-  const pickPerson = useCallback((row: PersonSearchRow) => {
-    clearSuggest(); setSearchMsg(null);
-    if (searchRef.current) searchRef.current.value = "";
-    void openDossier(row.person_id);
-  }, [clearSuggest, openDossier]);
-
-  // Ambient bearings without a permission prompt: coarse IP location from our own
-  // edge (/api/whereami) drops a faint marker so the map isn't a blank field.
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/whereami")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((w) => {
-        if (!cancelled && w && typeof w.lat === "number" && typeof w.lng === "number") {
-          mapRef.current?.setUserLocation(w.lng, w.lat, false);
-        }
-      })
-      .catch(() => { /* no bearings marker — fine */ });
-    return () => { cancelled = true; };
-  }, [mapRef]);
-
-  // Debounced typeahead over BOTH indexes (WO-5): a query with no digits looks
-  // like a name → search the lazy people index; anything address-shaped (or that
-  // still returns people) also hits the Census geocoder. The two result groups
-  // render together in one dropdown. Each keystroke cancels the last lookup.
-  const onSearchInput = (ev: React.ChangeEvent<HTMLInputElement>) => {
-    const q = ev.target.value;
-    window.clearTimeout(debounceRef.current);
-    setActiveIdx(-1);
-    if (q.trim().length < 3) { clearSuggest(); return; }
-    const looksLikeAddress = /\d/.test(q);   // digits ⇒ street number / ZIP
-    debounceRef.current = window.setTimeout(async () => {
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
-      // People: only for name-shaped queries (no digits). Index + minisearch are
-      // lazy-loaded on the first such keystroke, then cached.
-      if (!looksLikeAddress) {
-        loadPeopleIndex().then((idx) => {
-          if (!ac.signal.aborted) setPeople(idx?.search(q) ?? []);
-        });
-      } else {
-        setPeople([]);
-      }
-      // Addresses: the Census geocoder wants a fairly complete address, so short
-      // name-only queries won't match — that's fine, the People group carries them.
-      setPlaces(await suggest(q, ac.signal));
-    }, 320);
-  };
-
-  const submitSearch = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    const q = searchRef.current?.value.trim();
-    if (!q) return;
-    // Enter with a highlighted suggestion picks it; otherwise fall through to a
-    // geocode of the typed text.
-    if (activeIdx >= 0 && activeIdx < suggestions.length) {
-      return activateSuggestion(suggestions[activeIdx]);
-    }
-    // A name-shaped query with a single confident person match jumps to them
-    // rather than failing an address geocode.
-    if (!/\d/.test(q)) {
-      const idx = await loadPeopleIndex();
-      const hits = idx?.search(q) ?? [];
-      if (hits.length === 1) return pickPerson(hits[0]);
-    }
-    setBusy(true); setSearchMsg(null); clearSuggest();
-    const loc = await geocode(q);
-    setBusy(false);
-    if (!loc) { setSearchMsg("No match — try a full address, or search an official by name."); return; }
-    flyTo(loc.lng, loc.lat);
-  };
-
-  const useMyLocation = async () => {
-    setBusy(true); setSearchMsg(null); clearSuggest();
+  const locate = useCallback(async () => {
+    setBusy(true); setMsg(null);
     try {
       const { lng, lat } = await geolocate();
-      flyTo(lng, lat);
+      goOwn(lng, lat, "confirmed");
     } catch (err) {
-      const denied = (err as GeolocationPositionError)?.code === 1;
-      setSearchMsg(denied
-        ? "Location permission denied — type your address instead."
-        : "Couldn't get your location — type your address instead.");
+      setMsg((err as GeolocationPositionError)?.code === 1 ? STRINGS.locateDenied : STRINGS.locateFailed);
+      setStop((s) => (s === "full" ? "half" : s));            // the message sits by the search field
     } finally {
       setBusy(false);
     }
-  };
+  }, [goOwn]);
 
-  // A flat, ordered suggestion list (People first, then Addresses) so the arrow
-  // keys can traverse both groups with one active index.
-  type Suggestion = { kind: "person"; row: PersonSearchRow } | { kind: "place"; place: Place };
-  const suggestions: Suggestion[] = [
-    ...people.map((row) => ({ kind: "person", row }) as const),
-    ...places.map((place) => ({ kind: "place", place }) as const),
-  ];
-  const activateSuggestion = (s: Suggestion) =>
-    s.kind === "person" ? pickPerson(s.row) : flyTo(s.place.lng, s.place.lat);
+  const typeAddress = useCallback(() => {
+    setStop((s) => (s === "full" ? "half" : s));              // at full the sheet covers the search field
+    searchRef.current?.focus();
+  }, []);
 
-  const onSearchKeyDown = (ev: React.KeyboardEvent<HTMLInputElement>) => {
-    if (suggestions.length === 0) return;
-    if (ev.key === "ArrowDown") {
-      ev.preventDefault();
-      setActiveIdx((i) => (i + 1) % suggestions.length);
-    } else if (ev.key === "ArrowUp") {
-      ev.preventDefault();
-      setActiveIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
-    } else if (ev.key === "Escape") {
-      clearSuggest();
+  const fix = { onLocate: locate, onTypeAddress: typeAddress, busy };
+
+  // Arrive on the reader's own area: once, and only on a load whose URL asked
+  // for nothing. The place they confirmed on an earlier visit comes first; the
+  // edge's coarse guess second; with neither, the national map and a prompt.
+  // A load that DID ask for something keeps what it always had: the marker.
+  const arrived = useRef(false);
+  useEffect(() => {
+    if (arrived.current) return;
+    arrived.current = true;
+    const cold = nav.current().kind === "home" && !hashToInfo();
+    // After a reload this entry was already a step past the map: refill it.
+    const fill = snap.index > 0;
+    const saved = loadPlace();
+    if (saved) {
+      if (cold) goOwn(saved.lng, saved.lat, "remembered", fill);
+      else mapRef.current?.setUserLocation(saved.lng, saved.lat, true);
+      return;
     }
-  };
+    fetch("/api/whereami")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((w) => {
+        const here = w && typeof w.lat === "number" && typeof w.lng === "number" ? w : null;
+        // The reader may have opened or searched for something while we asked.
+        if (cold && nav.current().kind === "home" && !flight.current && !hashToInfo()) {
+          if (here) goOwn(here.lng, here.lat, "approximate", fill); else setPrompt(true);
+        } else if (here && !exact.current) mapRef.current?.setUserLocation(here.lng, here.lat, false);
+      });
+  }, [goOwn, mapRef, snap.index]);
 
-  const close = () => {
-    setPanel({ kind: "closed" });
-    mapRef.current?.clearSelection();
-    clearRouteHash();
-  };
-  // Touching any per-layer box is an explicit choice → drop to manual and stick.
+  /* ---- moving between views ---------------------------------------------- */
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (hashToInfo()) nav.closeOverlay();
+      else if (nav.current().kind === "home") setPrompt(false);
+      else nav.up();                                          // one altitude; from the top, close
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const heading = () => sheetRef.current?.querySelector<HTMLElement>(".sheet-body h2") ?? null;
+
+  // A view replaced its own heading (loading -> dossier, or -> not found). If
+  // focus was on the old one it fell to the page; put it on the new one.
+  const onReady = useCallback(() => {
+    const a = document.activeElement;
+    if (a && a !== document.body) return;
+    const h = heading();
+    if (h) { h.tabIndex = -1; h.focus(); }
+  }, []);
+
+  // On every change of view: a new view takes focus on its heading; a view
+  // come back to returns focus to the control that left it.
+  const shown = useRef(view);
+  const wantFocus = useRef<"heading" | "opener" | null>(null);
+  useEffect(() => {
+    const prev = shown.current;
+    shown.current = view;
+    const quiet = unasked.current;
+    unasked.current = false;
+    if (prev === view) return;                                // renamed, or an info page over it
+    if (view.kind === "home") mapRef.current?.clearSelection();
+    else {
+      // Show what was asked for: never leave a new view folded away at peek.
+      setStop((s) => (s === "peek" || prev.kind === "home" ? "half" : s));
+      if (prev.kind === "person" && view.kind === "person" && prev.personId === view.personId) return;   // a tab
+      const body = sheetRef.current?.querySelector(".sheet-body");
+      if (body) body.scrollTop = 0;
+      // The reader is working the map (district after district): leave focus there.
+      if (move === "replace" && document.activeElement?.closest("#root")) return;
+      // Arrival opened this by itself. Taking focus would move a reader who did nothing.
+      if (quiet) return;
+    }
+    wantFocus.current = move === "back" ? "opener" : view.kind === "home" ? null : "heading";
+  }, [view, move, mapRef]);
+  // Applied after the render in which the sheet's body is no longer inert.
+  useEffect(() => {
+    const want = wantFocus.current;
+    if (!want || sheetRef.current?.querySelector(".sheet-body[inert]")) return;
+    wantFocus.current = null;
+    const el = (want === "opener" ? nav.opener() : null) ?? heading();
+    if (!el) return;
+    if (/^H\d$/.test(el.tagName)) el.tabIndex = -1;           // a heading takes focus by script only
+    el.focus();
+  });
+
+  /* ---- map chrome -------------------------------------------------------- */
+
+  // Touching any per-layer box is an explicit choice -> drop to manual and stick.
   const toggleLayer = (id: LayerId, v: boolean) =>
     setPrefs((p) => ({ ...p, mode: "manual", visible: { ...p.visible, [id]: v } }));
   // Auto master toggle. Re-checking Auto restores zoom-driven behavior; the stored
   // per-layer visibility is left intact so unchecking Auto again returns to it.
   const setAuto = (on: boolean) => setPrefs((p) => ({ ...p, mode: on ? "auto" : "manual" }));
-  // Open an info overlay and reflect it in the hash so it's shareable/back-able.
-  // Methodology uses the #methodology[/anchor] form (WO-8); the flat pages keep
-  // their bare #about / #privacy / #sources hash.
-  const openInfo = (p: InfoPage, anchor?: string | null) => {
-    location.hash = p === "methodology" ? methodologyHash(anchor ?? undefined) : p;
-    setInfo({ page: p, anchor });
-  };
-  const closeInfo = () => {
-    history.replaceState(null, "", location.pathname + location.search);
-    setInfo(null);
-  };
+  // An info page lies over the current view as its own history entry, so Back
+  // closes it; moving between info pages swaps that entry.
+  const openInfo = (p: InfoPage, anchor?: string | null) =>
+    nav.overlay(p === "methodology" ? methodologyHash(anchor ?? undefined) : `#${p}`, !!info);
 
   return (
     <GradeFilterProvider value={minGrade}>
@@ -532,109 +331,35 @@ export function App({ mapRef, handleRef }: {
           <span className="brand-name">Beholden</span>
           <span className="brand-tag">power, on the public record</span>
         </div>
-        <form className="search" onSubmit={submitSearch} role="search">
-          <div className="search-field">
-            <input ref={searchRef} type="search" name="address" autoComplete="street-address"
-                   enterKeyHint="search" placeholder="Address or official's name — find your reps"
-                   aria-label="Search an address or an official's name"
-                   role="combobox" aria-expanded={suggestions.length > 0} aria-controls="suggest-list"
-                   aria-activedescendant={activeIdx >= 0 ? `suggest-${activeIdx}` : undefined}
-                   onChange={onSearchInput} onKeyDown={onSearchKeyDown}
-                   onBlur={() => window.setTimeout(clearSuggest, 150)} />
-            {suggestions.length > 0 && (
-              <ul className="suggest" id="suggest-list" role="listbox">
-                {people.length > 0 && <li className="suggest-group" role="presentation">Officials</li>}
-                {people.map((row, i) => (
-                  <li key={row.person_id} role="option" aria-selected={activeIdx === i}>
-                    <button type="button" id={`suggest-${i}`}
-                            className={`suggest-person${activeIdx === i ? " is-active" : ""}`}
-                            onMouseEnter={() => setActiveIdx(i)}
-                            onMouseDown={(e) => { e.preventDefault(); pickPerson(row); }}>
-                      <span className="suggest-name">{row.full_name}</span>
-                      <span className="suggest-office">{row.office}</span>
-                    </button>
-                  </li>
-                ))}
-                {places.length > 0 && <li className="suggest-group" role="presentation">Addresses</li>}
-                {places.map((p, j) => {
-                  const idx = people.length + j;
-                  return (
-                    <li key={`${p.lng},${p.lat}`} role="option" aria-selected={activeIdx === idx}>
-                      <button type="button" id={`suggest-${idx}`}
-                              className={activeIdx === idx ? "is-active" : undefined}
-                              onMouseEnter={() => setActiveIdx(idx)}
-                              onMouseDown={(e) => { e.preventDefault(); flyTo(p.lng, p.lat); }}>
-                        {p.label}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <button type="submit" disabled={busy}>{busy ? "…" : "Find"}</button>
-          <button type="button" className="loc-btn" onClick={useMyLocation} disabled={busy}
-                  aria-label="Use my location" title="Use my location">⌖</button>
-        </form>
-        {searchMsg && <p className="search-msg">{searchMsg}</p>}
+        <SearchBar inputRef={searchRef} busy={busy} setBusy={setBusy} message={msg} setMessage={setMsg}
+                   onPlace={(lng, lat) => goOwn(lng, lat, "confirmed")}
+                   onPerson={(row) => openPerson(row.person_id, row.full_name)}
+                   onLocate={locate} />
+        {prompt && view.kind === "home" && <ArrivePrompt {...fix} onDismiss={() => setPrompt(false)} />}
       </div>
 
-      {panel.kind !== "closed" && (
-        <aside className="panel" role="dialog" aria-label="Representation details">
-          <button className="close-btn" onClick={close} aria-label="Close">×</button>
-
-          {panel.kind === "stack" && (
-            <div className="stack">
-              <div className="stack-head">
-                <h2>Representation here</h2>
-                <button type="button" className="ballot-link"
-                        onClick={() => setPanel({ kind: "ballot", entries: panel.entries })}>
-                  Your ballot ↗
-                </button>
-              </div>
-              {PANEL_SECTIONS.map((sec) => {
-                const entries = panel.entries.filter((e) => sec.layers.includes(e.layer));
-                if (entries.length === 0) return null;   // no hits at this level → no section
-                return (
-                  <StackSection key={sec.level} level={sec.level} entries={entries}
-                                onOpen={(pin) => void openDossier(pin.person_id, panel.entries)} />
-                );
-              })}
-              <p className="stack-hint">Select anyone to open their full cited dossier.</p>
-            </div>
+      {view.kind !== "home" && (
+        <Sheet sheetRef={sheetRef} label={titleOf(view)} stop={stop} onStop={setStop} onClose={nav.close}
+               header={<Breadcrumb trail={nav.trail()} />}>
+          {view.kind === "place" && (
+            <PlaceView view={view} pins={pins} fix={fix}
+                       onOpenPerson={(pin) => openPerson(pin.person_id, pin.full_name)} />
           )}
-
-          {panel.kind === "ballot" && (
-            <Ballot
-              entries={panel.entries}
-              onOpen={(pin) => void openDossier(pin.person_id, panel.entries)}
-              onBack={() => setPanel({ kind: "stack", entries: panel.entries })}
-            />
+          {view.kind === "person" && (
+            <PersonView key={view.personId} personId={view.personId} tab={view.tab} onReady={onReady} />
           )}
-
-          {panel.kind === "dossier" && (
-            <DossierView
-              dossier={panel.dossier}
-              tab={panel.tab}
-              onSelectTab={setDossierTab}
-              onOpenPerson={(id) => void openDossier(id)}
-              onBack={panel.from ? () => {
-                setPanel({ kind: "stack", entries: panel.from! });
-                clearRouteHash();   // leaving a dossier drops its #/p/ permalink
-              } : undefined}
-            />
-          )}
-        </aside>
+          {view.kind === "record" && <RecordView route={view.route} onReady={onReady} />}
+        </Sheet>
       )}
 
       <LevelToast gate={toast} />
-      <LayerControl visible={layerVis} auto={prefs.mode === "auto"}
+      <LayerControl visible={prefs.visible} auto={prefs.mode === "auto"}
                     onToggle={toggleLayer} onAuto={setAuto}
                     minGrade={minGrade} onMinGrade={changeMinGrade}
                     activeGate={gate.id} />
       <Footer onOpen={openInfo} />
       {info && (
-        <InfoOverlay page={info.page} anchor={info.anchor} onClose={closeInfo}
+        <InfoOverlay page={info.page} anchor={info.anchor} onClose={nav.closeOverlay}
                      onOpenInfo={(p) => openInfo(p)} />
       )}
     </GradeFilterProvider>

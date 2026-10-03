@@ -326,14 +326,42 @@ function Privacy() {
         of you.
       </p>
       <h2>What stays on your device</h2>
+      {/* A PUBLIC PROMISE (WO-35). These paragraphs must stay exactly true to
+          ui/place/remembered.ts (what is stored, under which key, how it is
+          removed) and to the arrival flow in ui/App.tsx. Change the code and
+          this copy in the same commit, or neither. */}
       <p>
-        <strong>Your location.</strong> If you tap "Use my location," your browser asks
-        your permission and hands the coordinates to the page to pan the map. That
-        happens entirely on your device — your location is never sent to us or stored.
+        <strong>Your exact location.</strong> If you choose "Use my exact location" (or
+        the location button beside the search field), your browser asks your permission
+        and hands the coordinates to the page, which uses them on your device to move the
+        map and list who represents that point. The coordinates are not sent to us.
       </p>
       <p>
-        <strong>Your layer choices.</strong> Which map layers you show are remembered in
-        your browser's local storage, on your device only.
+        <strong>Your place.</strong> When you confirm a place — by searching an address or
+        by allowing your exact location — the page keeps that one map point, a longitude
+        and a latitude, in this browser's local storage, on this device, so that your next
+        visit opens on your own representatives. Nothing else is kept: not the address you
+        typed, and not a history of places — a new place replaces the old one. The point is
+        never sent anywhere, and it is never put in a link or in the address bar: a link you
+        copy names a county or district, not where you are. To remove it, choose "Forget
+        this place", shown wherever your place is shown; it is deleted from this browser
+        at once. Clearing this site's data in your browser removes it too.
+      </p>
+      <p>
+        <strong>Your display choices.</strong> Which map layers you show, and your
+        source-quality filter, are remembered in your browser's local storage, on your
+        device only.
+      </p>
+      <h2>Where the map opens</h2>
+      <p>
+        If no place is saved, the page asks the server that delivers this site roughly
+        where you are. Every request to a website carries an internet (IP) address; the
+        server estimates a city-level location from yours and hands that estimate straight
+        back to the page. The page marks it on the map and, when you arrive without a link
+        to something specific, opens the map there — labelled <em>approximate</em>, because
+        it can be wrong. The estimate is not stored and not logged to a profile. Wherever
+        the map is looking, it downloads the map tiles for that area from our own servers,
+        as any online map does.
       </p>
       <h2>Address search</h2>
       <p>

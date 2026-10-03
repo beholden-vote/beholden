@@ -1,0 +1,92 @@
+/** The person and record altitudes, as the shell mounts them.
+ *
+ *  PersonView owns what DossierView never had to: the wait while a dossier
+ *  loads, and the answer when there is none. Until now a link to a dossier that
+ *  no longer exists -- the official left office and the object was removed --
+ *  did nothing at all. It now says so.
+ */
+import { Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import type { Dossier } from "../../types";
+import { loadDossier } from "../../lib/data";
+import type { DossierTab } from "../../router";
+import { STRINGS } from "../../strings";
+import { nav } from "./history";
+import { RECORD_VIEWS, type RecordRoute, type RecordViewProps } from "./registry";
+
+// The dossier's code loads with the first dossier, not with the map: a reader
+// who arrives on a place has not asked for one yet.
+const dossierCode = () => import("../DossierView");
+type DossierViewType = Awaited<ReturnType<typeof dossierCode>>["DossierView"];
+
+export function PersonView({ personId, tab, onReady }: {
+  personId: string;
+  tab: DossierTab;
+  /** The heading has changed (loading -> dossier, or -> not found); the shell
+   *  moves focus to it if focus was sitting on the heading it replaced. */
+  onReady: () => void;
+}) {
+  // Keyed by person in the shell, so this state is always this person's.
+  const [dossier, setDossier] = useState<Dossier | null | undefined>(undefined);
+  const [DossierView, setView] = useState<DossierViewType | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    // Data and code together, so the wait is one round trip, not two. Code that
+    // will not load is the same dead end as data that is not there.
+    void Promise.all([loadDossier(personId), dossierCode()])
+      .then(([d, code]) => { if (live) { setView(() => code.DossierView); setDossier(d); } })
+      .catch(() => { if (live) setDossier(null); });
+    return () => { live = false; };
+  }, [personId]);
+
+  // Name the crumb. Checked on every render, not once: the same dossier can
+  // come back as a different history entry (Back, a typed tab link) that has
+  // not been named yet. A no-op when the name already matches.
+  useEffect(() => { if (dossier) nav.retitle(dossier.identity.full_name); });
+
+  useEffect(() => { if (dossier !== undefined) onReady(); }, [dossier, onReady]);
+
+  if (dossier === undefined) {
+    return <div className="view-wait"><h2 tabIndex={-1}>{STRINGS.dossierLoading}</h2></div>;
+  }
+  if (dossier === null || !DossierView) {
+    return (
+      <div className="not-found">
+        <h2 tabIndex={-1}>{STRINGS.notFoundTitle}</h2>
+        <p>{STRINGS.notFoundBody}</p>
+        {!navigator.onLine && <p>{STRINGS.notFoundOffline}</p>}
+        <p className="mono not-found-id">{personId}</p>
+        <button type="button" className="fix-ghost" onClick={nav.close}>{STRINGS.notFoundAction}</button>
+      </div>
+    );
+  }
+  return (
+    <DossierView
+      dossier={dossier}
+      tab={tab}
+      // A tab is not an altitude: it replaces the entry, it never stacks Back.
+      onSelectTab={(t) => nav.replace({ kind: "person", personId, tab: t, title: dossier.identity.full_name })}
+      onOpenPerson={(id) => nav.push({ kind: "person", personId: id, tab: "overview" })}
+    />
+  );
+}
+
+/** Tells the shell when a lazily loaded view has actually mounted. */
+function Mounted({ onReady, children }: { onReady: () => void; children: ReactNode }) {
+  useEffect(onReady, [onReady]);
+  return children;
+}
+
+/** A bill, a roll call or a comparison: whatever the registry has for it. The
+ *  router only yields a record view when an entry exists, so `View` is set.
+ *  The wait has a heading of its own, so focus has somewhere to be while the
+ *  view's code loads; onReady then moves it to the view's own heading. */
+export function RecordView({ route, onReady }: { route: RecordRoute; onReady: () => void }) {
+  const View = RECORD_VIEWS[route.kind] as unknown as ComponentType<RecordViewProps> | undefined;
+  if (!View) return null;
+  return (
+    <Suspense fallback={<div className="view-wait"><h2 tabIndex={-1}>{STRINGS.viewLoading}</h2></div>}>
+      <Mounted onReady={onReady}><View route={route} onTitle={nav.retitle} /></Mounted>
+    </Suspense>
+  );
+}
