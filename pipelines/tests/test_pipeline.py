@@ -1933,12 +1933,15 @@ def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monke
     _stub_fetchers(monkeypatch, calls)
     manifest = _fetch.run(tmp_path / "raw", full=True)
     # every source fetcher ran (wa_pdc's stub returns a fragment here; the real
-    # fetcher returns None when disabled — covered separately below).
-    assert calls == {"unitedstates_legislators", "congress.gov", "voteview",
+    # fetcher returns None when disabled — covered separately below). A superset
+    # check: each work order that registers a source would otherwise have to edit
+    # this literal and collide with the others; dropping one of THESE still fails.
+    assert calls >= {"unitedstates_legislators", "congress.gov", "voteview",
                      "fec", "openstates", "house_clerk", "wa_pdc", "wikidata",
                      # WO-22: one fetcher per locality, so coverage and freshness
                      # stay meaningful per government rather than per "local".
                      "sumner_county", "hendersonville"}
+    assert calls == set(_fetch._FETCHERS)          # and every registered one ran
     for meta in manifest["sources"].values():
         assert meta["count"] == 1 and "retrieved_at" in meta
     timings = manifest["fetch_timings"]

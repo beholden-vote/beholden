@@ -37,6 +37,7 @@ jobs:
       CONGRESS_GOV_API_KEY: ${{ secrets.CONGRESS_GOV_API_KEY }}
       FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
       OPENSTATES_KEY: ${{ secrets.OPENSTATES_KEY }}   # WO-17 state votes (API v3)
+      CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}   # WO-34 county/city facts; unset = area facts skipped
       # Free-tier pacing (10 req/min cap): 6.5s ≈ 9/min, under the limit. When
       # the approved tier key lands, set repo variable OPENSTATES_MIN_INTERVAL_S
       # (e.g. 0.8 for silver) to backfill faster — this default is the fallback.

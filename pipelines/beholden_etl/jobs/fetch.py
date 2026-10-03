@@ -45,6 +45,7 @@ from .. import rawlake
 from ..config import CONGRESS, FEC_CYCLE, RAW_DIST, STATE_VOTES_SLUGS, WA_PDC_ENABLED
 from ..sources import congress_gov, fec, house_clerk, legislators, openstates, voteview
 from ..sources import tn_local                                  # WO-22 (local rosters)
+from ..sources import census_areas                               # WO-34 (county/city facts)
 from ..sources import openstates_votes                           # WO-17 (state votes/bills)
 from ..sources import wa_pdc                                     # WO-9 (trusted extraction)
 from ..sources import wikidata                                   # WO-15 (education)
@@ -479,6 +480,9 @@ _FETCHERS = {
     # reshaped page fails the run that saw it rather than the next one.
     "sumner_county": tn_local.fetch_sumner_county,
     "hendersonville": tn_local.fetch_hendersonville,
+    # WO-34: both pinned vintages, long SLAs; cold start (no prior) always fetches.
+    "census_acs": census_areas.fetch_acs,
+    "census_gazetteer": census_areas.fetch_gazetteer,
 }
 # Manifest source-key -> the config.SOURCES key whose SLA governs its freshness.
 # wa_pdc (registered in config.SOURCES since WO-19) is never freshness-skipped:

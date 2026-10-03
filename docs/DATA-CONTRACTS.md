@@ -398,7 +398,7 @@ Pin layer: `/pins/{layer}.json` — `[{ person_id, ocd_id, lat, lng (division ce
 
 ## 6. Source Registry (enum)
 
-`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `wikidata` · `wa_pdc` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
+`congress.gov` · `unitedstates_legislators` · `voteview` · `shor_mccarty` · `openstates` · `house_clerk` · `senate_efd` · `vendor:quiver|fmp|finnhub` (one selected per O1) · `fec` · `census_tiger` · `census_acs` · `census_gazetteer` · `wikidata` · `wa_pdc` · `gsa_plumbook` (Phase 2) · `internal` (derived; must reference upstream sources in methodology).
 
 **Local sources are registered per locality** (WO-22): `sumner_county` · `hendersonville`. There is no national roster of local officials, so coverage, freshness and grade are only meaningful per government — one registry row, one coverage row, one SLA each. Local person identifiers are namespaced `local:<locality>` rather than enumerated in the `person_identifiers.id_scheme` CHECK, because no identifier authority exists below the state level.
 
@@ -535,7 +535,7 @@ never reached a vote are linked out to congress.gov, not mirrored.
 still publishes. **`/bills/index.json`** lists every mirrored bill
 (`bill_id`, `number`, `title`, `policy_area`, `last_vote_at`) for client-side search.
 
-### 8.4 Area facts — WO-34 · *target*
+### 8.4 Area facts — WO-34 · **shipped**
 
 Facts about a place, as distinct from the people who represent it. Packed **one file per
 state per level** — roughly a hundred objects nationally instead of one per county and city,
@@ -546,7 +546,7 @@ which would be some 22,000 objects rewritten whenever the Census revises anythin
 ```jsonc
 {
   "schema_version": "1.0", "level": "county", "state": "tn", "generated_at": "…",
-  "geography": { "vintage": 2025,        "provenance": { "source": "census_gazetteer", … } },
+  "geography": { "vintage": 2024,        "provenance": { "source": "census_gazetteer", … } },
   "survey":    { "vintage": "2020-2024", "provenance": { "source": "census_acs", … } },
   "areas": {
     "47165": {                                   // keyed by Census GEOID
@@ -570,7 +570,51 @@ where the Bureau publishes none) — PRD principle 2, *ranges are ranges*: a cli
 margin or does not show the number. A fact the Bureau withholds for an area is **omitted**,
 never published as the Bureau's sentinel value.
 
-### 8.5 Place tiles — WO-21 · *built — live after the next `tiles-build`*
+**Sources and terms.** `census_acs` is the Census Data API, ACS 5-year, tables `B01003`,
+`B11001`, `B19013`, `B01002` (estimate and margin of each); `census_gazetteer` is the national
+counties and places Gazetteer files. Both are works of the U.S. Government, grade `A`
+(`official_structured`). Both vintages are **pinned constants** in
+`sources/census_areas.py` (ACS 2020-2024 is the newest the API serves; the Gazetteer vintage
+matches the ACS *geography* year, 2024, so both describe the same set of places) — never
+discovered at run time, and a snapshot of any other vintage halts the build. The Bureau's
+terms for API users (`census.gov/data/developers/about/terms-of-service`) ask that a service
+display *"This product uses the Census Bureau Data API but is not endorsed or certified by the
+Census Bureau"* (on the Sources page) and forbid modifying content while still crediting the
+Bureau, which is why nothing here computes or repairs a value. **The API requires a key**
+(`CENSUS_API_KEY`; a keyless data call is answered with an HTML page, not data — observed
+2026-10-03). When a fetch is due and it is unset, the fetch prints one loud `CENSUS_API_KEY is
+NOT SET` line (a workflow annotation in Actions) and skips; the build then writes **no**
+`areas/` object — the publish stage only ever PUTs, so the files already published stay exactly
+as they are — and `coverage.json` reports `area_counties: 0` for that run. A snapshot still
+inside its SLA is reused without a key. Nothing is written until every file has been validated,
+so a failed check never leaves a partial tree.
+
+**Withheld values.** The Bureau reports them as `-666666666`, `-999999999`, `-888888888`
+(estimates) and `-222222222`, `-333333333`, `-555555555` (margins; `-555555555` marks a
+controlled estimate such as a county's population, which has no sampling error), annotates
+them, and annotates an open-ended median (`median+`/`median-`) whose number is a bound, not an
+estimate. A withheld or annotated **estimate** omits that field for that area; a withheld
+**margin** is `null`. Any other negative number halts the run as an undocumented sentinel.
+
+**Places.** Only places with a government: Gazetteer `FUNCSTAT` `A` or `B`, **plus** every
+consolidated city-county government. The Gazetteer carries those only as a `(balance)` row
+with `FUNCSTAT` `F` (Nashville-Davidson, Indianapolis, Louisville/Jefferson, Augusta-Richmond,
+Athens-Clarke, Butte-Silver Bow, Greeley County, Milford — eight rows in the 2024 file), and
+the place tiles ship exactly those polygons (§8.5), so they publish by one rule: `FUNCSTAT`
+`F` and `(balance)` in the `NAME`, never a list of GEOIDs. Census designated places (`S`),
+any other `F` row and inactive or nonfunctioning entities (`I`, `N`) are dropped. `name` is
+the Gazetteer's verbatim `NAME` (`Sumner County`, `Hendersonville city`,
+`Nashville-Davidson metropolitan government (balance)`); the tile layer's bare name is a
+presentation choice made there.
+
+**Gates**, all fail-closed: pinned ACS and Gazetteer headers; per state, Σ county population
+equals the state's own figure from the same API (to rounding); no negative population,
+households, income, age, margin or land area (each runs at fetch and again at build); and,
+at build, per state, the survey and Gazetteer agree on which counties exist and every place
+that would publish has a survey row. `generated_at` is the snapshot's retrieval time, so an unchanged snapshot rebuilds
+byte-identically.
+
+### 8.5 Place tiles — WO-21 · **shipped**
 
 `tiles/us-places-{vintage}.pmtiles`, layer `places`, **incorporated places only** — Census
 designated places are statistical areas with no government and are dropped (LSAD `57`, and
