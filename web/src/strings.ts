@@ -270,6 +270,7 @@ export const STRINGS = {
   coveragePageLede:
     "What the pipeline checked, when, and which local governments it covers. A source is re-checked every run; its content is rewritten only when it changes.",
   coverageSourcesTitle: "Sources",
+  coverageLocalitiesNone: "No local government totals are published yet.",
   coverageCountsTitle: "Published counts",
   coverageLocalitiesTitle: "Localities",
   coverageStateTitle: "Local coverage by state",

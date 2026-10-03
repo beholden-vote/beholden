@@ -70,7 +70,7 @@ export default function CoveragePage() {
   useEffect(() => { void loadCoverageDoc().then(setDoc); }, []);
   const sources = Object.entries(doc?.sources ?? {}).sort(([a], [b]) => a.localeCompare(b));
   const counts = Object.entries(doc?.counts ?? {});
-  const isLocal = ([k]: [string, number]) => k.startsWith("localities_") || k.startsWith("area_");
+  const isLocal = ([k]: [string, number]) => k.startsWith("localities_");
   const localities = counts.filter(isLocal);
   const rest = counts.filter((c) => !isLocal(c)).sort(([a], [b]) => a.localeCompare(b));
   return (
@@ -98,6 +98,7 @@ export default function CoveragePage() {
           </table>
           <h2>{STRINGS.coverageLocalitiesTitle}</h2>
           <dl className="area-facts">
+            {localities.length === 0 && <p className="empty-note">{STRINGS.coverageLocalitiesNone}</p>}
             {localities.map(([k, v]) => (
               <div key={k}><dt>{prettyKey(k)}</dt><dd className="mono">{v.toLocaleString("en-US")}</dd></div>
             ))}
