@@ -13,6 +13,7 @@ import { ocdShortLabel } from "../../lib/data";
 export function layerOfOcd(ocdId: string): LayerId | null {
   if (/\/sldu:/.test(ocdId)) return "sldu";
   if (/\/sldl:/.test(ocdId)) return "sldl";
+  if (/\/place:/.test(ocdId)) return "place";   // before county: a seat id can carry both
   if (/\/(county|parish|borough):/.test(ocdId)) return "county";
   if (/\/cd:/.test(ocdId)) return "cd";
   if (/\/state:[a-z]{2}$/.test(ocdId)) return "states";
@@ -46,13 +47,14 @@ export function divisionName(layer: LayerId, props: DivisionProps, ocdId: string
     const word = kind.charAt(0).toUpperCase() + kind.slice(1);
     return props.name ? `${props.name} ${word}` : ocdShortLabel(ocdId);
   }
+  if (layer === "place") return props.name ?? ocdShortLabel(ocdId);
   return ocdShortLabel(ocdId);
 }
 
 /** Most local first. Not the ballot's reading order (lib/levels.ts puts the
  *  U.S. House ahead of the state): a congressional district is smaller than the
  *  state it sits in. */
-const MOST_LOCAL: LayerId[] = ["county", "sldl", "sldu", "cd", "states"];
+const MOST_LOCAL: LayerId[] = ["place", "county", "sldl", "sldu", "cd", "states"];
 
 /** The most local division of a place. It carries the shareable #/d/ link: a
  *  division id says which district, never where in it the reader stood. */
@@ -69,7 +71,7 @@ export function smallestDivision(hits: RawStackHit[]): RawStackHit | null {
 export function hitTitle(hit: RawStackHit): string {
   const name = divisionName(hit.layer, hit.props, hit.ocdId);
   const st = stateOf(hit.ocdId);
-  return hit.layer === "county" && st ? `${name}, ${st}` : name;
+  return (hit.layer === "county" || hit.layer === "place") && st ? `${name}, ${st}` : name;
 }
 
 /** What to call a place: its most local division. */
@@ -91,7 +93,7 @@ export function hitsFromOcd(ocdId: string): RawStackHit[] | null {
   const num = /\/(?:cd|sldu|sldl):([\w-]+)$/.exec(ocdId)?.[1]?.toUpperCase();
   const props: DivisionProps = { state };
   if (num) props.district_num = num;
-  if (layer === "county") props.name = ocdShortLabel(ocdId);
+  if (layer === "county" || layer === "place") props.name = ocdShortLabel(ocdId);
   const hits: RawStackHit[] = [{ layer, ocdId, props }];
   const parent = /^(.*\/state:[a-z]{2})\/./.exec(ocdId)?.[1];
   if (parent) hits.push({ layer: "states", ocdId: parent, props: { state } });

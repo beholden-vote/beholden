@@ -16,26 +16,75 @@ async function fetchJSON<T>(path: string): Promise<T | null> {
 /** layer feed id -> (ocd_id -> pins at that division). Senate = 2 per state. */
 export type PinIndex = Map<string, Map<string, Pin[]>>;
 
-// WO-22: county joins the feed list now that county PEOPLE publish. `place`
-// waits for its tiles (WO-21) — the pins are built, but with no place layer on
-// the map nothing could hit-test them, so fetching them would be dead weight.
-const PIN_FEEDS = ["states", "cd", "sldu", "sldl", "county"] as const;
+// `states`, `cd`, `sldu`, `sldl` are monolithic feeds, fetched at startup. The two
+// local layers are sharded by state (contracts 8.11): a shard is fetched when a
+// division of that state first matters, then kept for the session.
+const PIN_FEEDS = ["states", "cd", "sldu", "sldl"] as const;
+const SHARDED = ["county", "place"] as const;
+type Sharded = (typeof SHARDED)[number];
+
+function indexRows(rows: Pin[], byOcd: Map<string, Pin[]>) {
+  for (const p of rows) {
+    const list = byOcd.get(p.ocd_id) ?? [];
+    list.push(p);
+    byOcd.set(p.ocd_id, list);
+  }
+}
 
 export async function loadPins(): Promise<PinIndex> {
   const index: PinIndex = new Map();
+  for (const layer of SHARDED) index.set(layer, new Map());   // filled shard by shard
   await Promise.all(
     PIN_FEEDS.map(async (feed) => {
-      const rows = (await fetchJSON<Pin[]>(`/pins/${feed}.json`)) ?? [];
       const byOcd = new Map<string, Pin[]>();
-      for (const p of rows) {
-        const list = byOcd.get(p.ocd_id) ?? [];
-        list.push(p);
-        byOcd.set(p.ocd_id, list);
-      }
+      indexRows((await fetchJSON<Pin[]>(`/pins/${feed}.json`)) ?? [], byOcd);
       index.set(feed, byOcd);
     }),
   );
   return index;
+}
+
+// layer/st -> its in-flight or finished fetch. A 404 is an empty list, remembered.
+const shardFetches = new Map<string, Promise<void>>();
+
+/** The sharded layer and state of a division id, or null for a monolithic layer. */
+export function shardOf(ocdId: string): { layer: Sharded; st: string } | null {
+  const st = /state:([a-z]{2})(?:\/|$)/.exec(ocdId)?.[1];
+  if (!st) return null;
+  if (/\/(county|parish|borough):/.test(ocdId)) return { layer: "county", st };
+  if (/\/place:/.test(ocdId)) return { layer: "place", st };
+  return null;
+}
+
+/** True while this division's state shard has not finished loading. */
+export function shardPending(ocdId: string): boolean {
+  const s = shardOf(ocdId);
+  return !!s && !shardDone.has(`${s.layer}/${s.st}`);
+}
+const shardDone = new Set<string>();
+
+/** Fetch (once) the shards the given divisions live in and merge them into the
+ *  index in place. Resolves true when at least one shard was awaited, so the
+ *  caller re-renders. Never fetches a state no division asked for. */
+export async function ensurePinShards(index: PinIndex, ocdIds: string[]): Promise<boolean> {
+  const wanted = new Map<string, { layer: Sharded; st: string }>();
+  for (const id of ocdIds) {
+    const s = shardOf(id);
+    if (s) wanted.set(`${s.layer}/${s.st}`, s);
+  }
+  let merged = false;
+  await Promise.all([...wanted].map(async ([key, { layer, st }]) => {
+    if (!shardFetches.has(key)) {
+      shardFetches.set(key, (async () => {
+        const rows = (await fetchJSON<Pin[]>(`/pins/${layer}/${st}.json`)) ?? [];
+        indexRows(rows, index.get(layer)!);
+        shardDone.add(key);
+      })());
+    }
+    await shardFetches.get(key);
+    merged = true;
+  }));
+  return merged;
 }
 
 /** One row of the flat people search index (WO-5): search/people.json, emitted

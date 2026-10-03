@@ -1023,4 +1023,51 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .vr-table td, .vr-table tbody th { display: flex; gap: 10px; padding: 2px 0; border: 0; }
   .vr-table td::before { content: attr(data-label); flex: none; width: 76px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding-top: 2px; }
   .vr-table td > a, .vr-table td > .vr-bill { flex: 1; }
+/* ---------- WO-37: area card, coverage fills, coverage page ----------
+   Coverage is DATA, never chrome and never party. One neutral lightness ramp
+   (covered light, partial mid, withheld dark) plus a pattern per step, so the
+   state survives colour-vision deficiency and greyscale. Swatches mirror the
+   map's pattern layers (map.ts COVERAGE_FILL). */
+.area-cov-swatch {
+  display: inline-block; width: 14px; height: 14px; flex: none; vertical-align: -2px;
+  border: 1px solid rgba(234, 242, 248, 0.35); margin-right: 4px;
+}
+.area-cov-swatch[data-cov="covered"] { background: #aab4bc; }
+.area-cov-swatch[data-cov="partial"] {
+  background: radial-gradient(#06131d 1px, transparent 1.4px) 0 0 / 4px 4px, #7d878f;
+}
+.area-cov-swatch[data-cov="withheld"] {
+  background: repeating-linear-gradient(135deg, #eaf2f8 0 1.5px, transparent 1.5px 4px), #4a545c;
+}
+.area-cov-swatch[data-cov="none"] { background: transparent; border-style: dashed; }
+
+.area-card { margin: 0 0 12px; padding: 10px 0 0; border-top: 1px solid var(--line); }
+.area-coverage { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 10px; }
+.area-coverage .area-cov-swatch { margin-top: 2px; }
+.area-cov-state { margin: 0; font-size: 13px; color: var(--ink); }
+.area-cov-state .mono { font-size: 11px; color: var(--mut); }
+.area-cov-why { margin: 2px 0 0; font-size: 12px; line-height: 1.45; color: var(--mut); }
+.area-h {
+  margin: 0 0 6px; font-size: 11px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--mut);
+}
+.area-facts { margin: 0 0 6px; }
+.area-facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.area-facts dt { color: var(--mut); text-transform: capitalize; }
+.area-facts dd { margin: 0; color: var(--ink); text-align: right; }
+.area-moe { color: var(--mut); }
+.area-note { margin: 4px 0 6px; font-size: 11px; color: var(--dim); }
+.area-cites { list-style: none; margin: 0; padding: 0; }
+.area-cites li { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px; }
+.area-cites .retrieved { margin: 0; }
+.cov-legend .legend-item { align-items: center; }
+.cov-pick { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; max-width: 220px; }
+.cov-table { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.cov-table th { text-align: left; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mut); padding: 4px 8px 4px 0; border-bottom: 2px solid var(--line); }
+.cov-table td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; color: #cfe0ec; }
+.cov-reason { display: block; font-size: 11px; color: var(--mut); }
+@media (max-width: 559px) {
+  .cov-table thead { display: none; }
+  .cov-table tr { display: block; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .cov-table td { display: block; border: 0; padding: 1px 0; }
 }

@@ -10,15 +10,16 @@
  *  kept and offers to forget it; a place opened from a link says which levels
  *  a link cannot carry.
  */
-import { useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import type { Pin, StackEntry } from "../../types";
-import type { PinIndex } from "../../lib/data";
+import { ensurePinShards, shardPending, type PinIndex } from "../../lib/data";
 import { LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS } from "../../lib/levels";
 import { divisionHash } from "../../router";
 import { STRINGS } from "../../strings";
 import { EmptyNote } from "../bits";
 import { isOwnPlace, type PlaceState } from "../nav/history";
 import { divisionName, smallestDivision } from "./divisions";
+import { AreaCard } from "../places/AreaCard";   // WO-37
 import { PersonRow } from "./PersonRow";
 import { forgetPlace, isSavedPlace } from "./remembered";
 
@@ -103,7 +104,9 @@ function LevelSection({ level, entries, loading, onOpen }: {
       {open && entries.map((entry) => (
         <div className="stack-level" key={`${entry.layer}:${entry.ocdId}`}>
           <DivisionCard entry={entry} />
-          {loading ? <EmptyNote>{STRINGS.placeLoading}</EmptyNote>
+          {/* WO-37: coverage and Census facts for a county or city. */}
+          {(entry.layer === "county" || entry.layer === "place") && <AreaCard entry={entry} />}
+          {loading || shardPending(entry.ocdId) ? <EmptyNote>{STRINGS.placeLoading}</EmptyNote>
             : entry.pins.length === 0 ? <EmptyNote>{emptyNote(entry.layer)}</EmptyNote>
             : (
               <ul className="prow-list">
@@ -159,6 +162,14 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
   // Forgetting changes storage, not props; re-read it.
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const heading = useRef<HTMLHeadingElement>(null);
+  // WO-37: the county / city pins live in per-state shards (contracts 8.11),
+  // fetched when this place first needs them and then kept for the session.
+  useEffect(() => {
+    if (!pins) return;
+    let live = true;
+    void ensurePinShards(pins, view.hits.map((h) => h.ocdId)).then((m) => { if (live && m) refresh(); });
+    return () => { live = false; };
+  }, [pins, view.hits]);
   const entries: StackEntry[] = view.hits
     .map((h) => ({ layer: h.layer, ocdId: h.ocdId, props: h.props, pins: pins?.get(h.layer)?.get(h.ocdId) ?? [] }))
     .sort((a, b) => (LEVEL_ORDER[a.layer] ?? 9) - (LEVEL_ORDER[b.layer] ?? 9));

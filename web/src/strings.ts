@@ -237,4 +237,43 @@ export const STRINGS = {
   repsNoPlace: "Choose a place to see how your representatives voted. Nothing about it is stored in the address.",
   repsNone: "No recorded position.",
   repsNoFederal: "No federal representatives are published for this place.",
+  // WO-37 ---------------------------------------------------------------------
+  // Coverage state of a local division. Same words for every place (Rule 0).
+  coverageTitle: "Coverage",
+  coverageLabels: {
+    covered: "Covered", partial: "Partial", withheld: "Withheld", none: "Not covered yet",
+  } as Record<string, string>,
+  coverageMeaning: {
+    covered: "Every seat on the roster is published.",
+    partial: "Some seats are published and others are not.",
+    withheld: "The roster failed a check on the last run; the last good roster is still shown.",
+    none: "We have not attempted this place. That says nothing about whether it has officials.",
+  } as Record<string, string>,
+  coverageLegendTitle: "Fill = coverage",
+  coverageLegendNote: "Counties and cities only. Local fills never show party.",
+  coverageSeats: (listed: number, expected: number) => `${listed} of ${expected} seats listed`,
+  coverageAsOf: "roster as of",
+  areaTitle: "Census facts",
+  areaNone: "No Census facts are published for this place yet.",
+  areaNoGeoid: "Open this place from the map to see its Census facts.",
+  areaLoading: "Loading Census facts…",
+  areaNoMargin: "no margin published",
+  areaFields: {
+    population: "Population", households: "Households",
+    median_household_income: "Median household income", median_age: "Median age",
+  } as Record<string, string>,
+  areaLand: "Land area",
+  areaSurvey: "American Community Survey, 5-year",
+  areaGeography: "Census Gazetteer",
+  areaMoeNote: "Each estimate is shown with its margin of error.",
+  coveragePageTitle: "Coverage",
+  coveragePageLede:
+    "What the pipeline checked, when, and which local governments it covers. A source is re-checked every run; its content is rewritten only when it changes.",
+  coverageSourcesTitle: "Sources",
+  coverageCountsTitle: "Published counts",
+  coverageLocalitiesTitle: "Localities",
+  coverageStateTitle: "Local coverage by state",
+  coverageStateNone: "No local government in this state has been attempted yet.",
+  coverageStatePick: "Choose a state",
+  coverageUnavailable: "Coverage is unavailable right now.",
 } as const;

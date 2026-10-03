@@ -67,7 +67,7 @@ function loadLayerPrefs(): LayerPrefs {
 type InfoState = { page: InfoPage; anchor?: string | null };
 function hashToInfo(): InfoState | null {
   const h = location.hash.replace("#", "");
-  if (h === "about" || h === "privacy" || h === "sources") return { page: h };
+  if (h === "about" || h === "privacy" || h === "sources" || h === "coverage") return { page: h };
   const meth = parseMethodologyHash();
   if (meth) return { page: "methodology", anchor: meth.anchor };
   return null;

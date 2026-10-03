@@ -7,6 +7,7 @@ import { STRINGS } from "../strings";
 import { GRADES, type Grade } from "./gradeFilter";
 // Layers sorted by level of government — the axis users actually think in.
 // Shared with the stack panel so the two can never disagree (lib/levels.ts).
+import { CoverageLegend } from "./places/CoverageLegend";   // WO-37
 import { GATES, PANEL_SECTIONS as LEVEL_GROUPS, type Gate, type GateId } from "../lib/levels";
 
 /** How long the layer dock stays open with no interaction before folding away.
@@ -18,10 +19,11 @@ const IDLE_COLLAPSE_MS = 6000;
 // it (dynamic import keeps the formula copy out of the main bundle, matching the
 // lazy-load discipline used for Connections).
 const Methodology = lazy(() => import("./Methodology"));
+const CoveragePage = lazy(() => import("./places/CoveragePage"));   // WO-37
 
 const LAYER_LABELS: Record<LayerId, string> = {
   cd: "U.S. House", states: "U.S. Senate", sldu: "State Senate", sldl: "State House",
-  county: "Counties",
+  county: "Counties", place: "Cities",
 };
 
 // Legend swatches: every party code the feeds can carry, in a fixed
@@ -213,8 +215,9 @@ export function LayerControl({
         ))}
         <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
         <Legend showSplit={!!visible.states} />
+        {(visible.county || visible.place) && <CoverageLegend />}
         <span className="layer-ctl-hint">
-          {auto ? "State and county layers show as you zoom in." : "Manual — Auto by zoom is off."}
+          {auto ? "State, county and city layers show as you zoom in." : "Manual — Auto by zoom is off."}
         </span>
       </div>
     </div>
@@ -240,7 +243,7 @@ export function LevelToast({ gate }: { gate: Gate | null }) {
   );
 }
 
-export type InfoPage = "about" | "privacy" | "sources" | "methodology";
+export type InfoPage = "about" | "privacy" | "sources" | "methodology" | "coverage";
 
 export function Footer({ onOpen }: { onOpen: (p: InfoPage) => void }) {
   return (
@@ -248,6 +251,7 @@ export function Footer({ onOpen }: { onOpen: (p: InfoPage) => void }) {
       <button type="button" onClick={() => onOpen("about")}>Why Beholden</button>
       <button type="button" onClick={() => onOpen("sources")}>Sources</button>
       <button type="button" onClick={() => onOpen("methodology")}>Methodology</button>
+      <button type="button" onClick={() => onOpen("coverage")}>Coverage</button>
       <button type="button" onClick={() => onOpen("privacy")}>Privacy</button>
     </footer>
   );
@@ -269,6 +273,11 @@ export function InfoOverlay({ page, anchor, onClose, onOpenInfo }: {
         {page === "about" && <About />}
         {page === "privacy" && <Privacy />}
         {page === "sources" && <Sources />}
+        {page === "coverage" && (
+          <Suspense fallback={<p className="empty-note">{STRINGS.viewLoading}</p>}>
+            <CoveragePage />
+          </Suspense>
+        )}
         {page === "methodology" && (
           <Suspense fallback={<p className="empty-note">Loading methodology…</p>}>
             <Methodology anchor={anchor} onOpenInfo={onOpenInfo} />
@@ -397,6 +406,7 @@ function Sources() {
     ["U.S. Census Bureau", "District boundaries (TIGER) and address geocoding."],
     ["U.S. Census Bureau, American Community Survey", "Population, households, median household income, and median age for every county and city, each with its margin of error. Five-year estimates, 2020-2024; a figure the Bureau withholds is left out, never filled in."],
     ["U.S. Census Bureau, Gazetteer", "County and city names and land area."],
+    ["U.S. Census Bureau, incorporated places (TIGER)", "City boundaries: incorporated places only, never Census designated places."],
     ["Sumner County, TN", "County commissioners: who holds each of the 24 district seats, from the county's own commission roster."],
     ["City of Hendersonville, TN", "The mayor and Board of Aldermen, from the city's own officials directory."],
   ];

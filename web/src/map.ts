@@ -10,6 +10,7 @@ import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
+import { loadStateCoverage } from "./lib/coverage";
 import type { DivisionProps } from "./types";
 
 export type { DivisionProps };
@@ -36,15 +37,16 @@ export const VACANT_FILL = "#2b2f33";
 const DEFAULT_FILL = "#0a2233";
 
 // One vector archive per geometry family (§5); sldu+sldl share the us-sld archive.
-type ArchiveId = "states" | "cd" | "sld" | "counties";
+type ArchiveId = "states" | "cd" | "sld" | "counties" | "places";
 const ARCHIVE_FILE: Record<ArchiveId, string> = {
   states: "us-states",
   cd: "us-cd",
   sld: "us-sld",
   counties: "us-counties",
+  places: "us-places",   // WO-37, contracts 8.5
 };
 
-export type LayerId = "states" | "cd" | "sldu" | "sldl" | "county";
+export type LayerId = "states" | "cd" | "sldu" | "sldl" | "county" | "place";
 interface LayerDef {
   id: LayerId;           // also the {layer}-fill id root and the pins/stylefeed name
   archive: ArchiveId;
@@ -65,6 +67,9 @@ export const LAYERS: LayerDef[] = [
   // only when you're zoomed into a place, keeping the national/state views clean.
   // Geometry + OCD-ID only for now (no member data), so it renders line-only.
   { id: "county", archive: "counties", sourceLayer: "counties", minzoom: 7, autoFade: { start: 8, end: 9 } },
+  // WO-37: incorporated places (the archive starts at z7). One zoom past counties,
+  // so a city draws inside its county the way a council sits inside a commission.
+  { id: "place", archive: "places", sourceLayer: "places", minzoom: 8, autoFade: { start: 9, end: 10 } },
 ];
 const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 
@@ -75,7 +80,7 @@ const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 export const DEFAULT_VISIBLE: Record<LayerId, boolean> = {
   // WO-22: counties ship people now, so the layer is on by default like the
   // federal ones. It still only appears from z7 with an 8->9 fade (LAYERS).
-  states: true, cd: true, sldu: false, sldl: false, county: true,
+  states: true, cd: true, sldu: false, sldl: false, county: true, place: true,
 };
 
 /** Layer-visibility mode: "auto" = zoom-driven, "manual" = explicit per-layer. */
@@ -137,6 +142,37 @@ function applyFeed(map: maplibregl.Map, source: string, sourceLayer: string, fee
   for (const [ocdId, row] of Object.entries(feed)) {
     map.setFeatureState({ source, sourceLayer, id: ocdId }, { fill: fillFor(row) });
   }
+}
+
+/* ── Coverage fills (WO-37, contracts 8.10) ────────────────────────────────────
+ *
+ * Local polygons are filled by coverage state, never by party (local sources
+ * publish none). One neutral scale held to a lightness ramp, so it survives every
+ * colour-vision deficiency, and each step also has a pattern, so it survives
+ * greyscale: covered = solid light, partial = mid with dots, withheld = dark with
+ * hatching, not covered yet = no fill, outline only. DESIGN.md section 2. */
+export const COVERAGE_FILL = { covered: "#aab4bc", partial: "#7d878f", withheld: "#4a545c" } as const;
+const LOCAL: LayerId[] = ["county", "place"];
+/** [layer suffix, coverage state it draws for, pattern image] */
+const PATTERNS = [["dots", "partial", "cov-dots"], ["hatch", "withheld", "cov-hatch"]] as const;
+
+function patternOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean, cov: string): unknown {
+  const here = ["case", ["==", ["feature-state", "cov"], cov], 0.9, 0];
+  if (!fade || manual) return here;
+  return ["interpolate", ["linear"], ["zoom"], fade.start, 0, fade.end, here];
+}
+
+/** Pattern tiles, drawn in code so no sprite sheet is published. */
+function patternImage(kind: "dots" | "hatch"): { width: number; height: number; data: Uint8Array } {
+  const n = 8;
+  const data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const on = kind === "hatch" ? (x + y) % n < 2 : (x % 4 === 1 || x % 4 === 2) && (y % 4 === 1 || y % 4 === 2);
+    if (!on) continue;
+    const c = kind === "hatch" ? [234, 242, 248] : [6, 19, 29];   // --ink on dark, --bg on mid
+    data.set([...c, 255], (y * n + x) * 4);
+  }
+  return { width: n, height: n, data };
 }
 
 /** What the UI receives on click: rendered divisions under the point, top-first.
@@ -219,13 +255,15 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
   };
   const applyVis = (id: LayerId) => {
     const v = layerPresent(id) ? "visible" : "none";
-    for (const suffix of ["fill", "line"] as const) {
+    for (const suffix of ["fill", "line", "hatch", "dots"] as const) {
       if (map.getLayer(`${id}-${suffix}`)) map.setLayoutProperty(`${id}-${suffix}`, "visibility", v);
     }
   };
   const applyAllVis = () => LAYERS.forEach((L) => applyVis(L.id));
 
   map.on("load", async () => {
+    map.addImage("cov-dots", patternImage("dots"));
+    map.addImage("cov-hatch", patternImage("hatch"));
     // One vector source per archive. promoteId lifts ocd_id to the feature id so
     // feature-state (style-feed fill, hover, selection) all key on it.
     map.addSource("states", {
@@ -242,6 +280,10 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     });
     // Local tier (WO-6b): county geometry only — no member style feed yet, so it
     // renders as outlines (see the transparent default fill below).
+    map.addSource("places", {
+      type: "vector", url: `pmtiles://${DATA}/tiles/${ARCHIVE_FILE.places}-${VINTAGE}.pmtiles`,
+      promoteId: { places: "ocd_id" },
+    });
     map.addSource("counties", {
       type: "vector", url: `pmtiles://${DATA}/tiles/${ARCHIVE_FILE.counties}-${VINTAGE}.pmtiles`,
       promoteId: { counties: "ocd_id" },
@@ -258,7 +300,7 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       // officials at all (honest: outline-only) — overlays the colored layers
       // beneath as outlines instead of blanketing them; they still hit-test on
       // geometry. Base layers (states, cd) keep the opaque navy default.
-      const overlay = L.id === "sldu" || L.id === "sldl" || L.id === "county";
+      const overlay = L.id === "sldu" || L.id === "sldl" || L.id === "county" || L.id === "place";
       const defaultFill = overlay ? "rgba(10,34,51,0)" : DEFAULT_FILL;
       // Build for whatever mode is current at construction time (usually "auto",
       // but a persisted manual preference can already be set if setLayerMode ran
@@ -292,6 +334,19 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
           "line-opacity": lineOpacityExpr(L.autoFade, manualAtInit) as maplibregl.ExpressionSpecification,
         },
       });
+      if (LOCAL.includes(L.id)) {
+        // Coverage patterns (WO-37): the state is never carried by colour alone.
+        for (const [suffix, cov, image] of PATTERNS) {
+          map.addLayer({
+            id: `${L.id}-${suffix}`, source: L.archive, "source-layer": L.sourceLayer, type: "fill",
+            minzoom: L.minzoom,
+            paint: {
+              "fill-pattern": image,
+              "fill-opacity": patternOpacityExpr(L.autoFade, manualAtInit, cov) as maplibregl.ExpressionSpecification,
+            },
+          });
+        }
+      }
     }
 
     // Sync paint + visibility to the CURRENT mode. If the UI restored a manual
@@ -372,6 +427,34 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     });
   });
 
+  // ---- coverage fills (WO-37): one shard per state the reader has reached ----
+  // A state is reached when a local polygon of it is on screen or in a click. Its
+  // shard is fetched once; divisions it names get their coverage state, and every
+  // other local polygon keeps the "not covered yet" default (outline only).
+  const covRequested = new Set<string>();
+  const reach = (states: Iterable<string | undefined>) => {
+    for (const raw of states) {
+      const st = raw?.toLowerCase();
+      if (!st || covRequested.has(st)) continue;
+      covRequested.add(st);
+      void loadStateCoverage(st).then((shard) => {
+        for (const [ocdId, d] of Object.entries(shard?.divisions ?? {})) {
+          const L = LAYERS.find((x) => LOCAL.includes(x.id) && (x.id === "place" ? /\/place:/ : /\/(county|parish|borough):/).test(ocdId));
+          if (!L) continue;
+          map.setFeatureState({ source: L.archive, sourceLayer: L.sourceLayer, id: ocdId },
+            { fill: COVERAGE_FILL[d.state], cov: d.state });
+        }
+      });
+    }
+  };
+  const reachViewport = () => {
+    const ids = LOCAL.map((id) => `${id}-fill`).filter((l) => !!map.getLayer(l));
+    if (!ids.length) return;
+    reach(map.queryRenderedFeatures({ layers: ids }).map((f) => (f.properties as DivisionProps).state));
+  };
+  map.on("moveend", reachViewport);
+  map.on("idle", reachViewport);
+
   // ---- hover: one feature per layer family gets the hover state ----
   type FeatRef = { source: string; sourceLayer: string; id: string };
   let hovered: FeatRef | null = null;
@@ -417,6 +500,7 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       // the division ("Sumner County", "TN-5") rather than only the officials
       // standing in it. Tile properties, not a lookup — no extra request.
       hits.push({ layer, ocdId: String(f.id), props: (f.properties ?? {}) as DivisionProps });
+      if (LOCAL.includes(layer)) reach([(f.properties as DivisionProps).state]);
       const ref = { source: f.source, sourceLayer: f.sourceLayer!, id: String(f.id) };
       map.setFeatureState(ref, { selected: true });
       selected.push(ref);
@@ -463,6 +547,12 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       if (map.getLayer(`${L.id}-line`)) {
         map.setPaintProperty(`${L.id}-line`, "line-opacity",
           lineOpacityExpr(L.autoFade, manual) as maplibregl.ExpressionSpecification);
+      }
+      for (const [suffix, cov] of PATTERNS) {
+        if (map.getLayer(`${L.id}-${suffix}`)) {
+          map.setPaintProperty(`${L.id}-${suffix}`, "fill-opacity",
+            patternOpacityExpr(L.autoFade, manual, cov) as maplibregl.ExpressionSpecification);
+        }
       }
     }
     applyAllVis();

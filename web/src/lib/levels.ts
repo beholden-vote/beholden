@@ -25,7 +25,7 @@ export const LEVEL_ORDER: Record<string, number> = {
 export const PANEL_SECTIONS: { level: string; layers: LayerId[] }[] = [
   { level: "Federal", layers: ["cd", "states"] },
   { level: "State", layers: ["sldu", "sldl"] },
-  { level: "Local", layers: ["county"] },
+  { level: "Local", layers: ["county", "place"] },
 ];
 
 /* ── Zoom gates ───────────────────────────────────────────────────────────────
@@ -66,12 +66,9 @@ export const GATES: Gate[] = [
     minzoom: gateZoom(["sldu", "sldl"]), blurb: "Both state chambers" },
   { id: "county", label: "County", layers: ["county"],
     minzoom: gateZoom(["county"]), blurb: "County commissions" },
-  // Cities publish officials (a mayor and a board of aldermen are in the data
-  // today) but no incorporated-place geometry exists yet, so there is nothing
-  // to draw or click. Listed anyway, and labelled as unmapped: a level we cover
-  // but cannot yet show is a fact about coverage, not something to hide.
-  { id: "place", label: "City", layers: [], minzoom: null,
-    blurb: "Awaiting place boundaries" },
+  // WO-37: incorporated-place boundaries (contracts 8.5) are mapped.
+  { id: "place", label: "City", layers: ["place"],
+    minzoom: gateZoom(["place"]), blurb: "City councils" },
 ];
 
 /** The deepest mapped level currently on screen. */
