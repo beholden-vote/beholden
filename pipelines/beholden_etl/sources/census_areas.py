@@ -117,10 +117,23 @@ _GEOID_LEN = {"county": 5, "place": 7}
 # defines. A code outside this set means the file is not what we pinned.
 FUNCSTAT_CODES = frozenset("ABCEFGILMNS")
 # "Active government ... providing primary general-purpose functions" (A) and its
-# partially-consolidated-with-separate-officials variant for incorporated places (B). Everything
-# else (S statistical = CDPs; F fictitious = the "(balance)" remainder of a consolidated
-# city; I inactive; N nonfunctioning) has no government to describe.
+# partially-consolidated-with-separate-officials variant for incorporated places (B).
+# S statistical (CDPs), I inactive and N nonfunctioning have no government to describe.
 ACTIVE_PLACE_FUNCSTAT = frozenset("AB")
+
+
+def has_government(funcstat: str, name: str) -> bool:
+    """Does this Gazetteer place row describe a government, so that we publish it?
+
+    A and B, plus ONE rule for consolidated city-county governments. Nashville, Indianapolis,
+    Louisville, Augusta, Athens, Butte-Silver Bow, Greeley County and Milford exist in the
+    Gazetteer only as the Bureau's "(balance)" row - the consolidated government less the
+    separately incorporated places inside it - with functional status F (fictitious), because
+    the whole city-county has no place record of its own. The tile layer (WO-21) ships exactly
+    those polygons, so a reader who clicks Nashville must get Nashville's facts. Rule, not
+    list: F and "(balance)" in the name. An F row without "(balance)" stays out, and so does
+    a "(balance)" row that is not F."""
+    return funcstat in ACTIVE_PLACE_FUNCSTAT or (funcstat == "F" and "(balance)" in name)
 
 # Every estimate is rounded to an integer independently of the one above it, so county
 # populations can sum to a few people off the state's own figure: up to half a person per
@@ -236,7 +249,7 @@ def parse_gazetteer(text: str, level: str) -> dict[str, dict]:
         if level == "place":
             if rec["FUNCSTAT"] not in FUNCSTAT_CODES:
                 raise CensusError(f"Gazetteer place {geoid}: unknown FUNCSTAT {rec['FUNCSTAT']!r}")
-            row["active"] = rec["FUNCSTAT"] in ACTIVE_PLACE_FUNCSTAT
+            row["active"] = has_government(rec["FUNCSTAT"], rec["NAME"])
             if row["active"] and (rec["LSAD"] == "57" or rec["NAME"].endswith(" CDP")):
                 raise CensusError(f"Gazetteer place {geoid} {rec['NAME']!r} is both an active "
                                   "government and a census designated place - cannot tell "

@@ -72,6 +72,10 @@ class World:
                                B01002_001M="-333333333", B01002_001MA="***")
                 self.add_place(fips, "28540", "Gallatin city", "25", "A",
                                B19013_001E="250001", B19013_001EA="median+")
+                # Nashville-shaped: the consolidated government exists in the Gazetteer only as
+                # the "(balance)" row, LSAD 00, functional status F (the real row, 2024 file).
+                self.add_place(fips, "52006", "Nashville-Davidson metropolitan government (balance)",
+                               "00", "F")
             elif fips == "35":
                 self.add_county(fips, "013", "Doña Ana County")
                 self.add_place(fips, "10000", "Alpha city", "25", "A")
@@ -83,7 +87,7 @@ class World:
                 self.add_county(fips, "001", f"{st.upper()} County")
                 self.add_place(fips, "10000", "Alpha city", "25", "A")
             self.add_place(fips, "20000", "Beta CDP", "57", "S")                  # no government
-            self.add_place(fips, "30000", "Gamma city (balance)", "00", "F")     # fictitious remainder
+            self.add_place(fips, "30000", "Gamma remainder", "00", "F")          # F without "(balance)": no government
         # Puerto Rico is out of scope: present in both sources, must be dropped from both.
         self.add_county("72", "001", "Adjuntas Municipio", usps="PR")
         self.add_place("72", "10000", "Adjuntas zona urbana", "62", "S", usps="PR")
@@ -218,7 +222,7 @@ def test_county_file_matches_the_contract_shape(built):
         "median_household_income": {"estimate": 78000, "moe": 2100},
         "median_age": {"estimate": 39.4, "moe": 0.3}}
     assert doc["generated_at"] == GAZ_AT                              # snapshot time, not the clock
-    assert counts == {"area_counties": 52, "area_places": 53}       # TN has a 2nd county, TN and LA a 2nd city
+    assert counts == {"area_counties": 52, "area_places": 54}       # TN has a 2nd county; TN two more cities, LA one
 
 
 def test_every_state_and_dc_gets_both_files_and_territories_are_dropped(built):
@@ -232,9 +236,37 @@ def test_every_state_and_dc_gets_both_files_and_territories_are_dropped(built):
 def test_places_are_incorporated_governments_only(built):
     _, out = built
     names = {a["name"] for a in load(out, "place", "tn")["areas"].values()}
-    assert names == {"Hendersonville city", "Gallatin city"}          # no CDP, no "(balance)"
+    assert names == {"Hendersonville city", "Gallatin city",          # no CDP, no bare F row
+                     "Nashville-Davidson metropolitan government (balance)"}
     assert "Baton Rouge city" in {a["name"] for a in load(out, "place", "la")["areas"].values()}
-    assert list(load(out, "place", "tn")["areas"]) == ["4728540", "4733280"]
+    assert list(load(out, "place", "tn")["areas"]) == ["4728540", "4733280", "4752006"]
+
+
+def test_a_consolidated_city_county_is_published_with_its_facts(built):
+    """Nashville is in the tile layer only as 4752006; clicking it must find a row."""
+    _, out = built
+    nashville = load(out, "place", "tn")["areas"]["4752006"]
+    assert nashville["name"] == "Nashville-Davidson metropolitan government (balance)"
+    assert nashville["land_sqmi"] == 7.891
+    assert nashville["population"] == {"estimate": 1000, "moe": None}
+    assert nashville["median_household_income"] == {"estimate": 50000, "moe": 1000}
+
+
+def test_has_government_is_a_rule_over_funcstat_and_name_not_a_list():
+    assert C.has_government("A", "Hendersonville city") and C.has_government("B", "Baton Rouge city")
+    for geoid, name in [("0947515", "Milford city (balance)"),
+                        ("1303440", "Athens-Clarke County unified government (balance)"),
+                        ("1304204", "Augusta-Richmond County consolidated government (balance)"),
+                        ("1836003", "Indianapolis city (balance)"),
+                        ("2028412", "Greeley County unified government (balance)"),
+                        ("2148006", "Louisville/Jefferson County metro government (balance)"),
+                        ("3011397", "Butte-Silver Bow (balance)"),
+                        ("4752006", "Nashville-Davidson metropolitan government (balance)")]:
+        assert C.has_government("F", name), geoid
+    assert not C.has_government("F", "Gamma remainder")             # fictitious, but not a "(balance)"
+    assert not C.has_government("S", "Gamma city (balance)")        # "(balance)" alone is not enough
+    assert not C.has_government("S", "Beta CDP")
+    assert not C.has_government("I", "Old town") and not C.has_government("N", "Dormant village")
 
 
 def test_non_ascii_names_survive_the_round_trip(built):
@@ -293,7 +325,7 @@ def test_the_registry_runs_the_writer_and_its_counts_reach_coverage(slice_dirs):
     man["sources"].update(manifest()["sources"])
     (slice_dirs / "raw" / "manifest.json").write_text(json.dumps(man))
     cov = build.run(db_path=str(slice_dirs / "wh.duckdb"), out_dir=data, raw_dir=slice_dirs / "raw")
-    assert cov["counts"]["area_counties"] == 52 and cov["counts"]["area_places"] == 53
+    assert cov["counts"]["area_counties"] == 52 and cov["counts"]["area_places"] == 54
     assert {"census_acs", "census_gazetteer"} <= set(cov["sources"])
     assert load(data, "county", "tn")["areas"]["47165"]["population"]["estimate"] == 205000
     assert "Hendersonville city" in {a["name"] for a in load(data, "place", "tn")["areas"].values()}
@@ -335,6 +367,10 @@ def test_row_count_gate_halts_on_any_disagreement_between_survey_and_gazetteer(t
     del w.places["4733280"]                                               # a city we would publish
     with pytest.raises(C.CensusError, match="TN place"):
         build_areas(tmp_path, w, "b")
+    w = World()
+    del w.places["4752006"]                                               # so is a consolidated city-county
+    with pytest.raises(C.CensusError, match="TN place.*4752006"):
+        build_areas(tmp_path, w, "b2")
     w = World()
     del w.gaz_places["4733280"]                                           # survey knows a GEOID the Gazetteer never heard of
     with pytest.raises(C.CensusError, match="TN place"):

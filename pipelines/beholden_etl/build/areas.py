@@ -53,8 +53,9 @@ def publish(ctx: BuildContext) -> dict[str, int]:
     counts = {"area_counties": 0, "area_places": 0}
     for level, acs, gaz, count_key in (("county", acs_counties, gaz_counties, "area_counties"),
                                        ("place", acs_places, gaz_places, "area_places")):
-        # Incorporated places only: a census designated place is a statistical area with
-        # no government (the Gazetteer's functional status says which is which).
+        # Places with a government only: a census designated place is a statistical area
+        # (the Gazetteer's functional status says which is which); consolidated city-county
+        # governments are kept by census_areas.has_government.
         keep = [g for g in sorted(acs) if level == "county" or gaz[g]["active"]]
         for fips, st in C.STATES.items():
             areas = {g: {"name": gaz[g]["name"], "land_sqmi": gaz[g]["land_sqmi"],

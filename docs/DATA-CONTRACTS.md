@@ -591,12 +591,16 @@ them, and annotates an open-ended median (`median+`/`median-`) whose number is a
 estimate. A withheld or annotated **estimate** omits that field for that area; a withheld
 **margin** is `null`. Any other negative number halts the run as an undocumented sentinel.
 
-**Places.** Only incorporated places with an active government (Gazetteer `FUNCSTAT` `A` or
-`B`): census designated places (`S`), the fictitious "(balance)" remainder of a consolidated
-city (`F`) and inactive or nonfunctioning entities (`I`, `N`) are dropped, so a consolidated
-government such as Nashville-Davidson appears at the county level only. `name` is the
-Gazetteer's verbatim `NAME` (`Sumner County`, `Hendersonville city`); the tile layer's bare
-name is a presentation choice made there.
+**Places.** Only places with a government: Gazetteer `FUNCSTAT` `A` or `B`, **plus** every
+consolidated city-county government. The Gazetteer carries those only as a `(balance)` row
+with `FUNCSTAT` `F` (Nashville-Davidson, Indianapolis, Louisville/Jefferson, Augusta-Richmond,
+Athens-Clarke, Butte-Silver Bow, Greeley County, Milford — eight rows in the 2024 file), and
+the place tiles ship exactly those polygons (§8.5), so they publish by one rule: `FUNCSTAT`
+`F` and `(balance)` in the `NAME`, never a list of GEOIDs. Census designated places (`S`),
+any other `F` row and inactive or nonfunctioning entities (`I`, `N`) are dropped. `name` is
+the Gazetteer's verbatim `NAME` (`Sumner County`, `Hendersonville city`,
+`Nashville-Davidson metropolitan government (balance)`); the tile layer's bare name is a
+presentation choice made there.
 
 **Gates**, all fail-closed: pinned ACS and Gazetteer headers; per state, Σ county population
 equals the state's own figure from the same API (to rounding); no negative population,
