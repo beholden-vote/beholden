@@ -51,6 +51,21 @@ interaction.
                               purple-gray that is deliberately NEITHER hue */
 --vacant:        #2b2f33
 ```
+### Coverage scale (WO-37) — data, never party
+Local polygons (counties, cities) are filled by coverage state, because local
+sources publish no party. One neutral near-grey lightness ramp; each step also has
+a pattern and a word, so no state is carried by colour alone:
+```
+covered      #aab4bc  solid                      L 0.45
+partial      #7d878f  dots                       L 0.24
+withheld     #4a545c  diagonal hatch             L 0.09
+not covered  (none)   outline only, dashed swatch
+```
+Checked by simulating protanopia, deuteranopia and tritanopia (Machado matrices):
+relative luminance of the three fills moves by under 0.01 in each, so the ramp
+order is preserved; being near-achromatic it cannot be read as red/blue or
+green/red. The legend and the area card state each state in words.
+
 Roles: **amber = the only chromatic action color** (anti-slop: no teal, one accent).
 Party hues are tuned to matched luminance so neither reads "louder." `--flag`/
 `--bad` are deliberately off the party-red hue so accountability signals never
