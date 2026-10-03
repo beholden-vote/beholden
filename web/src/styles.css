@@ -864,6 +864,8 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   font-family: var(--font-mono); font-size: 10px; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.06em;
 }
+.place-banner-saved { border-color: var(--line-2); }      /* reassurance, not a caveat */
+.place-hint { margin: 14px 0 0; color: var(--dim); font-family: var(--font-mono); font-size: 11px; line-height: 1.5; }
 .place > .place-saved { margin: 0 0 12px; color: var(--mut); font-family: var(--font-mono); font-size: 11px; }
 .stack-section-h { margin: 0; }
 .stack-section-head { min-height: 44px; }
@@ -884,6 +886,7 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .prow-main:hover { background: #16405c; }
 .prow-main:hover .person-office { color: #b9cdda; }
 .prow-main .person-name { flex: none; }
+.prow-main .person-office { white-space: normal; }       /* the office is the point: wrap it, never clip it */
 .prow-term { font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); }
 .prow-contact {
   min-width: 44px; min-height: 44px; padding: 0 12px; cursor: pointer;
@@ -961,6 +964,13 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .panel.is-dragging .sheet-handle { cursor: grabbing; }
   .sheet-head { padding-left: 16px; }
   .sheet-body { padding: 14px 16px 26px; }
+  /* Half a phone screen is not much: tighten what stands between the title and
+     the first representative. */
+  .place h2 { margin: 0 0 10px; font-size: 18px; }
+  .place-banner { margin-bottom: 12px; padding: 10px; }
+  .place-banner p { margin-bottom: 10px; font-size: 12.5px; line-height: 1.45; }
+  .fix-actions { gap: 8px; }
+  .fix-primary, .fix-ghost { padding: 0 10px; font-size: 12.5px; }
   /* At half the lower half of the sheet is below the screen. Pad the scroller
      by that much, so its last row can still be scrolled (and tabbed) into view. */
   .panel[data-stop="half"] .sheet-body { padding-bottom: calc(50vh + 26px); padding-bottom: calc(50dvh + 26px); scroll-padding-bottom: 50vh; }

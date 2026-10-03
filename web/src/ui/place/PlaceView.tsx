@@ -10,7 +10,7 @@
  *  kept and offers to forget it; a place opened from a link says which levels
  *  a link cannot carry.
  */
-import { useReducer, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 import type { Pin, StackEntry } from "../../types";
 import type { PinIndex } from "../../lib/data";
 import { LEVEL_ORDER, LEVEL_TITLES, PANEL_SECTIONS } from "../../lib/levels";
@@ -158,6 +158,7 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
 }) {
   // Forgetting changes storage, not props; re-read it.
   const [, refresh] = useReducer((n: number) => n + 1, 0);
+  const heading = useRef<HTMLHeadingElement>(null);
   const entries: StackEntry[] = view.hits
     .map((h) => ({ layer: h.layer, ocdId: h.ocdId, props: h.props, pins: pins?.get(h.layer)?.get(h.ocdId) ?? [] }))
     .sort((a, b) => (LEVEL_ORDER[a.layer] ?? 9) - (LEVEL_ORDER[b.layer] ?? 9));
@@ -166,7 +167,7 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
 
   return (
     <div className="place">
-      <h2 tabIndex={-1}>{view.title}</h2>
+      <h2 ref={heading} tabIndex={-1}>{view.title}</h2>
 
       {view.origin === "approximate" ? (
         <div className="place-banner">
@@ -176,11 +177,13 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
           <FixActions {...fix} />
         </div>
       ) : saved ? (
-        <div className="place-banner">
+        <div className="place-banner place-banner-saved">
           <p className="place-saved">
             <span className="place-stamp">{STRINGS.savedBadge}</span> {STRINGS.savedNote}
           </p>
-          <button type="button" className="fix-ghost" onClick={() => { forgetPlace(); refresh(); }}>
+          {/* The control removes itself; hand focus to the heading rather than drop it. */}
+          <button type="button" className="fix-ghost"
+                  onClick={() => { forgetPlace(); refresh(); heading.current?.focus(); }}>
             {STRINGS.forgetPlace}
           </button>
         </div>
@@ -188,7 +191,7 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
         <p className="place-saved" role="status">{STRINGS.notSavedNote}</p>
       ) : null}
 
-      <p className="place-lede">{view.origin === "link" ? STRINGS.placeLinkNote : STRINGS.placeLede}</p>
+      {view.origin === "link" && <p className="place-lede">{STRINGS.placeLinkNote}</p>}
 
       {PANEL_SECTIONS.map((sec) => {
         const here = entries.filter((e) => sec.layers.includes(e.layer));
@@ -197,6 +200,9 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
                              loading={pins === null} onOpen={onOpenPerson} />;
       })}
 
+      {/* Below the list, not above it: on a phone the first thing under the
+          title should be a representative, not a sentence about them. */}
+      <p className="place-hint">{STRINGS.placeLede}</p>
       {local && <CopyLink ocdId={local.ocdId} />}
     </div>
   );

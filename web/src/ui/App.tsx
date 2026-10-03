@@ -111,6 +111,8 @@ export function App({ mapRef, handleRef }: {
   const searchRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const flight = useRef<OwnFlight | null>(null);
+  /** The "you are here" marker already shows a confirmed point; a late guess must not move it. */
+  const exact = useRef(false);
   /** The view about to open was not asked for (arrival): it must not take focus. */
   const unasked = useRef(false);
   // An info page is opened and closed only by navigations, and every navigation
@@ -142,7 +144,8 @@ export function App({ mapRef, handleRef }: {
     flight.current = { lng, lat, origin, fill };
     setMsg(null);
     const m = mapRef.current;
-    m?.setUserLocation(lng, lat, origin !== "approximate");
+    exact.current = origin !== "approximate";
+    m?.setUserLocation(lng, lat, exact.current);
     // A phone's sheet opens over the lower half of the map: land the point in
     // the band left visible between the search field and the sheet.
     m?.goTo(lng, lat, 9, window.matchMedia(NARROW).matches ? -0.2 * window.innerHeight : 0);
@@ -223,25 +226,31 @@ export function App({ mapRef, handleRef }: {
   // Arrive on the reader's own area: once, and only on a load whose URL asked
   // for nothing. The place they confirmed on an earlier visit comes first; the
   // edge's coarse guess second; with neither, the national map and a prompt.
+  // A load that DID ask for something keeps what it always had: the marker.
   const arrived = useRef(false);
   useEffect(() => {
     if (arrived.current) return;
     arrived.current = true;
-    if (nav.current().kind !== "home" || hashToInfo()) return;
+    const cold = nav.current().kind === "home" && !hashToInfo();
     // After a reload this entry was already a step past the map: refill it.
     const fill = snap.index > 0;
     const saved = loadPlace();
-    if (saved) return goOwn(saved.lng, saved.lat, "remembered", fill);
+    if (saved) {
+      if (cold) goOwn(saved.lng, saved.lat, "remembered", fill);
+      else mapRef.current?.setUserLocation(saved.lng, saved.lat, true);
+      return;
+    }
     fetch("/api/whereami")
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
       .then((w) => {
+        const here = w && typeof w.lat === "number" && typeof w.lng === "number" ? w : null;
         // The reader may have opened or searched for something while we asked.
-        if (nav.current().kind !== "home" || flight.current) return;
-        if (w && typeof w.lat === "number" && typeof w.lng === "number") goOwn(w.lng, w.lat, "approximate", fill);
-        else setPrompt(true);
+        if (cold && nav.current().kind === "home" && !flight.current) {
+          if (here) goOwn(here.lng, here.lat, "approximate", fill); else setPrompt(true);
+        } else if (here && !exact.current) mapRef.current?.setUserLocation(here.lng, here.lat, false);
       });
-  }, [goOwn, snap.index]);
+  }, [goOwn, mapRef, snap.index]);
 
   /* ---- moving between views ---------------------------------------------- */
 
