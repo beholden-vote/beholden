@@ -390,9 +390,10 @@ def _settle_stale(client, stale: dict[str, list[str]], tripped: list[str], *,
             "publish: stale-object tripwire — " + "; ".join(tripped) + ". Nothing was "
             "deleted. If the build is right (not a bug that dropped documents), re-run "
             "with --allow-mass-delete. First stale keys: " + ", ".join(doomed[:10]))
-    for msg in tripped if blocked else ():
-        print(f"{tag}: TRIPWIRE {msg} — a deleting run raises and deletes nothing "
-              "without --allow-mass-delete")
+    if blocked:                             # not deleting, or a dry run: say so, don't raise
+        for msg in tripped:
+            print(f"{tag}: TRIPWIRE {msg} — a deleting run raises and deletes "
+                  "nothing without --allow-mass-delete")
     if delete and not dry_run:
         _delete(client, doomed)
         print(f"{tag}: deleted {len(doomed)} stale object(s)")
