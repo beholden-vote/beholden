@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 
+import httpx
 import pytest
 
 from beholden_etl import store
@@ -27,7 +28,9 @@ VOTES_MORE = ("119,House,4,11,1,99.0\n" "119,House,4,22,0,99.0\n"
               "119,House,5,11,9,99.0\n" "119,House,5,22,1,99.0\n")
 # One landed record, in the shape congress.gov serves (bill-detail and
 # cosponsors responses verified live 2026-10-03). The sponsor and one cosponsor
-# are not in office; Sam cosponsored and then withdrew.
+# are not in office; Sam cosponsored and then withdrew. Active cosponsors by
+# party are D 3, I 1, R 2, chosen so alphabetical (D, I, R) differs from largest
+# first (D, R, I) and from smallest first (I, R, D): the order cannot pass by luck.
 BILL_S7 = {
     "bill_id": "us/119/s/7", "fetched_at": "2026-10-01T06:00:00+00:00",
     "bill": {
@@ -37,7 +40,7 @@ BILL_S7 = {
         "updateDate": "2026-09-19T23:26:15Z",
         "sponsors": [{"bioguideId": "D000009", "firstName": "Dee", "lastName": "Parted",
                       "fullName": "Sen. Parted, Dee [D-OH]", "party": "D", "state": "OH"}],
-        "cosponsors": {"count": 3, "countIncludingWithdrawnCosponsors": 4}},
+        "cosponsors": {"count": 6, "countIncludingWithdrawnCosponsors": 7}},
     "cosponsors": [
         {"bioguideId": "R000001", "firstName": "Jane", "lastName": "Rep", "party": "R",
          "state": "TN", "isOriginalCosponsor": True, "sponsorshipDate": "2025-01-09"},
@@ -47,7 +50,13 @@ BILL_S7 = {
         {"bioguideId": "G000008", "firstName": "Gone", "lastName": "Away", "party": "R",
          "state": "TX", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-02"},
         {"bioguideId": "A000002", "firstName": "Al", "lastName": "Large", "party": "D",
-         "state": "AK", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-02"}]}
+         "state": "AK", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-02"},
+        {"bioguideId": "D000020", "firstName": "Dan", "lastName": "Delta", "party": "D",
+         "state": "CA", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-03"},
+        {"bioguideId": "D000021", "firstName": "Dora", "lastName": "Dell", "party": "D",
+         "state": "NY", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-03"},
+        {"bioguideId": "I000030", "firstName": "Ivy", "lastName": "Indy", "party": "I",
+         "state": "VT", "isOriginalCosponsor": False, "sponsorshipDate": "2025-02-04"}]}
 BILL_HR100 = {     # no `cosponsors` key at all: how the API says "none"
     "bill_id": "us/119/hr/100", "fetched_at": "2026-10-01T06:00:00+00:00",
     "bill": {"congress": 119, "type": "HR", "number": "100", "title": "A Bill To Do X",
@@ -215,13 +224,15 @@ def _unstamped(root):
     return out
 
 
-def test_two_builds_differ_only_in_their_stamps(slice_dirs, tmp_path_factory):
-    """Stable ordering everywhere, so a recess week rewrites nothing."""
-    first = _unstamped(slice_dirs)
+def test_two_builds_differ_only_in_their_stamps(bill_dirs, tmp_path_factory):
+    """Stable ordering everywhere, so a recess week rewrites nothing. On the
+    extended slice, so a bill page (cosponsors, parties, roll calls) is in it."""
+    first = _unstamped(bill_dirs)
     again = tmp_path_factory.mktemp("again")
-    build.run(db_path=str(slice_dirs / "wh.duckdb"), out_dir=again / "data",
-              raw_dir=slice_dirs / "raw")
-    assert _unstamped(again) == first and len(first) == 7
+    build.run(db_path=str(bill_dirs / "wh.duckdb"), out_dir=again / "data",
+              raw_dir=bill_dirs / "raw")
+    assert _unstamped(again) == first
+    assert len(first) == 3 + 5 + 2                  # votes + rollcalls + (bill + index)
 
 
 def test_counts_reach_coverage_and_crawlers_are_told(slice_dirs):
@@ -282,13 +293,17 @@ def test_bill_page_names_departed_legislators_without_linking_them(bill_dirs):
     assert bill["sponsor"] == {"person_id": None, "name": "Dee Parted", "party": "D", "state": "OH"}
 
     co = bill["cosponsors"]
-    assert co["total"] == 3 == len(co["members"])                       # Sam withdrew
-    assert co["by_party"] == [{"party": "D", "count": 1}, {"party": "R", "count": 2}]
-    assert [m["name"] for m in co["members"]] == ["Gone Away", "Al Large", "Jane Rep"]
+    assert co["total"] == 6 == len(co["members"])                       # Sam withdrew
+    # Alphabetical by party code - not largest first (D, R, I), not smallest first.
+    assert co["by_party"] == [{"party": "D", "count": 3}, {"party": "I", "count": 1},
+                              {"party": "R", "count": 2}]
+    assert [m["name"] for m in co["members"]] == [          # by family name
+        "Gone Away", "Dora Dell", "Dan Delta", "Ivy Indy", "Al Large", "Jane Rep"]
     assert co["members"][0] == {"person_id": None, "name": "Gone Away", "party": "R", "state": "TX"}
     people = {p["full_name"]: p["person_id"] for p in json.loads(
         (bill_dirs / "data" / "search" / "people.json").read_text(encoding="utf-8"))}
-    assert [m["person_id"] for m in co["members"][1:]] == [people["Al Large"], people["Jane Rep"]]
+    assert [m["person_id"] for m in co["members"]] == [
+        None, None, None, None, people["Al Large"], people["Jane Rep"]]
     assert len({tuple(m) for m in co["members"]} | {tuple(bill["sponsor"])}) == 1   # same fields
 
     assert bill["roll_calls"] == [{"roll_call_id": "us/119/house/4", "held_at": "2025-01-10",
@@ -463,3 +478,27 @@ def test_fetch_stops_early_on_an_outage_and_never_raises(tmp_path, monkeypatch):
     assert landed["roll_call_bills"] == 1 and landed["count"] == 0       # merged into the one row
     monkeypatch.setattr(fetch, "fetch_roll_call_bills", boom)
     assert fetch.fetch_congress_gov(raw, prior={})["count"] == 0         # skipped, not fatal
+
+
+def test_client_methods_use_the_documented_paths_under_the_one_throttle(monkeypatch):
+    """bill_detail and bill_cosponsors go through get(), so every call they make
+    is paced by the shared client's rate governor - there is no second path. The
+    cosponsor list walks every page: a bill with 253 cosponsors is two calls."""
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, request.url.params.get("offset")))
+        if request.url.path.endswith("/cosponsors"):
+            n = 250 if request.url.params["offset"] == "0" else 3
+            return httpx.Response(200, json={"cosponsors": [{"bioguideId": "X"}] * n})
+        return httpx.Response(200, json={"bill": {"congress": 119, "type": "HR", "number": "1"}})
+
+    client = congress_gov.CongressGovClient(api_key="test")
+    client._http = httpx.Client(transport=httpx.MockTransport(handler))
+    paced = []
+    monkeypatch.setattr(client, "_throttle", lambda: paced.append(1))
+    assert client.bill_detail(119, "hr", 1)["number"] == "1"
+    assert len(client.bill_cosponsors(119, "s", 5)) == 253
+    assert seen == [("/v3/bill/119/hr/1", None),
+                    ("/v3/bill/119/s/5/cosponsors", "0"), ("/v3/bill/119/s/5/cosponsors", "250")]
+    assert len(paced) == len(seen)
