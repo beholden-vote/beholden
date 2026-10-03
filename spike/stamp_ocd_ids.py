@@ -120,42 +120,61 @@ CDP_KINDS = frozenset({"cdp", "comunidad", "zona urbana"})
 # beholden_etl.divisions.PLACE_SLUG_OVERRIDES (the stamper runs standalone);
 # test_place_tiles pins the two equal. Seeded from the Bureau's TIGERweb place
 # layer; a collision the first real build finds is a new line here and there.
+# Colliding places take a `_GEOID` suffix. Not `~`: in an OCD slug `~` stands for
+# an apostrophe (o~fallon), and the client renders it as one.
 PLACE_SLUG_OVERRIDES: dict[str, str] = {
-    "1782088": "wilmington~1782088",  # IL Wilmington village
-    "1782101": "wilmington~1782101",  # IL Wilmington city
-    "1782309": "windsor~1782309",  # IL Windsor village
-    "1782322": "windsor~1782322",  # IL Windsor city
-    "2756680": "st_anthony~2756680",  # MN St. Anthony city
-    "2756698": "st_anthony~2756698",  # MN St. Anthony city
-    "3957750": "oakwood~3957750",  # OH Oakwood village
-    "3957764": "oakwood~3957764",  # OH Oakwood city
-    "3957792": "oakwood~3957792",  # OH Oakwood village
-    "4212184": "centerville~4212184",  # PA Centerville borough
-    "4212224": "centerville~4212224",  # PA Centerville borough
-    "4214584": "coaldale~4214584",  # PA Coaldale borough
-    "4214600": "coaldale~4214600",  # PA Coaldale borough
-    "4227360": "franklin~4227360",  # PA Franklin borough
-    "4227456": "franklin~4227456",  # PA Franklin city
-    "4237880": "jefferson~4237880",  # PA Jefferson borough
-    "4237944": "jefferson~4237944",  # PA Jefferson borough
-    "4243064": "liberty~4243064",  # PA Liberty borough
-    "4243128": "liberty~4243128",  # PA Liberty borough
-    "4253336": "newburg~4253336",  # PA Newburg borough
-    "4253344": "newburg~4253344",  # PA Newburg borough
-    "4261496": "pleasantville~4261496",  # PA Pleasantville borough
-    "4261512": "pleasantville~4261512",  # PA Pleasantville borough
-    "4840738": "lakeside~4840738",  # TX Lakeside town
-    "4840744": "lakeside~4840744",  # TX Lakeside town
-    "4853154": "oak_ridge~4853154",  # TX Oak Ridge town
-    "4853160": "oak_ridge~4853160",  # TX Oak Ridge town
-    "4861592": "reno~4861592",  # TX Reno city
-    "4861604": "reno~4861604",  # TX Reno city
-    "5562240": "pewaukee~5562240",  # WI Pewaukee city
-    "5562250": "pewaukee~5562250",  # WI Pewaukee village
-    "5578650": "superior~5578650",  # WI Superior city
-    "5578660": "superior~5578660",  # WI Superior village
-    "5584250": "waukesha~5584250",  # WI Waukesha city
-    "5584275": "waukesha~5584275",  # WI Waukesha village
+    "1782088": "wilmington_1782088",  # IL Wilmington village
+    "1782101": "wilmington_1782101",  # IL Wilmington city
+    "1782309": "windsor_1782309",  # IL Windsor village
+    "1782322": "windsor_1782322",  # IL Windsor city
+    "2756680": "st_anthony_2756680",  # MN St. Anthony city
+    "2756698": "st_anthony_2756698",  # MN St. Anthony city
+    "3957750": "oakwood_3957750",  # OH Oakwood village
+    "3957764": "oakwood_3957764",  # OH Oakwood city
+    "3957792": "oakwood_3957792",  # OH Oakwood village
+    "4212184": "centerville_4212184",  # PA Centerville borough
+    "4212224": "centerville_4212224",  # PA Centerville borough
+    "4214584": "coaldale_4214584",  # PA Coaldale borough
+    "4214600": "coaldale_4214600",  # PA Coaldale borough
+    "4227360": "franklin_4227360",  # PA Franklin borough
+    "4227456": "franklin_4227456",  # PA Franklin city
+    "4237880": "jefferson_4237880",  # PA Jefferson borough
+    "4237944": "jefferson_4237944",  # PA Jefferson borough
+    "4243064": "liberty_4243064",  # PA Liberty borough
+    "4243128": "liberty_4243128",  # PA Liberty borough
+    "4253336": "newburg_4253336",  # PA Newburg borough
+    "4253344": "newburg_4253344",  # PA Newburg borough
+    "4261496": "pleasantville_4261496",  # PA Pleasantville borough
+    "4261512": "pleasantville_4261512",  # PA Pleasantville borough
+    "4840738": "lakeside_4840738",  # TX Lakeside town
+    "4840744": "lakeside_4840744",  # TX Lakeside town
+    "4853154": "oak_ridge_4853154",  # TX Oak Ridge town
+    "4853160": "oak_ridge_4853160",  # TX Oak Ridge town
+    "4861592": "reno_4861592",  # TX Reno city
+    "4861604": "reno_4861604",  # TX Reno city
+    "5562240": "pewaukee_5562240",  # WI Pewaukee city
+    "5562250": "pewaukee_5562250",  # WI Pewaukee village
+    "5578650": "superior_5578650",  # WI Superior city
+    "5578660": "superior_5578660",  # WI Superior village
+    "5584250": "waukesha_5584250",  # WI Waukesha city
+    "5584275": "waukesha_5584275",  # WI Waukesha village
+    # Consolidated city-county governments. The Bureau names the place for the
+    # government rather than the city ("Nashville-Davidson metropolitan government
+    # (balance)"), which slugs to an id no roster would ever produce. Run against
+    # the real cb_2025 file, that left Nashville, Louisville, Indianapolis, Augusta
+    # and Athens unreachable. Slugs chosen for the city's common name; they are OUR
+    # ids and have not been checked against the ocd-division-ids registry.
+    "0947515": "milford",            # CT Milford city (balance)
+    "1303440": "athens",             # GA Athens-Clarke County unified government (balance)
+    "1304204": "augusta",            # GA Augusta-Richmond County consolidated government (balance)
+    "1836003": "indianapolis",       # IN Indianapolis city (balance)
+    "2028412": "greeley_county",     # KS Greeley County unified government (balance)
+    # Not "louisville": the Bureau still carries the pre-merger Louisville city
+    # (2148000) as its own place, and it holds the plain slug.
+    "2148006": "louisville-jefferson_county",  # KY Louisville/Jefferson County metro government (balance)
+    "3011397": "butte-silver_bow",   # MT Butte-Silver Bow (balance)
+    "4732742": "hartsville",         # TN Hartsville/Trousdale County
+    "4752006": "nashville",          # TN Nashville-Davidson metropolitan government (balance)
 }
 
 
@@ -168,6 +187,29 @@ def place_kind(name: str, namelsad: str) -> str:
     if not namelsad.startswith(name):
         raise SystemExit(f"stamp_ocd_ids: place NAMELSAD {namelsad!r} does not start with NAME {name!r}")
     return " ".join(namelsad[len(name):].replace("(balance)", "").split()).lower()
+
+
+# For a consolidated government the Bureau publishes no separate descriptor
+# (LSAD 00): NAME and NAMELSAD are both the whole legal name, e.g.
+# "Nashville-Davidson metropolitan government (balance)". Left alone, the tile
+# would call the city by its government's title and report no kind at all.
+CONSOLIDATED_KINDS = ("metropolitan government", "consolidated government",
+                      "unified government", "metro government", "city")
+
+
+def place_name_kind(name: str, namelsad: str) -> tuple[str, str]:
+    """(display name, kind) for a place. Ordinary places pass through unchanged.
+    Where the Bureau folds the descriptor into NAME, split it back out:
+    'Indianapolis city (balance)' -> ('Indianapolis', 'city'). Lowercase match
+    only, so 'Carson City' — a name, not a descriptor — is left whole."""
+    kind = place_kind(name, namelsad)
+    if kind:
+        return name, kind
+    bare = " ".join(name.replace("(balance)", "").split())
+    for k in CONSOLIDATED_KINDS:
+        if bare.endswith(" " + k):
+            return bare[: -len(k) - 1], k
+    return bare, ""
 
 
 def feature_props(level: str, src: dict) -> dict | None:
@@ -222,16 +264,18 @@ def feature_props(level: str, src: dict) -> dict | None:
         name, geoid, namelsad = (_get(src, k) for k in ("NAME", "GEOID", "NAMELSAD"))
         if not (name and namelsad and re.fullmatch(r"\d{7}", geoid or "")):
             raise SystemExit(f"stamp_ocd_ids: place without NAME, NAMELSAD and a 7-digit GEOID: {src!r}")
-        kind = place_kind(name, namelsad)
+        display, kind = place_name_kind(name, namelsad)
         if _get(src, "LSAD") in CDP_LSAD or kind in CDP_KINDS:
             return None           # statistical area, no government
-        # The county slug rule IS the place slug rule (divisions._ocd_slug serves both).
+        # The county slug rule IS the place slug rule (divisions._ocd_slug serves
+        # both). It is applied to the Bureau's NAME, not the display name, so a
+        # roster that slugs the same NAME lands on the same id.
         slug = PLACE_SLUG_OVERRIDES.get(geoid) or county_slug(name)
         return {
             "ocd_id": f"{state_ocd(usps)}/place:{slug}",
             "geoid": geoid,            # STATEFP+PLACEFP, the join key to the area facts
             "state": usps,
-            "name": name,
+            "name": display,
             "kind": kind,
         }
 

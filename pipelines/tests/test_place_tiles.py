@@ -225,7 +225,10 @@ def test_every_known_collision_is_resolved_by_an_override():
 def test_override_table_is_mirrored_between_stamper_and_divisions():
     stamper = _load_stamper()
     assert stamper.PLACE_SLUG_OVERRIDES == divisions.PLACE_SLUG_OVERRIDES
-    assert {g for g, _, _ in REAL_COLLISIONS} == set(divisions.PLACE_SLUG_OVERRIDES)
+    # The table holds exactly two kinds of entry: same-name collisions and
+    # consolidated governments. Anything else in it is unexplained.
+    assert ({g for g, _, _ in REAL_COLLISIONS} | {g for g, *_ in CONSOLIDATED}
+            == set(divisions.PLACE_SLUG_OVERRIDES))
     # Distinct ids, or the table would be the collision it exists to resolve.
     assert len(set(divisions.PLACE_SLUG_OVERRIDES.values())) == len(divisions.PLACE_SLUG_OVERRIDES)
     # And place_ocd with a geoid lands on the id the stamper puts on that polygon.
@@ -234,3 +237,62 @@ def test_override_table_is_mirrored_between_stamper_and_divisions():
         [feat] = _stamp(stamper, _feature(geoid, name, namelsad))
         assert feat["properties"]["ocd_id"] == divisions.place_ocd(usps, name, geoid)
         assert divisions.place_ocd(usps, name) != feat["properties"]["ocd_id"]   # name alone matches no polygon
+
+
+# --- consolidated governments -------------------------------------------------
+# (GEOID, the Bureau's NAME — which is also its NAMELSAD at LSAD 00 —, the slug,
+# the display name, the kind). Taken from the real cb_2025_us_place_500k
+# attribute table, where every one of these stamped an id no roster could
+# produce ("place:nashville-davidson_metropolitan_government_~balance~") and an
+# empty kind.
+CONSOLIDATED = [
+    ("0947515", "Milford city (balance)", "milford", "Milford", "city"),
+    ("1303440", "Athens-Clarke County unified government (balance)", "athens",
+     "Athens-Clarke County", "unified government"),
+    ("1304204", "Augusta-Richmond County consolidated government (balance)", "augusta",
+     "Augusta-Richmond County", "consolidated government"),
+    ("1836003", "Indianapolis city (balance)", "indianapolis", "Indianapolis", "city"),
+    ("2028412", "Greeley County unified government (balance)", "greeley_county",
+     "Greeley County", "unified government"),
+    ("2148006", "Louisville/Jefferson County metro government (balance)",
+     "louisville-jefferson_county", "Louisville/Jefferson County", "metro government"),
+    ("3011397", "Butte-Silver Bow (balance)", "butte-silver_bow", "Butte-Silver Bow", ""),
+    ("4732742", "Hartsville/Trousdale County", "hartsville", "Hartsville/Trousdale County", ""),
+    ("4752006", "Nashville-Davidson metropolitan government (balance)", "nashville",
+     "Nashville-Davidson", "metropolitan government"),
+]
+
+
+def test_consolidated_governments_get_a_usable_id_name_and_kind():
+    """The Bureau names a consolidated city-county for its government, not the
+    city. Stamped as-is, Nashville's polygon carried an id built from that whole
+    title, so officials pinned to "Nashville" matched nothing and the city was
+    unreachable from the map."""
+    stamper = _load_stamper()
+    for geoid, bureau_name, slug, display, kind in CONSOLIDATED:
+        props = stamper.feature_props(
+            "place", _feature(geoid, bureau_name, bureau_name, "00")["properties"])
+        assert props["ocd_id"].endswith(f"/place:{slug}"), geoid
+        assert (props["name"], props["kind"]) == (display, kind), geoid
+        assert "balance" not in props["ocd_id"] and "balance" not in props["name"]
+        # ...and the pipeline, given the geoid, lands on the same polygon.
+        assert divisions.place_ocd(props["state"], display, geoid=geoid) == props["ocd_id"]
+
+
+def test_a_descriptor_is_split_off_only_when_it_is_one():
+    """'Carson City' ends in a word that is also a descriptor. It is a name; the
+    match is on the Bureau's lowercase descriptor, so it is left whole."""
+    stamper = _load_stamper()
+    props = stamper.feature_props("place", _feature("3209700", "Carson City", "Carson City", "00")["properties"])
+    assert (props["name"], props["kind"]) == ("Carson City", "")
+    # An ordinary place is untouched by any of this.
+    props = stamper.feature_props("place", _feature("4737640", "Hendersonville", "Hendersonville city")["properties"])
+    assert (props["name"], props["kind"]) == ("Hendersonville", "city")
+
+
+def test_no_override_slug_uses_the_apostrophe_marker_as_a_separator():
+    """In an OCD slug '~' stands for an apostrophe (o~fallon) and the client
+    renders it as one, so a collision suffix written 'wilmington~1782088' would
+    display as Wilmington'1782088."""
+    import re
+    assert not [v for v in divisions.PLACE_SLUG_OVERRIDES.values() if re.search(r"~\d", v)]
