@@ -462,11 +462,16 @@ where the source publishes none. Never inferred.
 
 ### 8.3 Votes, roll calls, bills — WO-23a · *target*
 
-Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like
-(`us/119/hr/2384`) and are used **as the object key verbatim**; they contain only
-`[a-z0-9/._-]`, and a test pins that.
+Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like and are used
+**as the object key verbatim**; they contain only `[a-z0-9/._-]`, a test pins that, and the
+writer refuses to publish a key outside that set. A bill id is `us/{congress}/{type}/{number}`
+(`us/119/hr/2384`). A roll-call id is `us/{congress}/{house|senate}/{n}` (`us/119/house/312`),
+where `n` is Voteview's congress-cumulative roll number — not the clerk's per-session number,
+which appears only inside the official `url`.
 
-**`/votes/{person_id}.json`** — one member's complete record for the current scope.
+**`/votes/{person_id}.json`** — one member's complete record for the current scope. Every
+sitting member of the House and Senate has one; a member with no recorded position gets
+`total: 0` and `votes: []`, never a missing file, and every member's file has the same fields.
 
 ```jsonc
 {
@@ -474,29 +479,51 @@ Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like
   "scope": "119th Congress",
   "summary": {
     "total": 1042, "yea": 610, "nay": 380, "present": 2, "not_voting": 50,
-    "party_decided": 990,      // roll calls where the member's party had a majority position
+    "party_decided": 990,      // yea/nay votes on roll calls where the member's party had a majority position
     "with_party": 930, "against_party": 60
   },
   "votes": [                   // every roll call the member was eligible for, newest first
-    { "roll_call_id": "us/119/h/312", "held_at": "2026-06-12", "question": "On Passage",
+    { "roll_call_id": "us/119/house/312", "held_at": "2026-06-12", "question": "On Passage",
       "position": "yea",       // 'yea' | 'nay' | 'present' | 'not_voting'
       "party_position": "yea", // the member's party's majority position; null if tied or absent
       "result": "Passed", "yea_count": 220, "nay_count": 210,
       "bill_id": "us/119/hr/2384", "bill_title": "…", "policy_area": "Health" }
   ],
-  "provenance": { "source": "voteview", … }
+  "provenance": { "source": "voteview", "methodology_id": "co-voting", … }
 }
 ```
 
-**`/rollcalls/{roll_call_id}.json`** — one vote, everyone's position.
+- **Eligibility.** `votes` holds the roll calls the member holds a position row for. Voteview
+  separates "not a member of the chamber for this vote" (cast code 0) from "not voting" (9):
+  only the second is a position. A roll call held before the member took office is absent from
+  the list and from every count; it is never an absence. Voteview's paired and announced
+  casts fold into `yea` / `nay`.
+- **Order.** Newest first by `held_at` (a calendar date, `YYYY-MM-DD`; Voteview carries no
+  time of day), ties broken by higher roll number first.
+- **Votes that are not on a bill** — nominations, procedural motions, quorum calls — stay in
+  the record with `bill_id`, `bill_title` and `policy_area` all `null`, and the question the
+  source gives. A record that omitted them would misstate attendance. The same three fields
+  are `null` while a roll call's bill has no congress.gov record in the warehouse yet (see
+  *Landing*).
+- **Computed fields.** `party_position`, `with_party`, `against_party` and `party_decided` use
+  the published party-agreement rule and nothing else (`/methodology#co-voting`, hence the
+  envelope's `methodology_id`): only the member's `yea` / `nay` votes, only on roll calls where
+  their party had a majority; a party split evenly has no majority and the vote counts toward
+  neither side. So `with_party + against_party == party_decided` always, and
+  `with_party / party_decided` is the dossier's `party_agreement_pct` — the dossier withholds
+  that percentage below `key_votes.MIN_AGREEMENT_VOTES`, these counts are always exact.
+  `present` and `not_voting` count toward neither. No new measure is introduced here.
+
+**`/rollcalls/{roll_call_id}.json`** — one vote, every sitting member's position.
 
 ```jsonc
 {
-  "schema_version": "1.0", "roll_call_id": "us/119/h/312", "generated_at": "…",
+  "schema_version": "1.0", "roll_call_id": "us/119/house/312", "generated_at": "…",
   "chamber": "house", "held_at": "2026-06-12", "question": "On Passage",
-  "description": "…", "result": "Passed", "url": "https://clerk.house.gov/…",
+  "description": "…",          // Voteview's second text field; null when blank or the same as `question`
+  "result": "Passed", "url": "https://clerk.house.gov/…",
   "bill_id": "us/119/hr/2384", "bill_title": "…", "policy_area": "Health",
-  "totals": { "yea": 220, "nay": 210, "present": 1, "not_voting": 4 },   // the official tally
+  "totals": { "yea": 220, "nay": 210 },                                  // the official tally
   "by_party": [ { "party": "D", "yea": 4, "nay": 208, "present": 0, "not_voting": 2 } ],
   "positions": [ { "person_id": "…", "name": "…", "party": "R", "state": "TN",
                    "ocd_id": "…", "position": "yea" } ],
@@ -506,34 +533,71 @@ Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like
 ```
 
 `by_party` is ordered alphabetically by party code — the same party-agnostic rule as the map
-legend, never by size. `positions` is ordered by family name. `totals` is the official tally
-(`present` and `not_voting` appear only where the source publishes them); `positions` and
-`by_party` cover only members currently in office, because those are the positions the
-warehouse holds, so they legitimately differ from `totals` and `positions_cover` says why. A
-client must not present either as the complete roll.
+legend, never by size. `positions` is ordered by family name (then given name, then
+`person_id`). `totals` is the chamber's official tally as Voteview publishes it: `yea` and
+`nay` only, because its roll-call table carries no present or not-voting tally and a figure
+the source does not give is omitted, never computed (a blank cell is `null`, never `0`).
+`positions` and `by_party` cover only members currently in office — those are the positions
+the warehouse holds — so they legitimately do not sum to `totals`, and `positions_cover` says
+why. A client must not present either as the complete roll, and nothing is scaled or inferred
+to make them agree. `url` is the official record (House Clerk or Senate), built from the
+session and clerk numbers Voteview carries; where it cannot be built it is `null` and the
+envelope cites Voteview's chamber page instead. `bill_id` is `null` for a roll call whose
+bill is not in the warehouse, exactly as for the member's own record.
 
 **`/bills/{bill_id}.json`** — one per bill that has had **at least one roll call**. Bills that
-never reached a vote are linked out to congress.gov, not mirrored.
+never reached a vote are linked out to congress.gov, not mirrored. Only the eight measure
+types congress.gov serves have a page; a Senate nomination is not a bill.
 
 ```jsonc
 {
   "schema_version": "1.0", "bill_id": "us/119/hr/2384", "generated_at": "…",
   "number": "H.R. 2384", "title": "…", "policy_area": "Health",
-  "introduced_on": "2025-03-27", "status": "…", "url": "https://www.congress.gov/…",
+  "introduced_on": "2025-03-27", "status": "passed_chamber", "url": "https://www.congress.gov/…",
   "sponsor": { "person_id": "…", "name": "…", "party": "R", "state": "TN" },
   "cosponsors": { "total": 42,
                   "by_party": [ { "party": "D", "count": 10 }, { "party": "R", "count": 32 } ],
                   "members": [ { "person_id": "…", "name": "…", "party": "D", "state": "CA" } ] },
-  "roll_calls": [ { "roll_call_id": "us/119/h/312", "held_at": "2026-06-12",
+  "roll_calls": [ { "roll_call_id": "us/119/house/312", "held_at": "2026-06-12",
                     "question": "On Passage", "result": "Passed",
                     "yea_count": 220, "nay_count": 210 } ],
   "provenance": { "source": "congress.gov", … }
 }
 ```
 
-`person_id` is `null` for a sponsor or cosponsor who is not a current officeholder; the name
-still publishes. **`/bills/index.json`** lists every mirrored bill
-(`bill_id`, `number`, `title`, `policy_area`, `last_vote_at`) for client-side search.
+`status` is the spine's `bills.status` enum (§2), derived conservatively from congress.gov's
+latest-action text. `sponsor` is `null` when congress.gov lists none; it and every cosponsor
+carry the same four fields. `person_id` is `null` for a sponsor or cosponsor who is not a
+current officeholder; the name still publishes. A `person_id` is linked by bioguide id only,
+never by name. `cosponsors.total` counts current cosponsors — one who withdrew is neither
+counted nor listed. `members` is ordered by family name, `by_party` alphabetically by party
+code (never by size), `roll_calls` newest first.
+
+A page exists only once the bill's congress.gov record has landed. A roll-call bill that could
+not be fetched tonight has no page and no index row, is retried by the next fetch, and is
+never published from whatever fields the warehouse happens to hold.
+
+**`/bills/index.json`** — `{ schema_version, generated_at, bills, provenance }`, where `bills`
+lists every mirrored bill (`bill_id`, `number`, `title`, `policy_area`, `last_vote_at`) in bill
+id order, for client-side search.
+
+**Counts, crawl policy.** `coverage.json → counts` gains `votes` (members with a file),
+`rollcalls` and `bills` (bill pages; the index is not counted). `/votes/`, `/rollcalls/` and
+`/bills/` are `Disallow`ed in `robots.txt`, inside its one group: thousands of small objects
+under a guessable key, the same shape as `/dossiers/`.
+
+**Landing.** The warehouse held only bills a sitting member sponsored, and no cosponsors.
+Fetch now lands one raw record per distinct bill a current-Congress roll call references
+(`raw/congress.gov/bills/{congress}-{type}-{number}.json`: `{bill_id, fetched_at, bill,
+cosponsors}` — the bill-detail response and the complete cosponsor list). It resumes from the
+hydrated lake, fetches what is new, and re-fetches a landed bill only when a single "bills
+updated since" sweep, anchored on the cursor `roll_call_bills_swept_at` in the manifest's
+congress.gov row, names it. It is paced by the one shared congress.gov client, a failed bill
+keeps its last-good record or stays absent without costing the run anything else, and a
+cosponsor list whose length matches neither of the bill detail's counts is refused. Transform
+loads every landed record into `bills` (the sponsored-list row wins where both exist) and the
+federal `cosponsor` role of `sponsorships`, again by bioguide id only. The dossier's own
+`legislative` block and `key_votes` do not change.
 
 ### 8.4 Area facts — WO-34 · *target*
 
