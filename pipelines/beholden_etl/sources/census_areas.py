@@ -347,11 +347,17 @@ def _now() -> str:
 def fetch_acs(raw: Path, prior: dict) -> dict | None:
     """One national county call, one national state call (the control total), and one
     place call per state: 53 requests. Returns None when CENSUS_API_KEY is unset, so
-    the source is simply absent from the manifest and the build publishes no area files
-    (honest absence, the same shape as the OpenStates votes crawl)."""
+    the source is simply absent from the manifest and the build writes no area files at
+    all - the area files already published are left exactly as they are (honest absence,
+    the same shape as the OpenStates votes crawl). Only reached when a fetch is due: a
+    snapshot still inside its SLA is reused without a key."""
     if not api_key():
-        print("fetch: census_acs skipped (CENSUS_API_KEY not set - the Census Data API "
-              "refuses keyless data requests)")
+        msg = ("CENSUS_API_KEY is NOT SET - census_acs SKIPPED: no county or city facts will "
+               "be fetched or built this run; area files already published are left untouched")
+        # In GitHub Actions the workflow command turns the line into a run-summary annotation
+        # instead of one more line in a long log.
+        print(f"::warning title=census_acs skipped::{msg}" if os.environ.get("GITHUB_ACTIONS")
+              else f"fetch: WARNING {msg}")
         return None
     d = raw / "census_acs"
     (d / "place").mkdir(parents=True, exist_ok=True)

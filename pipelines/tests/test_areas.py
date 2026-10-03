@@ -309,6 +309,45 @@ def test_without_a_survey_nothing_publishes_and_counts_say_so(tmp_path):
     assert counts == {"area_counties": 0, "area_places": 0} and not (out / "areas").exists()
 
 
+def tree(out):
+    """{relative path: (bytes, mtime_ns)} for every file under areas/."""
+    return {p.relative_to(out).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns)
+            for p in sorted((out / "areas").rglob("*.json"))}
+
+
+def test_a_night_without_the_key_leaves_an_already_published_tree_untouched(tmp_path):
+    """The stale-snapshot, no-key night: the manifest drops census_acs (the fetcher returned
+    None) while last night's snapshot is still on disk, and `out` already holds good files."""
+    _, out = build_areas(tmp_path, World(), "pub")
+    before = tree(out)
+    assert len(before) == 102
+    counts, again = build_areas(tmp_path, World(), "pub", man=manifest(census_acs=1))
+    assert again == out and counts == {"area_counties": 0, "area_places": 0}
+    assert tree(out) == before                          # same files, same bytes, not even rewritten
+
+
+def test_a_failed_check_writes_no_partial_tree(tmp_path, monkeypatch):
+    """A check that fails on the seventh file must not leave six new ones behind, whether
+    `out` is empty or already holds a good published tree."""
+    _, pub = build_areas(tmp_path, World(), "pub")
+    before = tree(pub)
+    real, seen = dossiers._check_provenance, []
+
+    def fails_on_the_seventh(doc, section):
+        seen.append(section)
+        if len(seen) == 7:
+            raise dossiers.ProvenanceError("synthetic failure")
+        return real(doc, section)
+    monkeypatch.setattr(dossiers, "_check_provenance", fails_on_the_seventh)
+    with pytest.raises(dossiers.ProvenanceError, match="synthetic"):
+        build_areas(tmp_path, World(), "pub")
+    assert tree(pub) == before                          # nothing replaced
+    seen.clear()
+    with pytest.raises(dossiers.ProvenanceError, match="synthetic"):
+        build_areas(tmp_path, World(), "empty")
+    assert not (tmp_path / "empty" / "areas").exists()  # nothing half-written
+
+
 def test_a_snapshot_of_another_vintage_halts(tmp_path):
     bad = manifest()
     bad["sources"]["census_acs"]["vintage"] = C.ACS_YEAR - 1
@@ -453,10 +492,35 @@ def test_fetch_acs_lands_snapshots_and_the_key_goes_nowhere_public(tmp_path, mon
     assert len(list((raw / "census_acs" / "place").glob("*.json"))) == 51
 
 
-def test_fetch_acs_without_a_key_is_absent_not_a_crash(tmp_path, monkeypatch):
+def test_fetch_acs_without_a_key_is_absent_not_a_crash_and_says_so_loudly(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("CENSUS_API_KEY", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setattr(C, "_get_text", lambda url: pytest.fail("a keyless request was sent"))
     assert C.fetch_acs(tmp_path / "raw", {}) is None
+    line = capsys.readouterr().out.strip()
+    assert len(line.splitlines()) == 1 and line.startswith("fetch: WARNING CENSUS_API_KEY is NOT SET")
+    assert "SKIPPED" in line and "left untouched" in line
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")                          # becomes a run annotation
+    C.fetch_acs(tmp_path / "raw", {})
+    assert capsys.readouterr().out.startswith("::warning title=census_acs skipped::CENSUS_API_KEY is NOT SET")
+
+
+def test_without_a_key_a_fresh_snapshot_is_reused_and_a_stale_one_drops_out_of_the_manifest(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("CENSUS_API_KEY", raising=False)
+    now = datetime.now(timezone.utc)
+
+    def prior(days):
+        return {"sources": {"census_acs": {"retrieved_at": (now - timedelta(days=days)).isoformat(),
+                                           "count": 7}}}
+    with monkeypatch.context() as m:                                      # inside the 90-day SLA: no fetch at all
+        m.setitem(fetch._FETCHERS, "census_acs", lambda *a: pytest.fail("fetched a fresh snapshot"))
+        key, frag, status, _ = fetch._run_source("census_acs", tmp_path, prior(30), full=False)
+    assert status == "fresh" and frag["count"] == 7
+    key, frag, status, _ = fetch._run_source("census_acs", tmp_path, prior(120), full=False)
+    assert (status, frag) == ("absent", None)                             # due, no key: not in the manifest
+    key, frag, status, _ = fetch._run_source("census_acs", tmp_path, prior(30), full=True)
+    assert (status, frag) == ("absent", None)                             # --full bypasses freshness too
 
 
 def test_http_errors_never_echo_the_key(monkeypatch):

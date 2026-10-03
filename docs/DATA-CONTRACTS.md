@@ -581,8 +581,12 @@ display *"This product uses the Census Bureau Data API but is not endorsed or ce
 Census Bureau"* (on the Sources page) and forbid modifying content while still crediting the
 Bureau, which is why nothing here computes or repairs a value. **The API requires a key**
 (`CENSUS_API_KEY`; a keyless data call is answered with an HTML page, not data — observed
-2026-10-03); when it is unset the fetch skips, no `areas/` object publishes, and
-`coverage.json` reports `area_counties: 0`.
+2026-10-03). When a fetch is due and it is unset, the fetch prints one loud `CENSUS_API_KEY is
+NOT SET` line (a workflow annotation in Actions) and skips; the build then writes **no**
+`areas/` object — the publish stage only ever PUTs, so the files already published stay exactly
+as they are — and `coverage.json` reports `area_counties: 0` for that run. A snapshot still
+inside its SLA is reused without a key. Nothing is written until every file has been validated,
+so a failed check never leaves a partial tree.
 
 **Withheld values.** The Bureau reports them as `-666666666`, `-999999999`, `-888888888`
 (estimates) and `-222222222`, `-333333333`, `-555555555` (margins; `-555555555` marks a
