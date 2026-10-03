@@ -103,6 +103,22 @@ export async function loadDossier(personId: string): Promise<Dossier | null> {
   return d;
 }
 
+/** coverage.json, as far as the client reads it: when each source was last
+ *  checked. A document's own stamps say when it last CHANGED (contracts §8.1) —
+ *  an unchanged dossier is not rewritten — so "last checked" lives here, in the
+ *  one file that is rewritten every run. */
+export interface Coverage {
+  sources?: Record<string, { retrieved_at?: string | null } | undefined>;
+}
+
+let coveragePromise: Promise<Coverage | null> | null = null;
+
+/** Fetched once per page load; null when unavailable (callers degrade). */
+export function loadCoverage(): Promise<Coverage | null> {
+  coveragePromise ??= fetchJSON<Coverage>("/coverage.json");
+  return coveragePromise;
+}
+
 /** True when the legislative section is the pre-E2 stub (counts all zero and
  *  no items) — rendered as "syncing", never as a factual zero. */
 export function legislativeIsStub(d: Dossier): boolean {

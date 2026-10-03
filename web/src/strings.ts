@@ -112,7 +112,7 @@ export const STRINGS = {
 
   // Provenance
   sourceLabel: "Source",
-  retrievedLabel: "retrieved",
+  retrievedLabel: { checked: "checked", unchanged: "unchanged since" },
 
   // Credibility grades (WO-28) — DESCRIPTIVE OF METHOD, NEVER OF THE OFFICIAL.
   // A grade says how Beholden obtained a fact, not how trustworthy the person
