@@ -1,0 +1,134 @@
+{
+ "chamber": "house",
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "members": [
+  {
+   "layout": {
+    "x": -0.318,
+    "y": 0.742
+   },
+   "measures": {
+    "missed": {
+     "n": 3,
+     "of": 105,
+     "pct": 2.9
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 9,
+      "of": 10,
+      "pct": 90.0,
+      "policy_area": "Health"
+     }
+    ],
+    "with_other_party": {
+     "n": 5,
+     "of": 40,
+     "pct": 12.5
+    },
+    "with_own_party": {
+     "n": 94,
+     "of": 100,
+     "pct": 94.0
+    }
+   },
+   "name": "Fixture Member One",
+   "nominate": {
+    "dim1": 0.41,
+    "dim2": -0.12
+   },
+   "party": "R",
+   "person_id": "fixture-0001",
+   "state": "TN"
+  },
+  {
+   "layout": {
+    "x": 0.55,
+    "y": -0.4
+   },
+   "measures": {
+    "missed": {
+     "n": 3,
+     "of": 105,
+     "pct": 2.9
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 9,
+      "of": 10,
+      "pct": 90.0,
+      "policy_area": "Health"
+     }
+    ],
+    "with_other_party": {
+     "n": 5,
+     "of": 40,
+     "pct": 12.5
+    },
+    "with_own_party": {
+     "n": 96,
+     "of": 100,
+     "pct": 96.0
+    }
+   },
+   "name": "Fixture Member Two",
+   "nominate": {
+    "dim1": -0.38,
+    "dim2": 0.2
+   },
+   "party": "D",
+   "person_id": "fixture-0002",
+   "state": "TN"
+  },
+  {
+   "layout": {
+    "x": 0.05,
+    "y": 0.0
+   },
+   "measures": {
+    "missed": {
+     "n": 3,
+     "of": 105,
+     "pct": 2.9
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 9,
+      "of": 10,
+      "pct": 90.0,
+      "policy_area": "Health"
+     }
+    ],
+    "with_other_party": null,
+    "with_own_party": {
+     "n": 60,
+     "of": 100,
+     "pct": 60.0
+    }
+   },
+   "name": "Fixture Member Three",
+   "nominate": {
+    "dim1": -0.1,
+    "dim2": 0.0
+   },
+   "party": "I",
+   "person_id": "fixture-0003",
+   "state": "TN"
+  }
+ ],
+ "methodology_ids": {
+  "layout": "fixture",
+  "missed": "fixture",
+  "party_line": "fixture",
+  "with_other_party": "fixture",
+  "with_own_party": "co-voting"
+ },
+ "provenance": {
+  "grade": "A",
+  "pipeline_version": "fixture",
+  "retrieved_at": "2026-10-03T00:00:00+00:00",
+  "source": "voteview"
+ },
+ "schema_version": "1.0",
+ "scope": "119th Congress"
+}

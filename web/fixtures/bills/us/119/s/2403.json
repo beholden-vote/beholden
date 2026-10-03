@@ -1,0 +1,69 @@
+{
+ "bill_id": "us/119/s/2403",
+ "cosponsors": {
+  "by_party": [
+   {
+    "count": 1,
+    "party": "D"
+   },
+   {
+    "count": 2,
+    "party": "R"
+   }
+  ],
+  "members": [
+   {
+    "name": "Fixture, Member A",
+    "party": "D",
+    "person_id": null,
+    "state": "CA"
+   },
+   {
+    "name": "Fixture, Member B",
+    "party": "R",
+    "person_id": null,
+    "state": "TX"
+   },
+   {
+    "name": "Fixture, Member C",
+    "party": "R",
+    "person_id": null,
+    "state": "OH"
+   }
+  ],
+  "total": 3
+ },
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "introduced_on": "2025-03-27",
+ "number": "FIXTURE us/119/s/2403",
+ "policy_area": "Labor and Employment",
+ "provenance": {
+  "grade": "A",
+  "grade_reason": "official_structured",
+  "methodology_id": null,
+  "pipeline_version": "etl-2026.39.1641",
+  "retrieved_at": "2026-10-03T11:10:16+00:00",
+  "source": "voteview",
+  "source_url": "https://clerk.house.gov/Votes/2026314"
+ },
+ "roll_calls": [
+  {
+   "held_at": "2026-09-16",
+   "nay_count": 14,
+   "question": "On Motion to Suspend the Rules and Pass",
+   "result": "Passed",
+   "roll_call_id": "us/119/house/674",
+   "yea_count": 401
+  }
+ ],
+ "schema_version": "1.0",
+ "sponsor": {
+  "name": "Nicholas J. Begich III",
+  "party": "R",
+  "person_id": "8dda2328-60be-53f8-b966-3133f0264490",
+  "state": "AK"
+ },
+ "status": "passed_chamber",
+ "title": "Retire through Ownership Act",
+ "url": "https://www.congress.gov/"
+}

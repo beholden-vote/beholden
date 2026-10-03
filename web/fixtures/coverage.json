@@ -1,0 +1,85 @@
+{
+ "counts": {
+  "area_counties": 0,
+  "area_places": 0,
+  "bills": 0,
+  "cd_stylefeed": 439,
+  "dossiers": 7934,
+  "graph_neighborhoods": 7934,
+  "house": 439,
+  "rollcalls": 1589,
+  "senate": 100,
+  "state_bills": 0,
+  "state_house": 5419,
+  "state_roll_calls": 0,
+  "state_senate": 1939,
+  "state_vote_positions": 0,
+  "state_votes_states": 0,
+  "states_stylefeed": 50,
+  "votes": 539
+ },
+ "generated_at": "2026-10-03T17:23:55+00:00",
+ "pipeline_version": "etl-2026.39.1641",
+ "sources": {
+  "census_gazetteer": {
+   "age_hours": 6.23,
+   "retrieved_at": "2026-10-03T11:10:15+00:00",
+   "sla_hours": 8760,
+   "within_sla": true
+  },
+  "congress.gov": {
+   "age_hours": 5.81,
+   "retrieved_at": "2026-10-03T11:35:34+00:00",
+   "sla_hours": 24,
+   "within_sla": true
+  },
+  "fec": {
+   "age_hours": 27.64,
+   "retrieved_at": "2026-10-02T13:45:21+00:00",
+   "sla_hours": 72,
+   "within_sla": true
+  },
+  "hendersonville": {
+   "age_hours": 29.36,
+   "retrieved_at": "2026-10-02T12:02:17+00:00",
+   "sla_hours": 168,
+   "within_sla": true
+  },
+  "house_clerk": {
+   "age_hours": 6.23,
+   "retrieved_at": "2026-10-03T11:10:14+00:00",
+   "sla_hours": 24,
+   "within_sla": true
+  },
+  "openstates": {
+   "age_hours": 6.23,
+   "retrieved_at": "2026-10-03T11:10:16+00:00",
+   "sla_hours": 24,
+   "within_sla": true
+  },
+  "sumner_county": {
+   "age_hours": 29.36,
+   "retrieved_at": "2026-10-02T12:02:17+00:00",
+   "sla_hours": 168,
+   "within_sla": true
+  },
+  "unitedstates_legislators": {
+   "age_hours": 6.23,
+   "retrieved_at": "2026-10-03T11:10:14+00:00",
+   "sla_hours": 36,
+   "within_sla": true
+  },
+  "voteview": {
+   "age_hours": 6.23,
+   "retrieved_at": "2026-10-03T11:10:16+00:00",
+   "sla_hours": 36,
+   "within_sla": true
+  },
+  "wikidata": {
+   "age_hours": 654.94,
+   "retrieved_at": "2026-09-06T10:27:33+00:00",
+   "sla_hours": 720,
+   "within_sla": true
+  }
+ }
+}

@@ -104,6 +104,11 @@ sequentially — the WOs touch the same files.
 | 33 | Publish only what changed (stamp-insensitive digest, stale deletes, write budget) | P (after 32) | merged — [`WO-33`](WO-33-byte-stable-publish.md) |
 | 34 | Facts about every county and city (Census ACS + Gazetteer) | P (after 32) | merged — [`WO-34`](WO-34-area-facts.md) |
 | 35 | Reader shell: history, bottom sheet, arrival, remembered place, act from the list | F (after 32) | merged — [`WO-35`](WO-35-reader-shell.md) |
+| 22b | Roster framework (Part A) · statewide Tennessee (Part B, blocked on UT permission) | P (after 33) | open — [`WO-22b`](WO-22b-roster-framework.md) |
+| 23b | Votes UI: full record, roll-call page, bill page, how your representatives voted | F (after 35, 23a) | open — [`WO-23b`](WO-23b-votes-ui.md) |
+| 36 | Position profile (measures + layout, no composite) | P (after 23a) | open — [`WO-36`](WO-36-position-profile.md) |
+| 37 | Places UI: city layer, area card, coverage fills, sharded pins, coverage page | F (after 21, 34, 35) | open — [`WO-37`](WO-37-places-ui.md) |
+| 39 | Metros through Legistar | P (after 22b-A, 23a, R-B) | **gated** — [`WO-39`](WO-39-legistar-metros.md) |
 
 **WO-1…16 merged (2026-07-06).** WO-11…16 were the depth round: dossier tabs, cited
 drill-downs, an interactive connections graph, per-level map fills, and the

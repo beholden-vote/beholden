@@ -1,0 +1,62 @@
+{
+ "areas": {
+  "47001": {
+   "households": {
+    "estimate": 31000,
+    "moe": 600
+   },
+   "land_sqmi": 337.0,
+   "median_age": {
+    "estimate": 44.1,
+    "moe": 0.5
+   },
+   "name": "Anderson County",
+   "population": {
+    "estimate": 77000,
+    "moe": null
+   }
+  },
+  "47165": {
+   "households": {
+    "estimate": 76000,
+    "moe": 900
+   },
+   "land_sqmi": 529.4,
+   "median_age": {
+    "estimate": 39.4,
+    "moe": 0.3
+   },
+   "median_household_income": {
+    "estimate": 78000,
+    "moe": 2100
+   },
+   "name": "Sumner County",
+   "population": {
+    "estimate": 205000,
+    "moe": null
+   }
+  }
+ },
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "geography": {
+  "provenance": {
+   "grade": "A",
+   "pipeline_version": "fixture",
+   "retrieved_at": "2026-10-03T00:00:00+00:00",
+   "source": "census_gazetteer"
+  },
+  "vintage": 2024
+ },
+ "level": "county",
+ "schema_version": "1.0",
+ "state": "tn",
+ "survey": {
+  "provenance": {
+   "grade": "A",
+   "pipeline_version": "fixture",
+   "retrieved_at": "2026-10-03T00:00:00+00:00",
+   "source": "census_acs"
+  },
+  "vintage": "2020-2024"
+ }
+}
