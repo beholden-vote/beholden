@@ -485,9 +485,11 @@ def _legislative_stats(con, state_bill_urls: dict[str, str]) -> dict[str, dict]:
 
 def _cosponsored_spine(con) -> dict[str, int]:
     """person_id -> count of role='cosponsor' sponsorship rows (WO-17). The
-    federal path never warehouses cosponsor rows (the count comes per-member
-    from raw congress.gov snapshots, _cosponsored_counts), so this is the
-    state legislators' cosponsored figure — same table, different source path."""
+    federal path takes its count per-member from raw congress.gov snapshots
+    (_cosponsored_counts), so this is the state legislators' cosponsored figure
+    — same table, different source path. Federal cosponsor rows DO exist since
+    WO-23a, but only for bills a roll call reached: a partial set, never a
+    federal count, so the federal branch must not read this map."""
     return {str(pid): n for pid, n in con.execute(
         "SELECT person_id, count(*) FROM sponsorships"
         " WHERE role='cosponsor' GROUP BY person_id").fetchall()}
