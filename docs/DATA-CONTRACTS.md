@@ -410,3 +410,198 @@ Adding a source = adding an enum value + a methodology entry + a freshness SLA r
 - Dossier and graph documents carry `schema_version`; clients pin a major version. Additive fields allowed within a major; removals/renames bump it, and both versions publish in parallel for ≥60 days.
 - ETL releases are git-tagged; `pipeline_version` in every envelope makes any published fact reproducible from the raw lake.
 - The public API (P1) serves these same contracts verbatim — internal and external consumers read identical documents, so the API costs nothing extra to keep honest.
+
+---
+
+## 8. v1.1 additions (in progress)
+
+Everything in this section is **additive** — no v1 field is removed or renamed, so
+`schema_version` stays `1.0`. Each subsection names the work order that ships it and is
+normative for that work order. A subsection describes shipped behaviour only once its
+status line says **shipped**; until then it is the target, not a description of production.
+
+### 8.1 Stamps, and what "unchanged" means — WO-33 · *target*
+
+Three values in a served document record *when* rather than *what*:
+
+| Stamp | Where |
+|---|---|
+| `generated_at` | top level of every document |
+| `pipeline_version`, `retrieved_at` | inside every `provenance` envelope |
+| `as_of` | top level of a graph neighborhood |
+
+Until WO-33, every one of them changed on every run, so no document was ever byte-identical
+to the previous night's and every object was rewritten nightly whether or not a single fact
+had moved.
+
+**Rule.** A served object is replaced only when its content **excluding stamps** changes. The
+publish stage computes a digest over the canonical JSON with exactly the stamps above
+removed, stores it as object metadata, and skips the write when the stored digest matches.
+
+**Consequence, stated plainly because it changes what a reader is told.** A document's stamps
+now read *"as of the run in which this document last changed"*, not *"as of last night"*. A
+dossier whose facts have not moved since 12 September carries 12 September stamps even
+though the source was re-checked every night since. *Last checked* is therefore a separate
+fact with a separate home: `coverage.json → sources[<source>].retrieved_at`, rewritten every
+run. A client shows both — **"checked ‹coverage date› · unchanged since ‹envelope date›"** —
+and never presents the envelope date alone as the time of the last check.
+
+**The direction that must never be wrong.** Excluding a field from the digest means a change
+to it will not be published. That is correct for a stamp and a silent staleness bug for a
+fact. The stamp list above is closed: nothing is added to it without a contract change, and
+any field carrying a fact — including fact-bearing dates such as an ideology score's
+`as_of` — stays in the digest.
+
+Non-JSON objects (tiles, `robots.txt`) are compared on their raw bytes, as before.
+
+### 8.2 Pins — WO-32 · **shipped**
+
+`/pins/{layer}.json` rows gain `term_ends`: the ISO date the current term ends, or `null`
+where the source publishes none. Never inferred.
+
+### 8.3 Votes, roll calls, bills — WO-23a · *target*
+
+Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like
+(`us/119/hr/2384`) and are used **as the object key verbatim**; they contain only
+`[a-z0-9/._-]`, and a test pins that.
+
+**`/votes/{person_id}.json`** — one member's complete record for the current scope.
+
+```jsonc
+{
+  "schema_version": "1.0", "person_id": "…", "generated_at": "…",
+  "scope": "119th Congress",
+  "summary": {
+    "total": 1042, "yea": 610, "nay": 380, "present": 2, "not_voting": 50,
+    "party_decided": 990,      // roll calls where the member's party had a majority position
+    "with_party": 930, "against_party": 60
+  },
+  "votes": [                   // every roll call the member was eligible for, newest first
+    { "roll_call_id": "us/119/h/312", "held_at": "2026-06-12", "question": "On Passage",
+      "position": "yea",       // 'yea' | 'nay' | 'present' | 'not_voting'
+      "party_position": "yea", // the member's party's majority position; null if tied or absent
+      "result": "Passed", "yea_count": 220, "nay_count": 210,
+      "bill_id": "us/119/hr/2384", "bill_title": "…", "policy_area": "Health" }
+  ],
+  "provenance": { "source": "voteview", … }
+}
+```
+
+**`/rollcalls/{roll_call_id}.json`** — one vote, everyone's position.
+
+```jsonc
+{
+  "schema_version": "1.0", "roll_call_id": "us/119/h/312", "generated_at": "…",
+  "chamber": "house", "held_at": "2026-06-12", "question": "On Passage",
+  "description": "…", "result": "Passed", "url": "https://clerk.house.gov/…",
+  "bill_id": "us/119/hr/2384", "bill_title": "…", "policy_area": "Health",
+  "totals": { "yea": 220, "nay": 210, "present": 1, "not_voting": 4 },   // the official tally
+  "by_party": [ { "party": "D", "yea": 4, "nay": 208, "present": 0, "not_voting": 2 } ],
+  "positions": [ { "person_id": "…", "name": "…", "party": "R", "state": "TN",
+                   "ocd_id": "…", "position": "yea" } ],
+  "positions_cover": "current_members",
+  "provenance": { "source": "voteview", … }
+}
+```
+
+`by_party` is ordered alphabetically by party code — the same party-agnostic rule as the map
+legend, never by size. `positions` is ordered by family name. `totals` is the official tally
+(`present` and `not_voting` appear only where the source publishes them); `positions` and
+`by_party` cover only members currently in office, because those are the positions the
+warehouse holds, so they legitimately differ from `totals` and `positions_cover` says why. A
+client must not present either as the complete roll.
+
+**`/bills/{bill_id}.json`** — one per bill that has had **at least one roll call**. Bills that
+never reached a vote are linked out to congress.gov, not mirrored.
+
+```jsonc
+{
+  "schema_version": "1.0", "bill_id": "us/119/hr/2384", "generated_at": "…",
+  "number": "H.R. 2384", "title": "…", "policy_area": "Health",
+  "introduced_on": "2025-03-27", "status": "…", "url": "https://www.congress.gov/…",
+  "sponsor": { "person_id": "…", "name": "…", "party": "R", "state": "TN" },
+  "cosponsors": { "total": 42,
+                  "by_party": [ { "party": "D", "count": 10 }, { "party": "R", "count": 32 } ],
+                  "members": [ { "person_id": "…", "name": "…", "party": "D", "state": "CA" } ] },
+  "roll_calls": [ { "roll_call_id": "us/119/h/312", "held_at": "2026-06-12",
+                    "question": "On Passage", "result": "Passed",
+                    "yea_count": 220, "nay_count": 210 } ],
+  "provenance": { "source": "congress.gov", … }
+}
+```
+
+`person_id` is `null` for a sponsor or cosponsor who is not a current officeholder; the name
+still publishes. **`/bills/index.json`** lists every mirrored bill
+(`bill_id`, `number`, `title`, `policy_area`, `last_vote_at`) for client-side search.
+
+### 8.4 Area facts — WO-34 · *target*
+
+Facts about a place, as distinct from the people who represent it. Packed **one file per
+state per level** — roughly a hundred objects nationally instead of one per county and city,
+which would be some 22,000 objects rewritten whenever the Census revises anything.
+
+**`/areas/county/{st}.json`**, **`/areas/place/{st}.json`** (`st` = lowercase USPS code):
+
+```jsonc
+{
+  "schema_version": "1.0", "level": "county", "state": "tn", "generated_at": "…",
+  "geography": { "vintage": 2025,        "provenance": { "source": "census_gazetteer", … } },
+  "survey":    { "vintage": "2020-2024", "provenance": { "source": "census_acs", … } },
+  "areas": {
+    "47165": {                                   // keyed by Census GEOID
+      "name": "Sumner County", "land_sqmi": 529.4,                    // ← geography
+      "population":              { "estimate": 205000, "moe": null }, // ← survey, and below
+      "households":              { "estimate": 76000,  "moe": 900 },
+      "median_household_income": { "estimate": 78000,  "moe": 2100 },
+      "median_age":              { "estimate": 39.4,   "moe": 0.3 }
+    }
+  }
+}
+```
+
+Two sources feed one file, so it carries two envelopes: `name` and `land_sqmi` are cited by
+`geography.provenance`; every `{estimate, moe}` pair by `survey.provenance`.
+
+Areas are keyed by **GEOID**, not OCD id: the clicked polygon already carries its `geoid` as
+a tile property (§5), so the join needs no name-slug agreement between the tile build and
+this file. Every survey estimate travels with its margin of error (`moe`, same units, `null`
+where the Bureau publishes none) — PRD principle 2, *ranges are ranges*: a client shows the
+margin or does not show the number. A fact the Bureau withholds for an area is **omitted**,
+never published as the Bureau's sentinel value.
+
+### 8.5 Place tiles — WO-21 · *target*
+
+`tiles/us-places-{vintage}.pmtiles`, layer `places`, **incorporated places only** — Census
+designated places are statistical areas with no government and are dropped.
+
+| Property | Meaning |
+|---|---|
+| `ocd_id` | `ocd-division/country:us/state:{st}/place:{slug}`, by the same slug rule as `divisions.place_ocd` |
+| `geoid` | 7-digit state + place FIPS — the join key to §8.4 |
+| `state` | USPS code |
+| `name` | bare name (`Hendersonville`) |
+| `kind` | the Bureau's descriptor, lowercased (`city`, `town`, `village`, `borough`, …) |
+
+Two places in one state that slug to the same `ocd_id` are a **build failure**, resolved by an
+explicit override keyed on GEOID — never by silently keeping one.
+
+The tile table in §5 also omits `tiles/us-counties-{vintage}.pmtiles` (layer `counties`:
+`ocd_id`, `state`, `name`, `geoid`) and the non-interactive context archive; both ship.
+
+### 8.6 Client routes — WO-35 · *target*
+
+Hash routes, extending the existing `#/p/` and `#/d/` scheme. Ids are written with
+`encodeURIComponent`, as today.
+
+| Route | Opens |
+|---|---|
+| `#/p/{person_id}[/{tab}]` | a dossier (unchanged) |
+| `#/d/{ocd_id}` | a place: its facts and everyone who represents it (unchanged) |
+| `#/b/{bill_id}` | a bill |
+| `#/v/{roll_call_id}` | a roll call |
+| `#/c/{person_id}/{person_id}` | two officials compared |
+
+Moving between altitudes — place, person, record — **pushes** a history entry, so the
+browser's Back button steps up one level. Changing a tab within a dossier **replaces** it. A
+reader's own location is never written into a URL: a place is addressed by division id, and a
+remembered place is kept in the browser's storage only.

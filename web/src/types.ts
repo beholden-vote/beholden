@@ -40,6 +40,9 @@ export interface Pin {
   office?: string;
   chamber?: string;
   vacant?: boolean;
+  /** ISO date the current term ends, or null where the source publishes none
+   *  (WO-32). Absent on feeds built before it — treat absent like null. */
+  term_ends?: string | null;
 }
 
 export interface Dossier {

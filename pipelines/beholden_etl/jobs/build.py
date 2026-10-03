@@ -18,9 +18,11 @@ import json
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
+from ..build.context import BuildContext
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
@@ -279,6 +281,24 @@ SERVED_LAYERS = ("cd", "states", "sldu", "sldl", "county", "place")
 # in the "Nonpartisan" legend color — asserting a fact about the office that the
 # county never stated. Local counties stay outline-only; the panel does the work.
 STYLED_LAYERS = ("cd", "states", "sldu", "sldl")
+
+
+# ── Artifact writers (WO-32) ─────────────────────────────────────────────────
+# Every artifact beyond the original dossier/graph/pins set is a module under
+# beholden_etl/build/ exposing `publish(ctx: BuildContext) -> dict[str, int]`,
+# registered here by ONE line. run() calls them in order after the core
+# artifacts and merges their counts into coverage.json.
+#
+# This list is the insertion point. Adding an artifact is an import and an entry
+# — not an edit to run(), which is where several people working at once collide.
+# A writer that raises halts the build (rule #2): a missing artifact is a gate
+# failure, never something to log and skip.
+#
+#   ("areas", areas.publish),        # WO-34
+#   ("votes", votes.publish),        # WO-23a
+ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
+    # --- insertion point: one line per writer, in dependency order ---
+]
 
 
 def _tile_ocd(ocd_id: str) -> str:
@@ -1200,6 +1220,10 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                  "chamber": h["chamber"], "vacant": bool(h["is_vacant_marker"]),
                  "lat": None, "lng": None,
                  "photo_url": h.get("image_url") or photo.get(h.get("bioguide")),
+                 # WO-32: when the current term ends, so a list of officials
+                 # can say it without opening each dossier. Null where the
+                 # source publishes no term end (honest absence, never inferred).
+                 "term_ends": h.get("term_ends"),
                  "party": h["party"]} for h in rows]
     (out / "pins").mkdir(parents=True, exist_ok=True)
     for layer in SERVED_LAYERS:
@@ -1216,6 +1240,14 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     people.sort(key=lambda r: r["full_name"])
     (out / "search").mkdir(parents=True, exist_ok=True)
     (out / "search" / "people.json").write_text(json.dumps(people, separators=(",", ":")))
+
+    # --- registered artifact writers (WO-32): see ARTIFACT_WRITERS above ---
+    # No try/except, deliberately. A writer that fails must fail the build.
+    ctx = BuildContext(db_path=str(db_path), raw_dir=raw_dir, out=out, manifest=manifest,
+                       holders=holders, _provenance=_provenance)
+    writer_counts: dict[str, int] = {}
+    for _name, write in ARTIFACT_WRITERS:
+        writer_counts.update(write(ctx))
 
     # --- coverage dashboard: freshness vs SLA, computed not just echoed (G2) ---
     def _source_row(k: str) -> dict:
@@ -1235,7 +1267,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
                    "cd_stylefeed": len(cd_feed), "states_stylefeed": len(states_feed),
                    "house": len(house), "senate": len(senate),
                    "state_senate": len(by_layer["sldu"]), "state_house": len(by_layer["sldl"]),
-                   **state_counts},   # WO-17: state bills/votes coverage
+                   **state_counts,    # WO-17: state bills/votes coverage
+                   **writer_counts},  # WO-32: whatever the registered writers report
         "sources": {k: _source_row(k) for k in manifest.get("sources", {})},
     }
     (out / "coverage.json").write_text(json.dumps(coverage, separators=(",", ":")))
