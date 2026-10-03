@@ -62,12 +62,19 @@ STABLE_META = "stable-sha256"
 # THE STAMP LIST IS CLOSED. A field left out of the digest is a field whose
 # changes are never published: right for a stamp, silent staleness for a fact.
 # So nothing here is matched by name alone. These two keys are stamps ONLY
-# inside a dict stored under the key "provenance"; a `retrieved_at` anywhere
-# else (coverage.json's per-source rows are the reader's "last checked") is a
-# fact and stays in. `generated_at` and a graph document's `as_of` are handled
-# in stable_digest, at the top level only. Adding a stamp is a contract change
-# to §8.1, never a refactor here.
+# inside an envelope (below); a `retrieved_at` anywhere else (coverage.json's
+# per-source rows are the reader's "last checked") is a fact and stays in.
+# `generated_at` and a graph document's `as_of` are handled in stable_digest,
+# at the top level only. Adding a stamp is a contract change to §8.1, never a
+# refactor here.
 _ENVELOPE_STAMPS = frozenset({"pipeline_version", "retrieved_at"})
+# An envelope is a dict stored under EXACTLY one of these keys. The list is
+# closed and named, deliberately not a `*provenance` suffix match: a NEW
+# envelope key that build starts writing is then left in the digest, so its
+# documents re-upload every night and test_publish_stability fails by name. It
+# over-uploads loudly; it can never silently hide a fact. Adding a key here is
+# the same §8.1 contract change as adding a stamp.
+ENVELOPE_KEYS = frozenset({"provenance", "votes_provenance", "committees_provenance"})
 
 # ── Stale objects ────────────────────────────────────────────────────────────
 # Prefixes publish never deletes from, whatever the local tree looks like. The
@@ -160,8 +167,8 @@ def _latest_batch(raw_dir: Path) -> list[tuple[Path, str]]:
 
 def _strip_envelope_stamps(node):
     """`node` with the two per-run keys removed from every provenance envelope.
-    An envelope is recognised STRUCTURALLY — a dict stored under the key
-    "provenance", at any depth — never by finding the key names somewhere."""
+    An envelope is recognised STRUCTURALLY — a dict stored under one of
+    ENVELOPE_KEYS, at any depth — never by finding the key names somewhere."""
     if isinstance(node, list):
         return [_strip_envelope_stamps(v) for v in node]
     if not isinstance(node, dict):
@@ -169,7 +176,7 @@ def _strip_envelope_stamps(node):
     out = {}
     for k, v in node.items():
         v = _strip_envelope_stamps(v)
-        if k == "provenance" and isinstance(v, dict):
+        if k in ENVELOPE_KEYS and isinstance(v, dict):
             v = {kk: vv for kk, vv in v.items() if kk not in _ENVELOPE_STAMPS}
         out[k] = v
     return out
@@ -181,7 +188,8 @@ def stable_digest(key: str, body: bytes) -> str | None:
     For a `.json` key: parse, remove exactly the §8.1 stamps, serialise
     canonically, hash. Exactly these and nothing else:
       - `generated_at` at the top level of the document;
-      - `pipeline_version` and `retrieved_at` inside a provenance envelope;
+      - `pipeline_version` and `retrieved_at` inside a provenance envelope
+        (a dict under one of ENVELOPE_KEYS);
       - `as_of` at the top level, for keys under graph/ only.
     Every other field is in the digest, including dates that look like stamps
     and are facts: a finance total's `as_of`, coverage.json's `retrieved_at`

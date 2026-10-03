@@ -145,6 +145,11 @@ def _leaves(node, path=()):
         yield path
 
 
+# The three envelope keys section 8.1 names. Restated, not imported, for the
+# same reason as _is_stamp below.
+ENVELOPE_KEYS = ("provenance", "votes_provenance", "committees_provenance")
+
+
 def _is_stamp(key: str, path: tuple) -> bool:
     """The closed stamp list of DATA-CONTRACTS section 8.1, written out here
     from the contract rather than imported from publish.py -- a test that asked
@@ -153,7 +158,7 @@ def _is_stamp(key: str, path: tuple) -> bool:
         return True
     if key.startswith("graph/") and path == ("as_of",):
         return True
-    return (len(path) >= 2 and path[-2] == "provenance"
+    return (len(path) >= 2 and path[-2] in ENVELOPE_KEYS
             and path[-1] in ("pipeline_version", "retrieved_at"))
 
 
@@ -223,6 +228,39 @@ def test_two_builds_of_one_warehouse_differ_in_bytes_and_agree_in_digest(slice_d
         != publish.stable_digest("coverage.json", (night2 / "coverage.json").read_bytes())
 
 
+def _dict_keys(node):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            yield k
+            yield from _dict_keys(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _dict_keys(v)
+
+
+def test_every_provenance_key_the_build_emits_is_a_named_envelope(slice_dirs):
+    """The envelope list is closed and matched by exact name. This is the alarm
+    for the day build starts writing an envelope under a new key."""
+    assert publish.ENVELOPE_KEYS == set(ENVELOPE_KEYS)
+    root = slice_dirs / "data"
+    seen: dict[str, str] = {}
+    for key in _keys(root, ""):
+        for k in _dict_keys(json.loads((root / key).read_text(encoding="utf-8"))):
+            if k.endswith("provenance"):
+                seen.setdefault(k, key)
+    unknown = {k: where for k, where in seen.items() if k not in ENVELOPE_KEYS}
+    assert not unknown, (
+        f"build writes key(s) ending in 'provenance' that DATA-CONTRACTS section 8.1 does "
+        f"not name: {unknown}. DECIDE, do not just make this pass. If it is a provenance "
+        "envelope, its pipeline_version/retrieved_at re-stamp nightly and every document "
+        "carrying it re-uploads every night until the key is added to section 8.1, to "
+        "publish.ENVELOPE_KEYS and to ENVELOPE_KEYS in this file. If it is anything else, "
+        "rename it: a key that looks like an envelope and is not one will be mistaken "
+        "for one.")
+    # The fixture exercises all three, so none of them is on the list untested.
+    assert set(seen) == set(ENVELOPE_KEYS)
+
+
 # --- 2 + 3. the dangerous direction ------------------------------------------
 
 def test_every_field_the_build_emits_is_in_the_digest_unless_it_is_a_stamp(slice_dirs):
@@ -264,6 +302,8 @@ DOSSIER = {
     "schema_version": "1.0", "person_id": "p1", "generated_at": "2026-09-12T06:10:00+00:00",
     "identity": {"full_name": "Jane Rep", "party": {"code": "D"}, "provenance": dict(ENVELOPE)},
     "ideology": {"score": 0.5, "provenance": dict(ENVELOPE)},
+    "legislative": {"committees": [], "provenance": dict(ENVELOPE),
+                    "votes_provenance": dict(ENVELOPE), "committees_provenance": dict(ENVELOPE)},
     "money": {"campaign_finance": {"cycles": [
         {"cycle": 2026, "total_raised_cents": 100, "as_of": "2026-06-30"}]}},
 }
@@ -286,6 +326,8 @@ D, G, C = "dossiers/p1.json", "graph/neighborhood/p1.json", "coverage.json"
     (D, DOSSIER, ("ideology", "provenance", "methodology_id")),
     (D, DOSSIER, ("ideology", "provenance", "grade")),
     (D, DOSSIER, ("ideology", "provenance", "grade_reason")),
+    (D, DOSSIER, ("legislative", "votes_provenance", "source")),
+    (D, DOSSIER, ("legislative", "committees_provenance", "grade")),
     # Fact-bearing dates outside an envelope. An FEC total's as_of is the
     # filing's coverage date; if it were ignored, a new filing whose totals
     # happened to match would never show its new date.
@@ -303,6 +345,10 @@ def test_changing_a_fact_changes_the_digest(key, doc, path):
     (D, DOSSIER, ("identity", "provenance", "retrieved_at")),
     (D, DOSSIER, ("ideology", "provenance", "retrieved_at")),
     (D, DOSSIER, ("ideology", "provenance", "pipeline_version")),
+    (D, DOSSIER, ("legislative", "votes_provenance", "retrieved_at")),
+    (D, DOSSIER, ("legislative", "votes_provenance", "pipeline_version")),
+    (D, DOSSIER, ("legislative", "committees_provenance", "retrieved_at")),
+    (D, DOSSIER, ("legislative", "committees_provenance", "pipeline_version")),
     (G, GRAPH, ("as_of",)),
     (C, COVERAGE, ("generated_at",)),
 ], ids=_path_id)
@@ -327,8 +373,10 @@ def test_a_stamp_name_is_only_a_stamp_in_its_one_place():
     # retrieved_at / pipeline_version directly in a section, not in its envelope.
     assert moves(D, {"x": {"retrieved_at": "a"}}, {"x": {"retrieved_at": "b"}})
     assert moves(D, {"x": {"pipeline_version": "a"}}, {"x": {"pipeline_version": "b"}})
-    # A key merely ENDING in "provenance", or a provenance that is not a dict.
-    assert moves(D, {"x_provenance": {"retrieved_at": "a"}}, {"x_provenance": {"retrieved_at": "b"}})
+    # A key merely ENDING in "provenance" -- the list is closed, not a suffix
+    # match -- or a provenance that is not a dict.
+    for near_miss in ("x_provenance", "money_provenance", "provenances", "Provenance"):
+        assert moves(D, {near_miss: {"retrieved_at": "a"}}, {near_miss: {"retrieved_at": "b"}})
     assert moves(D, {"provenance": [{"retrieved_at": "a"}]}, {"provenance": [{"retrieved_at": "b"}]})
     assert moves(D, {"provenance": "a"}, {"provenance": "b"})
     # One level below an envelope is no longer the envelope.
