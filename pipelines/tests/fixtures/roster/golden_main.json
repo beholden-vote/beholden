@@ -1,0 +1,2171 @@
+{
+ "dossiers": [
+  {
+   "identity": {
+    "contact": {
+     "email": "mburgdorf@hvilletn.org",
+     "phone": "6159576264"
+    },
+    "full_name": "Mark Burgdorf",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:1",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5696",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "mskidmore@hvilletn.org",
+     "phone": "6158240033"
+    },
+    "full_name": "Mark Skidmore",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:1",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5583",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "dward@hvilletn.org",
+     "phone": "6154053236"
+    },
+    "full_name": "Don Ward",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:2",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=6556",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "mmartin@hvilletn.org",
+     "phone": "6155454547"
+    },
+    "full_name": "Michael Martin",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:2",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5575",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "bgarza@hvilletn.org",
+     "phone": "6157147920"
+    },
+    "full_name": "Bob Garza",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:3",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5585",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "jsasse@hvilletn.org",
+     "phone": "6153487838"
+    },
+    "full_name": "Jeffrey Sasse",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:3",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5695",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "kdixon@hvilletn.org",
+     "phone": "6157665739"
+    },
+    "full_name": "Karen Dixon",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:4",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5571",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "tgoodwin@hvilletn.org",
+     "phone": "6159734431"
+    },
+    "full_name": "Terri Goodwin",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:4",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5579",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "jgarton@hvilletn.org",
+     "phone": "6155099425"
+    },
+    "full_name": "Janna Garton",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:5",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5710",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "rcollins@hvilletn.org",
+     "phone": "6154773541"
+    },
+    "full_name": "Rachel Collins",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:5",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5577",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "eroberson@hvilletn.org",
+     "phone": "6156186704"
+    },
+    "full_name": "Eddie Roberson",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:6",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5694",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "mevans@hvilletn.org",
+     "phone": "6159575687"
+    },
+    "full_name": "Mark Evans",
+    "next_election": null,
+    "office": {
+     "chamber": "board_of_aldermen",
+     "display": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:6",
+     "role": "Alderman"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=6555",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "JClary@hvilletn.org",
+     "phone": "6158221000"
+    },
+    "full_name": "Jamie Clary",
+    "next_election": null,
+    "office": {
+     "chamber": null,
+     "display": "Mayor of Hendersonville",
+     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+     "role": "Mayor"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "/ImageRepository/Document?documentID=5697",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "hendersonville",
+     "source_url": "https://www.hvilletn.org/409/Board-of-Mayor-Aldermen"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "jody.garrison@sumnercountytn.gov"
+    },
+    "full_name": "Jody Garrison",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 1",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:1",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/jody-garrison/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/ChristopherTarlecky2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/jody-garrison/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "ben.harris@sumnercountytn.gov"
+    },
+    "full_name": "Benjamin Harris",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 10",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:10",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/benjamin-harris/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/NickIvey2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/benjamin-harris/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "nick.ivey@sumnercountytn.gov"
+    },
+    "full_name": "Nick Ivey",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 11",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:11",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/nick-ivey/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MattCampbell2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/nick-ivey/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "matt.campbell@sumnercountytn.gov"
+    },
+    "full_name": "Matt Campbell",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 12",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:12",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/matt-campbell/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JamesRohnkohl2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/matt-campbell/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "james.rohnkohl@sumnercountytn.gov"
+    },
+    "full_name": "James Rohnkohl, Jr.",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 13",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:13",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/james-ronkohl-jr/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JacobEdgar2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/james-ronkohl-jr/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "jacob.edgar@sumnercountytn.gov"
+    },
+    "full_name": "Jacob Edgar",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 14",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:14",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/jacob-edgar/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2022/10/JWesWynne2026.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/jacob-edgar/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "jwes.wynne@sumnercountytn.gov"
+    },
+    "full_name": "J. Wes Wynne",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 15",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:15",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/j-wes-wynne/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/BillyBarnfield2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/j-wes-wynne/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "billy.barnfield@sumnercountytn.gov"
+    },
+    "full_name": "Billy Barnfield",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 16",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:16",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/billy-barnfield/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/SuzanneHolt2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/billy-barnfield/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "suzanne.holt@sumnercountytn.gov"
+    },
+    "full_name": "Suzanne Holt",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 17",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:17",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/suzanne-holt/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DonSchmit2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/suzanne-holt/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "don.schmit@sumnercountytn.gov"
+    },
+    "full_name": "Don Schmit",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 18",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:18",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/don-schmit/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/ShannonBurgdorf2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/don-schmit/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "shannon.burgdorf@sumnercountytn.gov"
+    },
+    "full_name": "Shannon Burgdorf",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 19",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:19",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/shannon-burgdorf/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MerrolHyde2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/shannon-burgdorf/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "christopher.tarlecky@sumnercountytn.gov"
+    },
+    "full_name": "Christopher Tarlecky",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 2",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:2",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/christopher-tarlecky/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MarkHarrison2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/christopher-tarlecky/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "Merrol.Hyde@sumnercountytn.gov"
+    },
+    "full_name": "Merrol N. Hyde",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 20",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:20",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/merrol-n-hyde/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JerryBecker2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/merrol-n-hyde/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "Jerry.Becker@SumnerCountyTN.gov"
+    },
+    "full_name": "Jerry F. Becker",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 21",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:21",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/jerry-f-becker/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MatthewShoaf2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/jerry-f-becker/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "matthew.shoaf@sumnercountytn.gov"
+    },
+    "full_name": "Matthew Shoaf",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 22",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:22",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/matthew-shoaf/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/TimJones2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/matthew-shoaf/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "tim.jones@sumnercountytn.gov"
+    },
+    "full_name": "Tim Jones",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 23",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:23",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/tim-jones/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MatthewWilkinson2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/tim-jones/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "matthew.wilkinson@sumnercountytn.gov"
+    },
+    "full_name": "Matthew Wilkinson",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 24",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:24",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/matthew-wilkinson/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2020/08/logo.png",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/matthew-wilkinson/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "mark.harrison@sumnercountytn.gov"
+    },
+    "full_name": "Mark Harrison",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 3",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:3",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/mark-harrison/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DillonLamberth2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/mark-harrison/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "dillon.lamberth@sumnercountytn.gov"
+    },
+    "full_name": "Dillon Lamberth",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 4",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:4",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/dillon-lamberth/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DarrelRogers2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/dillon-lamberth/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "darrell.rogers@sumnercountytn.gov"
+    },
+    "full_name": "Darrell Rogers",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 5",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:5",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/darrell-rogers/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/AdamIssa2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/darrell-rogers/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "adam.issa@sumnercountytn.gov"
+    },
+    "full_name": "Adam Issa",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 6",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:6",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/adam-issa/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DanBristol2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/adam-issa/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "daniel.bristol@sumnercountytn.gov"
+    },
+    "full_name": "Daniel Bristol",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 7",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:7",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/daniel-bristol/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/RoryEdmonds2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/daniel-bristol/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "rory.edmonds@sumnercountytn.gov"
+    },
+    "full_name": "Rory Edmonds",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 8",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:8",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/rory-edmonds/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/PaulGraden2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/rory-edmonds/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  },
+  {
+   "identity": {
+    "contact": {
+     "email": "paul.graden@sumnercountytn.gov"
+    },
+    "full_name": "Paul Graden",
+    "next_election": null,
+    "office": {
+     "chamber": "county_commission",
+     "display": "Sumner County Commission \u00b7 District 9",
+     "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:9",
+     "role": "County Commissioner"
+    },
+    "official_links": [
+     {
+      "type": "official",
+      "url": "https://sumnercountytn.gov/paul-graden/"
+     }
+    ],
+    "party": {
+     "code": "U",
+     "display": "Not published"
+    },
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/BenHarris2026-scaled.jpg",
+    "provenance": {
+     "grade": "B",
+     "grade_reason": "official_web_roster",
+     "methodology_id": null,
+     "retrieved_at": "2026-10-03T21:20:02+00:00",
+     "source": "sumner_county",
+     "source_url": "https://sumnercountytn.gov/paul-graden/"
+    },
+    "status": "incumbent",
+    "tenure": {
+     "current_term_ends": null,
+     "first_took_office": null
+    }
+   },
+   "schema_version": "1.0"
+  }
+ ],
+ "people": [
+  {
+   "full_name": "Adam Issa",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:6",
+   "office": "Sumner County Commission \u00b7 District 6",
+   "party": "U"
+  },
+  {
+   "full_name": "Benjamin Harris",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:10",
+   "office": "Sumner County Commission \u00b7 District 10",
+   "party": "U"
+  },
+  {
+   "full_name": "Billy Barnfield",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:16",
+   "office": "Sumner County Commission \u00b7 District 16",
+   "party": "U"
+  },
+  {
+   "full_name": "Bob Garza",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:3",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+   "party": "U"
+  },
+  {
+   "full_name": "Christopher Tarlecky",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:2",
+   "office": "Sumner County Commission \u00b7 District 2",
+   "party": "U"
+  },
+  {
+   "full_name": "Daniel Bristol",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:7",
+   "office": "Sumner County Commission \u00b7 District 7",
+   "party": "U"
+  },
+  {
+   "full_name": "Darrell Rogers",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:5",
+   "office": "Sumner County Commission \u00b7 District 5",
+   "party": "U"
+  },
+  {
+   "full_name": "Dillon Lamberth",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:4",
+   "office": "Sumner County Commission \u00b7 District 4",
+   "party": "U"
+  },
+  {
+   "full_name": "Don Schmit",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:18",
+   "office": "Sumner County Commission \u00b7 District 18",
+   "party": "U"
+  },
+  {
+   "full_name": "Don Ward",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:2",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+   "party": "U"
+  },
+  {
+   "full_name": "Eddie Roberson",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:6",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+   "party": "U"
+  },
+  {
+   "full_name": "J. Wes Wynne",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:15",
+   "office": "Sumner County Commission \u00b7 District 15",
+   "party": "U"
+  },
+  {
+   "full_name": "Jacob Edgar",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:14",
+   "office": "Sumner County Commission \u00b7 District 14",
+   "party": "U"
+  },
+  {
+   "full_name": "James Rohnkohl, Jr.",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:13",
+   "office": "Sumner County Commission \u00b7 District 13",
+   "party": "U"
+  },
+  {
+   "full_name": "Jamie Clary",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+   "office": "Mayor of Hendersonville",
+   "party": "U"
+  },
+  {
+   "full_name": "Janna Garton",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:5",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+   "party": "U"
+  },
+  {
+   "full_name": "Jeffrey Sasse",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:3",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+   "party": "U"
+  },
+  {
+   "full_name": "Jerry F. Becker",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:21",
+   "office": "Sumner County Commission \u00b7 District 21",
+   "party": "U"
+  },
+  {
+   "full_name": "Jody Garrison",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:1",
+   "office": "Sumner County Commission \u00b7 District 1",
+   "party": "U"
+  },
+  {
+   "full_name": "Karen Dixon",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:4",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+   "party": "U"
+  },
+  {
+   "full_name": "Mark Burgdorf",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:1",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+   "party": "U"
+  },
+  {
+   "full_name": "Mark Evans",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:6",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+   "party": "U"
+  },
+  {
+   "full_name": "Mark Harrison",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:3",
+   "office": "Sumner County Commission \u00b7 District 3",
+   "party": "U"
+  },
+  {
+   "full_name": "Mark Skidmore",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:1",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+   "party": "U"
+  },
+  {
+   "full_name": "Matt Campbell",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:12",
+   "office": "Sumner County Commission \u00b7 District 12",
+   "party": "U"
+  },
+  {
+   "full_name": "Matthew Shoaf",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:22",
+   "office": "Sumner County Commission \u00b7 District 22",
+   "party": "U"
+  },
+  {
+   "full_name": "Matthew Wilkinson",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:24",
+   "office": "Sumner County Commission \u00b7 District 24",
+   "party": "U"
+  },
+  {
+   "full_name": "Merrol N. Hyde",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:20",
+   "office": "Sumner County Commission \u00b7 District 20",
+   "party": "U"
+  },
+  {
+   "full_name": "Michael Martin",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:2",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+   "party": "U"
+  },
+  {
+   "full_name": "Nick Ivey",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:11",
+   "office": "Sumner County Commission \u00b7 District 11",
+   "party": "U"
+  },
+  {
+   "full_name": "Paul Graden",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:9",
+   "office": "Sumner County Commission \u00b7 District 9",
+   "party": "U"
+  },
+  {
+   "full_name": "Rachel Collins",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:5",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+   "party": "U"
+  },
+  {
+   "full_name": "Rory Edmonds",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:8",
+   "office": "Sumner County Commission \u00b7 District 8",
+   "party": "U"
+  },
+  {
+   "full_name": "Shannon Burgdorf",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:19",
+   "office": "Sumner County Commission \u00b7 District 19",
+   "party": "U"
+  },
+  {
+   "full_name": "Suzanne Holt",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:17",
+   "office": "Sumner County Commission \u00b7 District 17",
+   "party": "U"
+  },
+  {
+   "full_name": "Terri Goodwin",
+   "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville/ward:4",
+   "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+   "party": "U"
+  },
+  {
+   "full_name": "Tim Jones",
+   "ocd_id": "ocd-division/country:us/state:tn/county:sumner/council_district:23",
+   "office": "Sumner County Commission \u00b7 District 23",
+   "party": "U"
+  }
+ ],
+ "pins": {
+  "county": [
+   {
+    "chamber": "county_commission",
+    "full_name": "Adam Issa",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 6",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DanBristol2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Benjamin Harris",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 10",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/NickIvey2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Billy Barnfield",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 16",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/SuzanneHolt2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Christopher Tarlecky",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 2",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MarkHarrison2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Daniel Bristol",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 7",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/RoryEdmonds2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Darrell Rogers",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 5",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/AdamIssa2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Dillon Lamberth",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 4",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DarrelRogers2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Don Schmit",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 18",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/ShannonBurgdorf2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "J. Wes Wynne",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 15",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/BillyBarnfield2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Jacob Edgar",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 14",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2022/10/JWesWynne2026.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "James Rohnkohl, Jr.",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 13",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JacobEdgar2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Jerry F. Becker",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 21",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MatthewShoaf2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Jody Garrison",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 1",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/ChristopherTarlecky2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Mark Harrison",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 3",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DillonLamberth2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Matt Campbell",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 12",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JamesRohnkohl2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Matthew Shoaf",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 22",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/TimJones2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Matthew Wilkinson",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 24",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2020/08/logo.png",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Merrol N. Hyde",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 20",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/JerryBecker2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Nick Ivey",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 11",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MattCampbell2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Paul Graden",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 9",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/BenHarris2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Rory Edmonds",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 8",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/PaulGraden2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Shannon Burgdorf",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 19",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MerrolHyde2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Suzanne Holt",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 17",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/DonSchmit2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "county_commission",
+    "full_name": "Tim Jones",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+    "office": "Sumner County Commission \u00b7 District 23",
+    "party": "U",
+    "photo_url": "https://sumnercountytn.gov/wp-content/uploads/2026/09/MatthewWilkinson2026-scaled.jpg",
+    "term_ends": null,
+    "vacant": false
+   }
+  ],
+  "place": [
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Bob Garza",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5585",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Don Ward",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=6556",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Eddie Roberson",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5694",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Janna Garton",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5710",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Jeffrey Sasse",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5695",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Karen Dixon",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5571",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Mark Burgdorf",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5696",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Mark Evans",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=6555",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Mark Skidmore",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5583",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Michael Martin",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5575",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Rachel Collins",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5577",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": "board_of_aldermen",
+    "full_name": "Terri Goodwin",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5579",
+    "term_ends": null,
+    "vacant": false
+   },
+   {
+    "chamber": null,
+    "full_name": "Jamie Clary",
+    "lat": null,
+    "lng": null,
+    "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+    "office": "Mayor of Hendersonville",
+    "party": "U",
+    "photo_url": "/ImageRepository/Document?documentID=5697",
+    "term_ends": null,
+    "vacant": false
+   }
+  ]
+ }
+}
