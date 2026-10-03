@@ -43,6 +43,15 @@ sequentially — the WOs touch the same files.
 6. **Data honesty:** if a source turns out different than documented (404, schema drift),
    STOP and report — do not improvise a lower-quality source or fake/zero the data.
 7. **Don't grow scope.** Each WO's "Out of scope" section is binding.
+8. **Several lanes run at once (WO-32).** Three rules keep them from colliding:
+   - **A new build artifact is a new module**, `pipelines/beholden_etl/build/<name>.py`
+     exposing `publish(ctx: BuildContext) -> dict[str, int]`, registered by **one line** in
+     `jobs/build.ARTIFACT_WRITERS`. Do not add another hand-wired block to `build.run()`.
+   - **New tests go in a new file**, `pipelines/tests/test_<feature>.py`. The `slice_dirs`
+     and `local_dirs` fixtures are available there through `conftest.py`. Edit
+     `test_pipeline.py` only to change a test that already lives in it.
+   - **One worktree per lane** (`git worktree add ../wt-<wo> -b <branch> origin/main`), one
+     branch, one PR. Rebase on `main` before opening it.
 
 ## Environment facts (all WOs)
 
@@ -81,14 +90,20 @@ sequentially — the WOs touch the same files.
 | 18 | State co-voting edges + party agreement | P (after 17) | open |
 | 19 | WA PDC reconciliation fix + surface in Money tab | P (independent) | open |
 | 20 | State-money pilot wave (3–5 best-portal states) | P (after 19) | open |
-| 21 | Place geometry (TIGER incorporated-places tiles) | T | open |
+| 21 | Place geometry (TIGER incorporated-places tiles) | T | in progress — [`WO-21`](WO-21-place-geometry.md) |
 | 22 | Local officials beachhead (top metros + one full state) | P (rolling) | **first locality merged** — Sumner County + Hendersonville, TN (37 officeholders, grade B) |
-| 23 | In-app bill pages + full voting-record artifacts | P+F (federal now; state after 17) | open |
+| 23 | In-app bill pages + full voting-record artifacts | P+F (federal now; state after 17) | 23a (federal artifacts) in progress — [`WO-23a`](WO-23a-federal-votes.md); 23b (UI) after 35 |
 | 24 | Voting-bloc analysis (descriptive, symmetric) | P+F (after 23) | open |
 | 25 | Donor networks deeper (multi-cycle, PAC flows) | P (independent) | open |
 | 26 | State lobbying registries (WA/CA/TX pilot) | P (after 19) | open |
 | 27 | Senate eFD filing links (chamber parity) | P (independent) | open |
 | 28 | Credibility grades on the provenance envelope | P+F (independent) | merged |
+| 30 | Metered bulk access over HTTP 402 | P+edge | parked — draft PR, blocked on source licence determinations |
+| 31 | Zoom gates named; division details on click; collapsible layer dock | F | merged |
+| 32 | Contracts v1.1, artifact-writer registry, shared test fixtures | P | merged |
+| 33 | Publish only what changed (stamp-insensitive digest, stale deletes, write budget) | P (after 32) | in progress — [`WO-33`](WO-33-byte-stable-publish.md) |
+| 34 | Facts about every county and city (Census ACS + Gazetteer) | P (after 32) | in progress — [`WO-34`](WO-34-area-facts.md) |
+| 35 | Reader shell: history, bottom sheet, arrival, remembered place, act from the list | F (after 32) | in progress — [`WO-35`](WO-35-reader-shell.md) |
 
 **WO-1…16 merged (2026-07-06).** WO-11…16 were the depth round: dossier tabs, cited
 drill-downs, an interactive connections graph, per-level map fills, and the
