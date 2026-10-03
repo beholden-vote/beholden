@@ -195,3 +195,52 @@ export interface StackEntry {
    *  there is no polygon in that path, so the panel falls back to the ocd_id. */
   props?: DivisionProps;
 }
+
+// WO-23b ---------------------------------------------------------------------
+// Votes, roll calls, bills (contracts 8.3). Ids are path-like and are the object key.
+
+export type VotePosition = "yea" | "nay" | "present" | "not_voting";
+
+export interface RecordedVote {
+  roll_call_id: string; held_at: string; question: string;
+  position: VotePosition;
+  /** The member's party's majority position; null if tied or absent. */
+  party_position: VotePosition | null;
+  result: string; yea_count: number; nay_count: number;
+  bill_id: string | null; bill_title: string | null; policy_area: string | null;
+}
+
+export interface PersonVotes {
+  schema_version: string; person_id: string; generated_at: string; scope: string;
+  summary: {
+    total: number; yea: number; nay: number; present: number; not_voting: number;
+    party_decided: number; with_party: number; against_party: number;
+  };
+  votes: RecordedVote[];
+  provenance: Provenance;
+}
+
+export interface RollCall {
+  schema_version: string; roll_call_id: string; generated_at: string;
+  chamber: string; held_at: string; question: string; description: string | null;
+  result: string; url: string | null;
+  bill_id: string | null; bill_title: string | null; policy_area: string | null;
+  /** The official tally; a figure the source does not give is null. */
+  totals: { yea: number | null; nay: number | null };
+  by_party: { party: string; yea: number; nay: number; present: number; not_voting: number }[];
+  positions: { person_id: string; name: string; party: string; state: string; ocd_id: string; position: VotePosition }[];
+  positions_cover: string;
+  provenance: Provenance;
+}
+
+export interface BillMember { person_id: string | null; name: string; party: string; state: string }
+
+export interface Bill {
+  schema_version: string; bill_id: string; generated_at: string;
+  number: string; title: string; policy_area: string | null;
+  introduced_on: string | null; status: string; url: string;
+  sponsor: BillMember | null;
+  cosponsors: { total: number; by_party: { party: string; count: number }[]; members: BillMember[] };
+  roll_calls: { roll_call_id: string; held_at: string; question: string; result: string; yea_count: number; nay_count: number }[];
+  provenance: Provenance;
+}

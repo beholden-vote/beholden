@@ -993,3 +993,34 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 @media (max-width: 719px) and (prefers-reduced-motion: reduce) {
   .panel { transition: none; }
 }
+
+/* ---------- votes UI (WO-23b) ---------- */
+/* Party hues appear only inside .chip (data). Nothing here varies by party. */
+.vr-summary { font-size: 12px; line-height: 1.6; color: var(--mut); margin: 0 0 12px; }
+.vr-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; font-size: 12px; color: var(--mut); }
+.vr-check { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+.vr-check input { accent-color: var(--sig); width: 16px; height: 16px; }
+.vr-check input:focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
+.vr-count { font-size: 11px; color: var(--dim); margin: 0 0 8px; }
+.vr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 0 10px; }
+.vr-table th { text-align: left; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding: 6px 8px 6px 0; border-bottom: 2px solid var(--line); }
+.vr-table td, .vr-table tbody th { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.vr-table a, .votes-view a:not(.kv-link) { color: var(--sig); text-decoration: none; }
+.vr-table a:hover, .votes-view a:hover { text-decoration: underline; }
+.vr-bill { display: block; margin-top: 2px; font-size: 12px; }
+.vr-against { display: inline-block; margin-left: 8px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--flag); }
+.vote-present, .vote-not_voting { color: var(--mut); }
+.votes-view h2 { margin: 2px 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.vv-meta { margin: 0 0 12px; font-size: 12px; color: var(--mut); text-transform: uppercase; }
+.vv-desc, .vv-note { font-size: 13px; line-height: 1.6; color: #cfe0ec; margin: 0 0 12px; }
+.vv-note { color: var(--mut); font-size: 12px; }
+.vv-parties { list-style: none; margin: 0 0 8px; padding: 0; display: flex; gap: 14px; flex-wrap: wrap; }
+.vv-members summary { cursor: pointer; color: var(--sig); font-size: 13px; }
+.vv-members summary:focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .vr-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .vr-table tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .vr-table td, .vr-table tbody th { display: flex; gap: 10px; padding: 2px 0; border: 0; }
+  .vr-table td::before { content: attr(data-label); flex: none; width: 76px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding-top: 2px; }
+  .vr-table td > a, .vr-table td > .vr-bill { flex: 1; }
+}

@@ -22,6 +22,7 @@ import { Avatar, EmptyNote, HeaderActions, PartyChip, Section } from "./bits";
 import { IdeologyScale } from "./Ideology";
 import { methodologyHash, type DossierTab } from "../router";
 import { TabBar } from "./Tabs";
+import { VoteRecord } from "./votes/VoteRecord";   // WO-23b
 
 // WO-4: the Connections view + entity-graph code load only when a dossier opens
 // (dynamic import keeps the graph fetch/types out of the main bundle).
@@ -170,6 +171,7 @@ function OverviewTab({ dossier }: { dossier: Dossier }) {
 function RecordTab({ dossier }: { dossier: Dossier }) {
   const legislative = dossier.legislative!;
   return (
+    <>
     <Section title="Legislative record" provenance={legislative.provenance}>
       {legislativeIsStub(dossier) ? (
         <EmptyNote>{STRINGS.legislativePending}</EmptyNote>
@@ -243,6 +245,8 @@ function RecordTab({ dossier }: { dossier: Dossier }) {
         </>
       )}
     </Section>
+    <VoteRecord personId={dossier.person_id} />   {/* WO-23b */}
+    </>
   );
 }
 

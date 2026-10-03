@@ -203,4 +203,35 @@ export const STRINGS = {
   sheetHandle: "Panel height",
   sheetHandleHint: "Up and Down arrow keys resize the panel.",
   sheetStops: { peek: "collapsed", half: "half", full: "full" } as Record<string, string>,
+
+  // ---- Votes UI (WO-23b) ------------------------------------------------------
+  // Nothing here varies by party. Counts and positions are the files' own.
+  recordTitle: "Full voting record",
+  recordLoading: "Loading the full record…",
+  recordAbsent: "The full voting record for this official is not published.",
+  recordEmpty: "No recorded votes for this official in this scope.",
+  recordFilters: "Filter the record",
+  filterTopic: "Topic",
+  filterTopicAll: "All topics",
+  filterResult: "Result",
+  filterResultAll: "All results",
+  filterAgainst: "Voted against own party",
+  filterNoMatch: "No votes match these filters.",
+  filterClear: "Clear filters",
+  recordMore: "Show more",
+  notOnBill: "Not on a bill",
+  againstTag: "against party",
+  billNotPublished:
+    "This bill’s page is not published yet — read it on congress.gov.",
+  billReadOn: "Read it on congress.gov",
+  billNoRecord: "This vote is not attached to a bill in our records.",
+  rollNotPublished: "This roll call is not published.",
+  rollCoverNote:
+    "Positions and the party breakdown cover current members only, so they do not add up to the official tally.",
+  rollNoPositions: "No positions are published for this roll call.",
+  officialRecord: "Official record",
+  tallyNotGiven: "not given",
+  sponsorNone: "No sponsor is listed.",
+  cosponsorsNone: "No current cosponsors.",
+  repsTitle: "How your representatives voted",
 } as const;
