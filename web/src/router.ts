@@ -125,13 +125,3 @@ export function parseMethodologyHash(hash: string = location.hash): { anchor: st
   if (h.startsWith("methodology/")) return { anchor: h.slice("methodology/".length) || null };
   return null;
 }
-
-// TEMPORARY (WO-35 recovery commit only): App.tsx still calls these until it is
-// rewired onto ui/nav/history.ts in the next commit, which deletes them.
-export function replaceHash(hash: string): void {
-  if (location.hash === hash) return;
-  history.replaceState(null, "", hash || location.pathname + location.search);
-}
-export function clearRouteHash(): void {
-  if (isRouteHash()) history.replaceState(null, "", location.pathname + location.search);
-}

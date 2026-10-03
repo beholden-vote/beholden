@@ -43,12 +43,15 @@ function FixActions({ onLocate, onTypeAddress, busy }: FixProps) {
  *  actions, and nothing else. */
 export function ArrivePrompt({ onDismiss, ...fix }: FixProps & { onDismiss: () => void }) {
   return (
-    <section className="arrive-prompt" aria-labelledby="arrive-prompt-title">
-      <button type="button" className="close-btn" aria-label="Dismiss" onClick={onDismiss}>&times;</button>
-      <h2 id="arrive-prompt-title">{STRINGS.promptTitle}</h2>
-      <p>{STRINGS.promptNote}</p>
-      <FixActions {...fix} />
-    </section>
+    // The row takes a full line of the top bar; the card inside it does not.
+    <div className="arrive-row">
+      <section className="arrive-prompt" aria-labelledby="arrive-prompt-title">
+        <button type="button" className="close-btn" aria-label="Dismiss" onClick={onDismiss}>&times;</button>
+        <h2 id="arrive-prompt-title">{STRINGS.promptTitle}</h2>
+        <p>{STRINGS.promptNote}</p>
+        <FixActions {...fix} />
+      </section>
+    </div>
   );
 }
 

@@ -130,7 +130,19 @@ function indexOf(state: unknown): number | null {
   return typeof i === "number" ? i : null;
 }
 
+/** history.go() lands later, on a popstate. Until it does, a second Escape (a
+ *  held key repeats) or a second click must not start another traversal: two
+ *  would walk straight off the site. The timer covers a go() that had nowhere
+ *  to go and so never lands. */
+let travelling = 0;
+function go(delta: number) {
+  if (travelling || delta === 0) return;
+  travelling = window.setTimeout(() => { travelling = 0; }, 600);
+  history.go(delta);
+}
+
 function sync() {
+  window.clearTimeout(travelling); travelling = 0;
   const i = indexOf(history.state);
   if (i === null) {
     // The browser made this entry itself (see the header). Adopt it as a push.
@@ -228,6 +240,9 @@ export const nav = {
     return out;
   },
 
+  /** Walk the browser's history by `delta` entries (a breadcrumb click). */
+  go,
+
   /** Close the panel: back to the map. If the map-only entry sits directly
    *  under the trail, closing IS going back to it; otherwise it is a new entry,
    *  so Back reopens what was closed. */
@@ -235,13 +250,13 @@ export const nav = {
     if (getSnapshot().view.kind === "home") return;
     let j = cur;
     while (views.has(j - 1) && views.get(j - 1)!.kind !== "home") j--;
-    if (views.get(j - 1)?.kind === "home") history.go(j - 1 - cur);
+    if (views.get(j - 1)?.kind === "home") go(j - 1 - cur);
     else nav.push(HOME);
   },
 
   /** Step up one altitude (Escape); from the top of the trail, close. */
   up() {
-    if (nav.trail().length > 1) history.back();
+    if (nav.trail().length > 1) go(-1);
     else nav.close();
   },
 
@@ -263,7 +278,7 @@ export const nav = {
    *  for a page opened cold from an info link, drop the hash. */
   closeOverlay() {
     getSnapshot();
-    if (views.get(cur - 1) === views.get(cur)) history.back();
+    if (views.get(cur - 1) === views.get(cur)) go(-1);
     else nav.replace(views.get(cur)!);
   },
 

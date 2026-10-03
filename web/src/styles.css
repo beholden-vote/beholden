@@ -782,3 +782,138 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .person-row:hover .person-office { color: #b9cdda; }
+
+/* ============================================================================
+   WO-35 -- the reader shell. Appended blocks only; nothing above is reordered.
+   Chrome here is amber, ink and rule colours ONLY: party hues stay inside the
+   party chip, which every row carries identically (Rule 0).
+   ========================================================================== */
+
+/* ---------- panel shell: a fixed header strip over a scrolling body ----------
+   The panel used to scroll as a whole, which took the way back out of reach as
+   soon as the reader scrolled. The trail and the close control now stay put. */
+.panel { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.sheet-grip { display: none; }                 /* the drag handle is the phone's (below) */
+.sheet-head {
+  position: relative; flex: none;
+  display: flex; align-items: center; min-height: 48px;
+  padding: 0 52px 0 20px;                      /* right: room for the close control */
+  border-bottom: 2px solid var(--line);
+}
+.sheet-head .close-btn { top: 2px; right: 4px; width: 44px; height: 44px; font-size: 24px; }
+.sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 20px 26px;
+}
+/* Focus is visible everywhere in the panel, in the one action colour. Headings
+   take focus by script when a view opens; they show the ring to keyboard users. */
+.panel :focus-visible, .arrive-prompt :focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
+.sheet-body h2:focus-visible { outline-offset: 4px; }
+
+/* ---------- breadcrumb: the trail actually walked ---------- */
+.crumbs { flex: 1 1 auto; min-width: 0; }
+.crumbs ol { display: flex; align-items: center; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.crumbs li { display: flex; align-items: center; min-width: 0; flex: 0 1 auto; }
+.crumbs li:not(:last-child) { flex-shrink: 4; }          /* earlier crumbs give way first */
+.crumbs li + li::before {
+  content: "\203A"; flex: none; padding: 0 7px;
+  color: var(--dim); font-family: var(--font-mono); font-size: 13px;
+}
+.crumbs a {
+  display: block; min-width: 2ch; line-height: 44px;     /* a 44px target */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--sig); text-decoration: none;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.crumbs a:hover { color: var(--sig-hover); text-decoration: underline; }
+.crumbs a[aria-current="page"] { color: var(--ink); font-weight: 500; cursor: default; text-decoration: none; }
+.crumbs a:focus-visible { outline-offset: -2px; }
+
+/* ---------- a view that is loading, or is not there ---------- */
+.view-wait h2 { margin: 2px 0 0; font-size: 14px; font-weight: 500; color: var(--mut); }
+.not-found h2 { margin: 2px 0 12px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.not-found p { margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: #cfe0ec; }
+.not-found .not-found-id { font-size: 11px; color: var(--dim); overflow-wrap: anywhere; }
+
+/* ---------- shared buttons: one primary (amber fill, hard shadow), one ghost ---------- */
+.fix-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.fix-primary, .fix-ghost {
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  border: 2px solid var(--sig);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+}
+.fix-primary { background: var(--sig); color: var(--on-sig); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
+.fix-primary:hover:not(:disabled) { background: var(--sig-hover); border-color: var(--sig-hover); }
+.fix-primary:disabled { opacity: 0.6; cursor: default; }
+.fix-ghost { background: none; color: var(--sig); }
+.fix-ghost:hover { background: var(--sig); color: var(--on-sig); }
+
+/* ---------- place view: an area and everyone who represents it ---------- */
+.place h2 { margin: 2px 0 12px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.place-lede { margin: 0 0 16px; color: var(--mut); font-size: 13px; line-height: 1.5; }
+/* How this place got here, when that decides how far to trust it. */
+.place-banner {
+  margin: 0 0 16px; padding: 12px;
+  background: var(--bg-raise); border: 2px solid var(--sig);
+}
+.place-banner p { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--ink); }
+.place-stamp {
+  display: inline-block; margin-right: 6px; padding: 2px 7px; vertical-align: 1px;
+  background: var(--sig); color: var(--on-sig);
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.place > .place-saved { margin: 0 0 12px; color: var(--mut); font-family: var(--font-mono); font-size: 11px; }
+.stack-section-h { margin: 0; }
+.stack-section-head { min-height: 44px; }
+
+/* One official: a link into the dossier and a Contact control, side by side --
+   two controls, neither inside the other. The whole row lifts on hover or
+   focus, the one "selectable" signal the stack has always used. */
+.prow-list { margin: 0; padding: 0; list-style: none; }
+.prow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 7px; background: var(--surf2); border: 2px solid var(--line);
+}
+.prow:hover, .prow:focus-within { border-color: var(--sig); box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45); }
+.prow-main {
+  display: flex; align-items: center; gap: 11px; min-width: 0; min-height: 60px;
+  padding: 8px 11px; color: var(--ink); text-decoration: none; font-size: 14px;
+}
+.prow-main:hover { background: #16405c; }
+.prow-main:hover .person-office { color: #b9cdda; }
+.prow-main .person-name { flex: none; }
+.prow-term { font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); }
+.prow-contact {
+  min-width: 44px; min-height: 44px; padding: 0 12px; cursor: pointer;
+  background: none; border: none; border-left: 2px solid var(--line);
+  color: var(--sig); font-family: var(--font-display); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.prow-contact:hover, .prow-contact[aria-expanded="true"] { background: var(--sig); color: var(--on-sig); }
+.prow-main:focus-visible, .prow-contact:focus-visible { outline-offset: -3px; }
+.prow-contact[aria-expanded="true"]:focus-visible { outline-color: var(--on-sig); }
+.prow-actions { grid-column: 1 / -1; padding: 10px 11px; background: var(--surf); border-top: 2px solid var(--line); }
+.prow-actions .dossier-actions { margin: 0; }
+.prow-actions .dossier-action { display: inline-flex; align-items: center; min-height: 44px; }
+
+.place-share { margin-top: 10px; }
+.place-share .ballot-copy { min-height: 44px; }
+.place-share-manual { display: block; margin-top: 8px; color: var(--mut); font-family: var(--font-mono); font-size: 11px; }
+.place-share-manual input {
+  display: block; width: 100%; margin-top: 4px; padding: 9px 10px;
+  border: 2px solid var(--line); background: #081925; color: var(--ink);
+  font-family: var(--font-mono); font-size: 12px;
+}
+
+/* ---------- arrival prompt: shown only when the edge had no guess ---------- */
+.topbar .arrive-row { flex: 0 0 100%; pointer-events: none; }
+.arrive-prompt {
+  position: relative; pointer-events: auto; max-width: 360px;
+  padding: 12px 14px 14px; color: var(--ink);
+  background: var(--surf); border: 2px solid var(--sig);
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+}
+.arrive-prompt h2 { margin: 0 36px 4px 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.arrive-prompt p { margin: 0 0 12px; color: var(--mut); font-size: 13px; line-height: 1.5; }
+.arrive-prompt .close-btn { top: 0; right: 0; width: 44px; height: 44px; }

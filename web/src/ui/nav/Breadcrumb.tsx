@@ -9,7 +9,7 @@
  *  A page opened cold from a shared link has a trail of one -- itself.
  */
 import type { MouseEvent } from "react";
-import type { Crumb } from "./history";
+import { nav, type Crumb } from "./history";
 
 /** True for a click the page should handle itself; false when the reader asked
  *  the browser for a new tab or window, which must be left alone. */
@@ -30,7 +30,7 @@ export function Breadcrumb({ trail }: { trail: Crumb[] }) {
                  onClick={(e) => {
                    if (!isPlainClick(e)) return;
                    e.preventDefault();
-                   if (!here) history.go(c.delta);
+                   nav.go(c.delta);
                  }}>
                 {c.label}
               </a>
