@@ -1,9 +1,11 @@
 """Congress.gov v3 client (ticket E2-1).
 Keyed, rate-limited (5,000 req/hr), paginated (max 250/page), retrying."""
 from __future__ import annotations
+import json
 import os
 import threading
 import time
+from pathlib import Path
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -97,6 +99,22 @@ class CongressGovClient:
         governed by the one existing rate governor (no second limiter)."""
         return self.get(f"member/{bioguide}").get("member") or {}
 
+    def bill_detail(self, congress: int | str, bill_type: str, number: int | str) -> dict:
+        """GET /bill/{congress}/{type}/{number} (WO-23a): sponsors[], policyArea,
+        latestAction, introducedDate, updateDate, and a `cosponsors` summary
+        {count, countIncludingWithdrawnCosponsors} that is ABSENT when the bill
+        has none. Shape verified live 2026-10-03 (hr/1, s/5)."""
+        return self.get(f"bill/{congress}/{bill_type}/{number}").get("bill") or {}
+
+    def bill_cosponsors(self, congress: int | str, bill_type: str,
+                        number: int | str) -> list[dict]:
+        """GET /bill/{congress}/{type}/{number}/cosponsors, every page (WO-23a).
+        Items carry bioguideId, firstName, lastName, party, state,
+        sponsorshipDate, isOriginalCosponsor (verified live 2026-10-03, s/5) and,
+        per the API documentation, sponsorshipWithdrawnDate once withdrawn."""
+        return list(self.paged(f"bill/{congress}/{bill_type}/{number}/cosponsors",
+                               "cosponsors"))
+
 
 # --- bill normalization (pure; unit-tested) --------------------------------
 # congress.gov bill `type` -> the slug used in our bill_id 'us/{congress}/{slug}/{num}'.
@@ -141,6 +159,49 @@ def bill_public_url(bill_id_str: str) -> str:
     link a dossier shows — every legislative fact must be traceable)."""
     _, cong, slug, num = bill_id_str.split("/")
     return f"https://www.congress.gov/bill/{cong}th-congress/{_BILL_URL_PATH.get(slug, 'bill')}/{num}"
+
+
+# bill_id slug -> the citation prefix congress.gov prints ("H.R. 2384").
+_BILL_NUMBER_PREFIX = {"hr": "H.R.", "s": "S.", "hres": "H.Res.", "sres": "S.Res.",
+                       "hjres": "H.J.Res.", "sjres": "S.J.Res.",
+                       "hconres": "H.Con.Res.", "sconres": "S.Con.Res."}
+
+
+def bill_display_number(bill_id_str: str) -> str:
+    """'us/119/hr/2384' -> 'H.R. 2384'."""
+    _, _, slug, num = bill_id_str.split("/")
+    return f"{_BILL_NUMBER_PREFIX.get(slug, slug.upper())} {num}"
+
+
+def is_bill(bill_id_str: str) -> bool:
+    """True for the eight measure types the bill endpoint serves. Voteview also
+    keys Senate nominations ('PN123') in its bill_number column; those normalize
+    to an id but are not bills, and have no bill page to fetch."""
+    return bill_id_str.split("/")[2] in _BILL_URL_PATH
+
+
+# --- WO-23a: roll-call bill records in the raw lake --------------------------
+def bill_snapshot_path(bill_id_str: str) -> str:
+    """Lake-relative path of one bill's landed record: its bill-detail response
+    and its full cosponsor list, in ONE file so the pair can never be half
+    refreshed. The congress is in the name so a new Congress cannot overwrite
+    the previous one's H.R. 1."""
+    _, cong, slug, num = bill_id_str.split("/")
+    return f"congress.gov/bills/{cong}-{slug}-{num}.json"
+
+
+def landed_bills(raw_dir: str | Path) -> dict[str, dict]:
+    """bill_id -> landed record {fetched_at, bill, cosponsors} for every bill
+    record in the lake. Keyed by the id normalized from the record's OWN
+    congress/type/number - never from the filename - so transform and build
+    cannot disagree about which bill a file describes."""
+    out: dict[str, dict] = {}
+    for f in sorted((Path(raw_dir) / "congress.gov" / "bills").glob("*.json")):
+        record = json.loads(f.read_text(encoding="utf-8"))
+        item = record.get("bill") or {}
+        if item.get("type") and item.get("number") and item.get("congress"):
+            out[bill_id(item)] = record
+    return out
 
 
 def bill_row(item: dict) -> dict:

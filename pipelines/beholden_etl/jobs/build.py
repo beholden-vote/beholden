@@ -23,6 +23,7 @@ from typing import Callable
 from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..build.context import BuildContext
+from ..build import votes                                    # WO-23a (votes/rollcalls/bills)
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
@@ -84,6 +85,9 @@ Content-Signal: search=yes,ai-input=yes
 Disallow: /dossiers/
 Disallow: /graph/
 Disallow: /raw/
+Disallow: /votes/
+Disallow: /rollcalls/
+Disallow: /bills/
 Allow: /
 """
 
@@ -298,6 +302,7 @@ STYLED_LAYERS = ("cd", "states", "sldu", "sldl")
 #   ("votes", votes.publish),        # WO-23a
 ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
     # --- insertion point: one line per writer, in dependency order ---
+    ("votes", votes.publish),        # WO-23a
 ]
 
 
