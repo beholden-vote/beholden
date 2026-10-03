@@ -464,6 +464,11 @@ an envelope for each.
 
 Non-JSON objects (tiles, `robots.txt`) are compared on their raw bytes, as before.
 
+> **Optional `changed_at` (WO-37).** `coverage.json → sources[<source>]` may carry
+> `changed_at`, the date that source's published content last changed. A client with both
+> dates shows "checked ‹retrieved_at› · unchanged since ‹changed_at›"; without it, only
+> "checked". Additive; no pipeline change is required for clients to read it.
+
 ### 8.2 Pins — WO-32 · **shipped**
 
 `/pins/{layer}.json` rows gain `term_ends`: the ISO date the current term ends, or `null`

@@ -1071,3 +1071,10 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .cov-table tr { display: block; padding: 6px 0; border-bottom: 1px solid var(--line); }
   .cov-table td { display: block; border: 0; padding: 1px 0; }
 }
+
+/* WO-37 boundary-line legend + rail status. Width / dash / strength only. */
+.line-swatch { display: inline-block; width: 24px; height: 0; flex: none; }
+.line-state { border-top: 2px solid #a9c0cf; }
+.line-primary { border-top: 1px solid #2a6486; }
+.line-ref { border-top: 1px dashed #4a7f9d; opacity: 0.6; }
+.level-showing { margin: 0 0 6px; font-family: var(--font-mono); font-size: 11px; color: var(--ink); }

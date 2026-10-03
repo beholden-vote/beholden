@@ -7,7 +7,7 @@ import { STRINGS } from "../strings";
 import { GRADES, type Grade } from "./gradeFilter";
 // Layers sorted by level of government — the axis users actually think in.
 // Shared with the stack panel so the two can never disagree (lib/levels.ts).
-import { CoverageLegend } from "./places/CoverageLegend";   // WO-37
+import { CoverageLegend, LineLegend } from "./places/CoverageLegend";   // WO-37
 import { GATES, PANEL_SECTIONS as LEVEL_GROUPS, type Gate, type GateId } from "../lib/levels";
 
 /** How long the layer dock stays open with no interaction before folding away.
@@ -109,9 +109,16 @@ function GradeFilter({ minGrade, onMinGrade }: {
  *  draw them on. Omitting the row would imply we cover nothing there, which is
  *  a worse lie than showing an honest "not mapped yet".
  */
-function LevelRail({ activeId, auto }: { activeId: GateId; auto: boolean }) {
+const SHOWING: Record<GateId, string> = {
+  federal: "U.S. House district", state: "State chamber", county: "County", place: "City",
+};
+
+function LevelRail({ activeId, auto, chamber }: { activeId: GateId; auto: boolean; chamber: "sldl" | "sldu" }) {
+  const showing = activeId === "state" ? (chamber === "sldl" ? "State House district" : "State Senate district")
+    : SHOWING[activeId];
   return (
     <div className="level-rail" aria-label="Levels of government">
+      {auto && <p className="level-showing" role="status">Showing: {showing} boundaries</p>}
       {GATES.map((g) => {
         const active = auto && g.id === activeId;
         const unmapped = g.minzoom === null;
@@ -150,7 +157,7 @@ function LevelRail({ activeId, auto }: { activeId: GateId; auto: boolean }) {
  *  has opened it themselves.
  */
 export function LayerControl({
-  visible, auto, onToggle, onAuto, minGrade, onMinGrade, activeGate,
+  visible, auto, onToggle, onAuto, minGrade, onMinGrade, activeGate, chamber, onChamber,
 }: {
   visible: Record<LayerId, boolean>;
   auto: boolean;
@@ -159,6 +166,8 @@ export function LayerControl({
   minGrade: Grade;
   onMinGrade: (g: Grade) => void;
   activeGate: GateId;
+  chamber: "sldl" | "sldu";
+  onChamber: (c: "sldl" | "sldu") => void;
 }) {
   const [open, setOpen] = useState(false);
   const holdRef = useRef(false);            // pointer inside / focus within
@@ -194,13 +203,23 @@ export function LayerControl({
       </button>
 
       <div className="layer-ctl-body" id="layer-ctl-body" hidden={!open}>
-        <LevelRail activeId={activeGate} auto={auto} />
+        <LevelRail activeId={activeGate} auto={auto} chamber={chamber} />
         {/* Master toggle: ON = zoom decides which levels show; touching any per-layer
             box below drops to manual (the parent flips `auto` off). */}
         <label className="layer-auto">
           <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
           <span>Auto by zoom</span>
         </label>
+        {auto && (
+          <label className="grade-row">
+            <span className="layer-group-label">Auto draws</span>
+            <select className="grade-select" value={chamber}
+                    onChange={(e) => onChamber(e.target.value as "sldl" | "sldu")}>
+              <option value="sldl">State House</option>
+              <option value="sldu">State Senate</option>
+            </select>
+          </label>
+        )}
         {LEVEL_GROUPS.map((g) => (
           <div className="layer-group" key={g.level}>
             <span className="layer-group-label">{g.level}</span>
@@ -215,6 +234,7 @@ export function LayerControl({
         ))}
         <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
         <Legend showSplit={!!visible.states} />
+        <LineLegend />
         {(visible.county || visible.place) && <CoverageLegend />}
         <span className="layer-ctl-hint">
           {auto ? "State, county and city layers show as you zoom in." : "Manual — Auto by zoom is off."}

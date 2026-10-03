@@ -5,7 +5,7 @@
  *  the new level last and labelled it by raw layer id — so they live here now and
  *  a new level is one edit, not two.
  */
-import { LAYERS, type LayerId } from "../map";
+import type { LayerId } from "../map";
 
 export const LEVEL_TITLES: Record<string, string> = {
   cd: "U.S. House",
@@ -51,12 +51,56 @@ export interface Gate {
   blurb: string;
 }
 
-/** Lowest fade-in zoom among a gate's layers (0 for always-on federal levels). */
+/* ── The zoom table: ONE place for every boundary show/hide number ─────────────
+ *
+ * One PRIMARY boundary level per zoom band, drawn at full strength; the level it
+ * replaces recedes to a faint REFERENCE line and then fades out. Each row is a
+ * list of [zoom, primary, reference] stops, linearly interpolated: `primary` is
+ * 0..1 (fill + solid line), `reference` is the opacity of the thin dashed-or-faint
+ * line. map.ts paints from this table and GATES below derives from it, so the
+ * rail, the toast and the map can never disagree.
+ *
+ * Fading out is visual only: a level past its band keeps hit-testing, so a click
+ * at city zoom still lists the state legislators and the U.S. House member.
+ * Below its fade-in a chamber/county/city layer is hidden (as before).
+ */
+export type BandStop = [zoom: number, primary: number, reference: number];
+export const BANDS: Record<LayerId, BandStop[]> = {
+  states: [[0, 1, 0]],
+  cd:     [[0, 1, 0], [6, 1, 0], [7, 0, 0]],
+  sldu:   [[6, 0, 0], [7, 1, 0], [8, 1, 0], [9, 0, 0.35], [10.5, 0, 0]],
+  sldl:   [[6, 0, 0], [7, 1, 0], [8, 1, 0], [9, 0, 0.35], [10.5, 0, 0]],
+  county: [[8, 0, 0], [9, 1, 0], [10, 1, 0], [11, 0, 0.4]],
+  place:  [[10, 0, 0], [11, 1, 0]],
+};
+
+/** Zoom at which a layer first has any strength (0 = always on). */
+export function bandStart(id: LayerId): number {
+  const stops = BANDS[id];
+  const i = stops.findIndex(([, p, r]) => p > 0 || r > 0);
+  return i <= 0 ? 0 : stops[i - 1][0];
+}
+
+/** Interpolated primary / reference strength of a layer at a zoom. */
+export function bandAt(id: LayerId, z: number): { primary: number; ref: number } {
+  const st = BANDS[id];
+  if (z <= st[0][0]) return { primary: st[0][1], ref: st[0][2] };
+  for (let i = 1; i < st.length; i++) {
+    if (z <= st[i][0]) {
+      const t = (z - st[i - 1][0]) / (st[i][0] - st[i - 1][0]);
+      return {
+        primary: st[i - 1][1] + t * (st[i][1] - st[i - 1][1]),
+        ref: st[i - 1][2] + t * (st[i][2] - st[i - 1][2]),
+      };
+    }
+  }
+  const last = st[st.length - 1];
+  return { primary: last[1], ref: last[2] };
+}
+
+/** Lowest first-strength zoom among a gate's layers (0 for always-on federal levels). */
 function gateZoom(layers: LayerId[]): number {
-  const starts = layers
-    .map((id) => LAYERS.find((L) => L.id === id)?.autoFade?.start)
-    .filter((z): z is number => typeof z === "number");
-  return starts.length ? Math.min(...starts) : 0;
+  return Math.min(...layers.map(bandStart));
 }
 
 export const GATES: Gate[] = [

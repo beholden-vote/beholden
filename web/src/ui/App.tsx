@@ -95,6 +95,8 @@ export function App({ mapRef, handleRef }: {
   const snap = useNav();
   const { view, move } = snap;
   const [pins, setPins] = useState<PinIndex | null>(null);
+  // WO-37: the one state chamber auto mode draws (both together is manual-only).
+  const [chamber, setChamber] = useState<"sldl" | "sldu">("sldl");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [prompt, setPrompt] = useState(false);
@@ -132,6 +134,8 @@ export function App({ mapRef, handleRef }: {
     }
     try { localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ok */ }
   }, [prefs, mapRef]);
+
+  useEffect(() => { mapRef.current?.setChamber(chamber); }, [chamber, mapRef]);
 
   /* ---- opening things ---------------------------------------------------- */
 
@@ -356,7 +360,7 @@ export function App({ mapRef, handleRef }: {
       <LayerControl visible={prefs.visible} auto={prefs.mode === "auto"}
                     onToggle={toggleLayer} onAuto={setAuto}
                     minGrade={minGrade} onMinGrade={changeMinGrade}
-                    activeGate={gate.id} />
+                    activeGate={gate.id} chamber={chamber} onChamber={setChamber} />
       <Footer onOpen={openInfo} />
       {info && (
         <InfoOverlay page={info.page} anchor={info.anchor} onClose={nav.closeOverlay}

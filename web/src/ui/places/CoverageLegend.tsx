@@ -18,3 +18,16 @@ export function CoverageLegend() {
     </div>
   );
 }
+
+/** What the boundary lines mean. Levels differ by width, dash and strength, never
+ *  by hue, so no level reads as louder for any party. */
+export function LineLegend() {
+  return (
+    <div className="legend" aria-label="Boundary line legend">
+      <span className="legend-title">Lines = boundary</span>
+      <span className="legend-item legend-wide"><span className="line-swatch line-state" aria-hidden="true" />State outline, always on</span>
+      <span className="legend-item legend-wide"><span className="line-swatch line-primary" aria-hidden="true" />Level you are zoomed to</span>
+      <span className="legend-item legend-wide"><span className="line-swatch line-ref" aria-hidden="true" />Level just left, fading</span>
+    </div>
+  );
+}

@@ -11,6 +11,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
 import { loadStateCoverage } from "./lib/coverage";
+import { BANDS, bandAt, bandStart, type BandStop } from "./lib/levels";
 import type { DivisionProps } from "./types";
 
 export type { DivisionProps };
@@ -52,24 +53,20 @@ interface LayerDef {
   archive: ArchiveId;
   sourceLayer: string;   // tippecanoe layer name inside the archive
   minzoom: number;
-  /** Auto mode: fade the fill/line opacity in over [start, end] (zoom); below
-   *  `start` the layer drops to visibility:none. Absent = always-on in Auto
-   *  (federal levels). The fade avoids the "pop" of toggling visibility on zoom. */
-  autoFade?: { start: number; end: number };
 }
 export const LAYERS: LayerDef[] = [
   { id: "states", archive: "states", sourceLayer: "states", minzoom: 0 },
   { id: "cd", archive: "cd", sourceLayer: "districts", minzoom: 0 },
   // State chambers fade in past ~z6 so zooming in reveals them without popping.
-  { id: "sldu", archive: "sld", sourceLayer: "sldu", minzoom: 6, autoFade: { start: 6, end: 7 } },
-  { id: "sldl", archive: "sld", sourceLayer: "sldl", minzoom: 6, autoFade: { start: 6, end: 7 } },
+  { id: "sldu", archive: "sld", sourceLayer: "sldu", minzoom: 6 },
+  { id: "sldl", archive: "sld", sourceLayer: "sldl", minzoom: 6 },
   // Local tier (WO-6b): counties fade in past ~z8 — the metro band — so they join
   // only when you're zoomed into a place, keeping the national/state views clean.
   // Geometry + OCD-ID only for now (no member data), so it renders line-only.
-  { id: "county", archive: "counties", sourceLayer: "counties", minzoom: 7, autoFade: { start: 8, end: 9 } },
+  { id: "county", archive: "counties", sourceLayer: "counties", minzoom: 7 },
   // WO-37: incorporated places (the archive starts at z7). One zoom past counties,
   // so a city draws inside its county the way a council sits inside a commission.
-  { id: "place", archive: "places", sourceLayer: "places", minzoom: 8, autoFade: { start: 9, end: 10 } },
+  { id: "place", archive: "places", sourceLayer: "places", minzoom: 8 },
 ];
 const FILL_IDS = LAYERS.map((L) => `${L.id}-fill`);
 
@@ -100,41 +97,31 @@ function fillFor(row: StyleRow): string {
   return PARTY_COLORS[row.party] ?? PARTY_COLORS.NP;
 }
 
-// The base (non-faded) feature-state opacity case: 0.95 selected / 0.92 hover /
-// 0.8 otherwise. Used directly when a layer has no fade or is pinned (manual).
+// The base feature-state opacity case: 0.95 selected / 0.92 hover / 0.8 otherwise.
 const FILL_OPACITY_CASE = [
   "case",
   ["boolean", ["feature-state", "selected"], false], 0.95,
   ["boolean", ["feature-state", "hover"], false], 0.92,
   0.8,
 ] as const;
+const SELECTED = ["boolean", ["feature-state", "selected"], false];
 
-// MapLibre's style spec requires a "zoom" expression to be the DIRECT input to
-// a TOP-LEVEL "interpolate"/"step" — it may not be nested inside "case"/"*"/etc.
-// (nesting it fails style validation and silently drops the whole layer; this
-// bit the sld*/county layers for their entire lifetime — WO-2/WO-6b built the
-// fade as `["*", caseExpr, ["case", selected, 1, ["interpolate", zoom, ...]]]`,
-// which validates but never actually adds the layer). The legal pattern instead
-// makes the interpolate itself the top-level expression, with the CASE living
-// in the interpolation stops (per-feature expressions as stop values are fully
-// supported) — so a selected feature evaluates to full opacity at every stop,
-// and an unselected one fades from 0 at `start` to the normal case at `end`.
-function fillOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean): unknown {
-  if (!fade || manual) return FILL_OPACITY_CASE;
-  const selected = ["boolean", ["feature-state", "selected"], false];
-  return ["interpolate", ["linear"], ["zoom"],
-    fade.start, ["case", selected, 0.95, 0],
-    fade.end, FILL_OPACITY_CASE,
-  ];
+// MapLibre requires "zoom" to be the DIRECT input of a top-level "interpolate",
+// so the zoom ramp is the outer expression and per-feature cases live in its stop
+// values. Stops come from the one zoom table in lib/levels.ts (BANDS).
+function ramp(stops: BandStop[], at: (primary: number, ref: number) => unknown): unknown {
+  if (stops.length === 1) return at(stops[0][1], stops[0][2]);
+  return ["interpolate", ["linear"], ["zoom"], ...stops.flatMap(([z, p, r]) => [z, at(p, r)])];
 }
-function lineOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean): unknown {
-  if (!fade || manual) return 1;
-  const selected = ["boolean", ["feature-state", "selected"], false];
-  return ["interpolate", ["linear"], ["zoom"],
-    fade.start, ["case", selected, 1, 0],
-    fade.end, 1,
-  ];
-}
+/** Primary fill: full where primary, none where reference/off -- except a selected
+ *  division, which is always shown. `pinned` (manual, or the chosen layer) = no ramp. */
+const fillExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
+  off ? 0 : manual ? FILL_OPACITY_CASE
+    : ramp(BANDS[id], (p) => (p > 0 ? FILL_OPACITY_CASE : ["case", SELECTED, 0.95, 0]));
+const lineExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
+  off ? ["case", SELECTED, 1, 0] : manual ? 1 : ramp(BANDS[id], (p) => ["case", SELECTED, 1, p]);
+const refExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
+  off || manual ? 0 : ramp(BANDS[id], (_p, r) => r);
 
 // Join a style feed to already-loaded geometry via feature-state — tiles stay
 // immutable, colors update daily, and map + dossier can never disagree (§5).
@@ -156,10 +143,9 @@ const LOCAL: LayerId[] = ["county", "place"];
 /** [layer suffix, coverage state it draws for, pattern image] */
 const PATTERNS = [["dots", "partial", "cov-dots"], ["hatch", "withheld", "cov-hatch"]] as const;
 
-function patternOpacityExpr(fade: { start: number; end: number } | undefined, manual: boolean, cov: string): unknown {
+function patternOpacityExpr(id: LayerId, manual: boolean, cov: string): unknown {
   const here = ["case", ["==", ["feature-state", "cov"], cov], 0.9, 0];
-  if (!fade || manual) return here;
-  return ["interpolate", ["linear"], ["zoom"], fade.start, 0, fade.end, here];
+  return manual ? here : ramp(BANDS[id], (p) => (p > 0 ? here : 0));
 }
 
 /** Pattern tiles, drawn in code so no sprite sheet is published. */
@@ -196,6 +182,8 @@ export interface BeholdenMap {
   setLayerVisible(id: LayerId, visible: boolean): void;
   /** Switch between zoom-driven ("auto") and explicit ("manual") visibility. */
   setLayerMode(mode: LayerMode): void;
+  /** Which state chamber auto mode draws (one at a time; both = manual only). */
+  setChamber(chamber: "sldl" | "sldu"): void;
   /** Drop/move the "you are here" marker. precise=false renders the fainter
    *  "approximate area" style (coarse IP location); true = exact (geolocation). */
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
@@ -241,7 +229,10 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
   const desiredVis: Record<LayerId, boolean> = { ...DEFAULT_VISIBLE };
   let mode: LayerMode = "auto";
   const selectedLayers = new Set<LayerId>();
-  const fadeDef = (id: LayerId) => LAYERS.find((L) => L.id === id)?.autoFade;
+  // Auto mode draws ONE state chamber at a time (the other stays hit-testable but
+  // invisible, so the place view still lists both). Both together: manual only.
+  let chamber: "sldl" | "sldu" = "sldl";
+  const chamberOff = (id: LayerId) => mode === "auto" && (id === "sldu" || id === "sldl") && id !== chamber;
 
   // Should this layer be present (visibility:visible) at all right now?
   // In auto, a faded layer hides below its floor; but a selected or manually-on
@@ -249,13 +240,13 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
   const layerPresent = (id: LayerId): boolean => {
     if (selectedLayers.has(id)) return true;
     if (mode === "manual") return desiredVis[id];
-    const fade = fadeDef(id);
-    if (!fade) return desiredVis[id];        // federal: honor seed (always on)
-    return map.getZoom() >= fade.start;      // faded layer: present past the floor
+    const start = bandStart(id);
+    if (!start) return desiredVis[id];       // federal: honor seed (always on)
+    return map.getZoom() >= start;           // present past its fade-in; past its band it only fades out
   };
   const applyVis = (id: LayerId) => {
     const v = layerPresent(id) ? "visible" : "none";
-    for (const suffix of ["fill", "line", "hatch", "dots"] as const) {
+    for (const suffix of ["fill", "line", "ref", "hatch", "dots"] as const) {
       if (map.getLayer(`${id}-${suffix}`)) map.setLayoutProperty(`${id}-${suffix}`, "visibility", v);
     }
   };
@@ -305,49 +296,72 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       // Build for whatever mode is current at construction time (usually "auto",
       // but a persisted manual preference can already be set if setLayerMode ran
       // before "load" fired — see setLayerMode's own note below).
-      const manualAtInit = mode === "manual";
-      map.addLayer({
+        map.addLayer({
         id: `${L.id}-fill`, source: L.archive, "source-layer": L.sourceLayer, type: "fill",
         minzoom: L.minzoom,
         paint: {
           "fill-color": ["coalesce", ["feature-state", "fill"], defaultFill],
           // Base feature-state opacity, scaled by the zoom-fade factor (WO-2).
-          "fill-opacity": fillOpacityExpr(L.autoFade, manualAtInit) as maplibregl.ExpressionSpecification,
+          "fill-opacity": 0,   // set by applyPaint from the zoom table
         },
       });
       map.addLayer({
         id: `${L.id}-line`, source: L.archive, "source-layer": L.sourceLayer, type: "line",
         minzoom: L.minzoom,
         paint: {
+          // Primary boundary: solid, mid strength. Selection / hover are blue-grey
+          // line states shared by every level (no new hues).
           "line-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false], "#9fd4ff",
             ["boolean", ["feature-state", "hover"], false], "#5f93b8",
-            "#0e3a52",
+            "#2a6486",
           ],
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.2,
             ["boolean", ["feature-state", "hover"], false], 1.4,
-            0.6,
+            0.9,
           ],
-          "line-opacity": lineOpacityExpr(L.autoFade, manualAtInit) as maplibregl.ExpressionSpecification,
+          "line-opacity": 0,
         },
       });
+      if (L.id !== "states" && L.id !== "cd") {
+        // Reference boundary: the level a primary one replaced. Thin and faint;
+        // county and city lines are dashed. Never in hit-testing (not a -fill).
+        map.addLayer({
+          id: `${L.id}-ref`, source: L.archive, "source-layer": L.sourceLayer, type: "line",
+          minzoom: L.minzoom,
+          paint: {
+            "line-color": "#4a7f9d", "line-width": 0.7, "line-opacity": 0,
+            ...(L.id === "county" || L.id === "place" ? { "line-dasharray": [3, 2] } : {}),
+          },
+        });
+      }
       if (LOCAL.includes(L.id)) {
         // Coverage patterns (WO-37): the state is never carried by colour alone.
-        for (const [suffix, cov, image] of PATTERNS) {
+        for (const [suffix, , image] of PATTERNS) {
           map.addLayer({
             id: `${L.id}-${suffix}`, source: L.archive, "source-layer": L.sourceLayer, type: "fill",
             minzoom: L.minzoom,
             paint: {
               "fill-pattern": image,
-              "fill-opacity": patternOpacityExpr(L.autoFade, manualAtInit, cov) as maplibregl.ExpressionSpecification,
+              "fill-opacity": 0,
             },
           });
         }
       }
     }
+
+    // The one permanent reference: the state outline, solid, widest and pale,
+    // above every fill. Not a -fill layer, so it never takes a click.
+    map.addLayer({
+      id: "states-outline", source: "states", "source-layer": "states", type: "line",
+      paint: {
+        "line-color": "#a9c0cf", "line-opacity": 0.85,
+        "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.9, 10, 2.2],
+      },
+    });
 
     // Sync paint + visibility to the CURRENT mode. If the UI restored a manual
     // preference before "load" fired, `mode`/`desiredVis` already reflect it but
@@ -359,7 +373,7 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     // The opacity fade itself is a paint expression, so it interpolates for free.
     map.on("zoom", () => {
       if (mode !== "auto") return;
-      for (const L of LAYERS) if (L.autoFade) applyVis(L.id);
+      for (const L of LAYERS) if (bandStart(L.id)) applyVis(L.id);
     });
 
     // ---- orientation context (Natural Earth): barely-visible interstates +
@@ -468,7 +482,16 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     const feats = map.queryRenderedFeatures(e.point, {
       layers: FILL_IDS.filter((l) => !!map.getLayer(l)),
     });
-    const top = feats[0];
+    // The primary level takes the hover; a reference-only or faded-out level never does.
+    const live = feats.filter((f) => {
+      const id = f.layer.id.replace(/-fill$/, "") as LayerId;
+      if (mode === "manual" || selectedLayers.has(id)) return true;
+      return !chamberOff(id) && bandAt(id, map.getZoom()).primary > 0;
+    });
+    const top = live.reduce<typeof feats[number] | undefined>((best, f) => {
+      const p = (f2: typeof f) => bandAt(f2.layer.id.replace(/-fill$/, "") as LayerId, map.getZoom()).primary;
+      return !best || p(f) > p(best) ? f : best;
+    }, undefined);
     if (!top || top.id == null) return setHover(null);
     setHover({ source: top.source, sourceLayer: top.sourceLayer!, id: String(top.id) });
   });
@@ -532,30 +555,32 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     applyVis(id);
   };
 
-  // Swap every faded layer's opacity expression to match the mode (auto = zoom
-  // ramp, manual = pinned on), then re-evaluate visibility. Called on mode flips
-  // and once on init if the restored mode is manual.
-  const setLayerMode = (next: LayerMode) => {
-    mode = next;
+  // Paint every layer from the zoom table for the current mode and chamber.
+  // Auto = zoom ramp (primary, then reference, then off); manual = pinned on, so a
+  // layer the reader checked is never dimmed away.
+  const applyPaint = () => {
     const manual = mode === "manual";
+    const set = (layer: string, prop: string, v: unknown) => {
+      if (map.getLayer(layer)) map.setPaintProperty(layer, prop, v as never);
+    };
     for (const L of LAYERS) {
-      if (!L.autoFade) continue;                 // federal layers have no fade to swap
-      if (map.getLayer(`${L.id}-fill`)) {
-        map.setPaintProperty(`${L.id}-fill`, "fill-opacity",
-          fillOpacityExpr(L.autoFade, manual) as maplibregl.ExpressionSpecification);
-      }
-      if (map.getLayer(`${L.id}-line`)) {
-        map.setPaintProperty(`${L.id}-line`, "line-opacity",
-          lineOpacityExpr(L.autoFade, manual) as maplibregl.ExpressionSpecification);
-      }
+      const off = chamberOff(L.id);
+      set(`${L.id}-fill`, "fill-opacity", fillExpr(L.id, manual, off));
+      set(`${L.id}-line`, "line-opacity", lineExpr(L.id, manual, off));
+      set(`${L.id}-ref`, "line-opacity", refExpr(L.id, manual, off));
       for (const [suffix, cov] of PATTERNS) {
-        if (map.getLayer(`${L.id}-${suffix}`)) {
-          map.setPaintProperty(`${L.id}-${suffix}`, "fill-opacity",
-            patternOpacityExpr(L.autoFade, manual, cov) as maplibregl.ExpressionSpecification);
-        }
+        if (LOCAL.includes(L.id)) set(`${L.id}-${suffix}`, "fill-opacity", off ? 0 : patternOpacityExpr(L.id, manual, cov));
       }
     }
+  };
+  const setLayerMode = (next: LayerMode) => {
+    mode = next;
+    applyPaint();
     applyAllVis();
+  };
+  const setChamber = (next: "sldl" | "sldu") => {
+    chamber = next;
+    applyPaint();
   };
 
   // "You are here" marker. Coarse (IP) on load for ambient bearings; exact when
@@ -572,5 +597,5 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     userMarker.getElement().classList.toggle("you-marker-approx", !precise);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setUserLocation };
+  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, setUserLocation };
 }
