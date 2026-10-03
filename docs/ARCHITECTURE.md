@@ -18,7 +18,7 @@ at serve time is the CDN. Postgres enters the picture only when the public API s
 | 1 | Code, issues, CI/CD | **GitHub public monorepo** | GitHub | Public repos get **unlimited** Actions minutes. Public code also *is* the transparency mission. |
 | 2 | ETL orchestration | **GitHub Actions cron** (nightly + intra-day PTR/vote checks) | GitHub | Free. 6h job limit is far beyond our needs. Retries via workflow re-run; backfills via manual dispatch. |
 | 3 | Transform engine | **DuckDB + Python** inside Actions runners | GitHub | Free, in-process, zero infra. Same SQL migrates to Postgres later. |
-| 4 | Raw lake (immutable) | **Cloudflare R2**, versioned bucket | Cloudflare | 10 GB storage, 1M class-A + 10M class-B ops/mo free, **zero egress fees**. Raw filings/PDFs/CSV snapshots live here. |
+| 4 | Raw lake (immutable) | **Cloudflare R2**, versioned bucket | Cloudflare | 10 GB storage, 1M class-A + 10M class-B ops/mo free, **zero egress fees**. Raw filings/PDFs/CSV snapshots live here. What the nightly actually spends of this: §1.1. |
 | 5 | Published data (dossiers, feeds, graph, search index) | Static JSON on **Cloudflare Pages** (small files) + R2 (bulk) | Cloudflare | Pages: unlimited requests + bandwidth, 500 builds/mo, 20k files/25MB-per-file per deploy. ~8k dossier JSONs fit comfortably. |
 | 6 | Map tiles | **PMTiles archives on R2**, custom domain through Cloudflare CDN | Cloudflare | Single-file archives read via HTTP range requests directly by the browser — **no tile server exists**. R2 behind your own domain = free egress + CDN cache. |
 | 7 | Frontend | **Vite + React + MapLibre GL + deck.gl + pmtiles** (fully static SPA) | Cloudflare Pages | No SSR runtime = nothing to pay for and nothing to fall over on launch day. |
@@ -30,6 +30,46 @@ at serve time is the CDN. Postgres enters the picture only when the public API s
 **Explicitly NOT in v1 free architecture:** runtime Postgres, tile servers, Kubernetes,
 Temporal, graph databases, vendor trade feeds, self-hosted analytics. Each has a defined
 entry point in §5.
+
+### 1.1 The R2 write budget (corrected, WO-33)
+
+Rows 4 and 5 quote the free tier and say nothing of what is spent against it. As built,
+**all** serving JSON — not only "bulk" — is published to R2 at the bucket root and read
+from `data.beholden.vote`; none of it goes through a Pages deploy. Every served object is
+therefore a class-A write whenever publish decides to send it, and the scarce resource is
+the 1,000,000 class-A operations (PUT, COPY, LIST) a month, not requests or egress.
+
+**Observed before WO-33** (the nightly's own log line): 15,883 serving PUTs + 2,158 raw
+PUTs + 2,158 latest-pointer COPYs = **20,199 a night, about 606,000 a month** — 61% of
+the allowance, every night, whether or not a single fact had moved, and before the local
+tier added one object. The cause was not volume. Every document carries per-run stamps,
+so none was ever byte-identical to the previous night's and the byte comparison skipped
+7 of 15,883.
+
+**From WO-33** a served object is written only when its content excluding stamps changes
+(DATA-CONTRACTS §8.1). Per night:
+
+| Operation | Count | Note |
+|---|---|---|
+| Serving PUT | objects whose facts changed | Target: well under 1,000 on a quiet night. All ~15,900 on the first run after deploy (no stored digests yet) and on any `full_rebuild`. |
+| Raw PUT, `raw/{date}/…` | 2,158 | Unchanged by WO-33: the dated partition is the reproducibility record and every key is new. This is now the floor — about 65,000 a month. |
+| Latest-pointer COPY, `raw/latest/…` | files whose bytes changed | At most 2,158. |
+| LIST | one per 1,000 keys under each managed prefix | About 20. |
+
+That is an expected 3,000–5,500 a night, **90,000–165,000 a month**. It is an estimate
+until the second nightly after deploy prints its `class-A this run` line; WO-33 is not
+done before that line is read. The comparison itself costs a HEAD per object — about
+18,000 class-B a night, 540,000 a month of 10,000,000 free.
+
+Two guards sit in publish rather than in anyone's memory: a GitHub `::warning::` when a
+run projects past 700,000 a month, and a refusal to start a run that would make more than
+200,000 writes without `--force-all` or `--allow-bulk-writes`.
+
+**Storage is the other budget, and it is unmeasured.** `raw/{date}/` adds the lake's full
+size every night and nothing removes it, against 10 GB free. Publish now prints the bytes
+it wrote, serving and raw separately; the raw figure times the nights retained is the
+lake's footprint. De-duplicating the dated partition is a follow-on, to be sized from
+that number.
 
 ## 2. The only non-free line items (be honest about them)
 
