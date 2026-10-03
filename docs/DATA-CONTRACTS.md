@@ -388,6 +388,7 @@ PMTiles archives on CDN, one per geometry family, redistricting-versioned in the
 | `tiles/us-states-{vintage}.pmtiles` | `states` | `ocd_id`, `name`, `geoid` |
 | `tiles/us-cd-{vintage}.pmtiles` | `districts` | `ocd_id`, `state`, `district_num`, `at_large` (bool) |
 | `tiles/us-sld-{vintage}.pmtiles` | `sldu`, `sldl` | `ocd_id`, `state`, `chamber`, `district_num` |
+| `tiles/us-places-{vintage}.pmtiles` | `places` | `ocd_id`, `geoid`, `state`, `name`, `kind` — see §8.5 |
 
 **Join rule:** tiles carry geometry + OCD-ID **only** — no member data baked in. The client joins a tiny "style feed" (`/stylefeeds/{layer}.json`: `ocd_id → {party, ideology_dim1, vacant}`) to color polygons. This keeps tiles immutable for a full redistricting cycle while colors update daily, and it is the mechanism that keeps map state and dossier data from ever disagreeing.
 
@@ -569,10 +570,12 @@ where the Bureau publishes none) — PRD principle 2, *ranges are ranges*: a cli
 margin or does not show the number. A fact the Bureau withholds for an area is **omitted**,
 never published as the Bureau's sentinel value.
 
-### 8.5 Place tiles — WO-21 · *target*
+### 8.5 Place tiles — WO-21 · *built — live after the next `tiles-build`*
 
 `tiles/us-places-{vintage}.pmtiles`, layer `places`, **incorporated places only** — Census
-designated places are statistical areas with no government and are dropped.
+designated places are statistical areas with no government and are dropped (LSAD `57`, and
+`55` / `62`, the Puerto Rico equivalents, per the Bureau's feature catalog for the file). The
+archive starts at z7 (the others at z3) and shares their maxzoom of 10.
 
 | Property | Meaning |
 |---|---|
@@ -580,10 +583,13 @@ designated places are statistical areas with no government and are dropped.
 | `geoid` | 7-digit state + place FIPS — the join key to §8.4 |
 | `state` | USPS code |
 | `name` | bare name (`Hendersonville`) |
-| `kind` | the Bureau's descriptor, lowercased (`city`, `town`, `village`, `borough`, …) |
+| `kind` | the Bureau's descriptor, lowercased (`city`, `town`, `village`, `borough`, …); `(balance)` stripped; empty when the Bureau gives none |
 
 Two places in one state that slug to the same `ocd_id` are a **build failure**, resolved by an
-explicit override keyed on GEOID — never by silently keeping one.
+explicit override keyed on GEOID — never by silently keeping one. The table is
+`PLACE_SLUG_OVERRIDES`, in `spike/stamp_ocd_ids.py` and mirrored in `divisions.py` (a test pins
+them equal); every member of a colliding group is listed, and a roster for one of them passes its
+GEOID: `place_ocd(st, name, geoid)`.
 
 The tile table in §5 also omits `tiles/us-counties-{vintage}.pmtiles` (layer `counties`:
 `ocd_id`, `state`, `name`, `geoid`) and the non-interactive context archive; both ship.
