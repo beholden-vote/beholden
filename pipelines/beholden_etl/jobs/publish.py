@@ -407,6 +407,20 @@ def _budget_line(class_a: int, tag: str = "publish") -> None:
               f"about {monthly:,} a month against {CLASS_A_FREE_PER_MONTH:,} free")
 
 
+def _bytes_line(to_put: list[tuple[Path, str]], raw: list[tuple[Path, str]],
+                tag: str = "publish") -> None:
+    """Bytes sent this run, serving and raw apart, because they cost differently.
+    A serving PUT overwrites its object in place. The raw figure is NEW storage
+    on every run: the dated partition never reuses a key, so this number times
+    the nights retained is what the lake occupies. (The latest-pointer copies
+    are server-side and overwrite in place: no bytes sent, no growth.)"""
+    serving_b = sum(p.stat().st_size for p, _ in to_put)
+    raw_b = sum(p.stat().st_size for p, _ in raw)
+    print(f"{tag}: bytes written this run = serving {serving_b:,} B "
+          f"({serving_b / 2**20:.1f} MiB) + raw {raw_b:,} B ({raw_b / 2**20:.1f} MiB, "
+          "new storage every run)")
+
+
 def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         dry_run: bool | None = None, force_all: bool = False,
         delete_stale: bool = False, allow_mass_delete: bool = False,
@@ -470,6 +484,7 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
               f"skipped) + {len(raw)} raw + {len(to_copy)}/{len(mirror)} latest-pointer; "
               f"{sum(map(len, stale.values()))} stale. Nothing written, nothing deleted.")
         _budget_line(writes + lists, "publish[dry-run]")
+        _bytes_line(to_put, raw, "publish[dry-run]")
         return len(serving) + len(raw)
 
     _ensure_cors(client)
@@ -488,6 +503,7 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
     # and a tripwire stops only the deletion. Listed always; deleted on request.
     stale, tripped, lists = _find_stale(client, serving_keys)
     _budget_line(writes + lists)
+    _bytes_line(to_put, raw)
     _settle_stale(client, stale, tripped, delete=delete_stale,
                   allow_mass_delete=allow_mass_delete, dry_run=False, tag="publish")
     return len(serving) + len(raw)

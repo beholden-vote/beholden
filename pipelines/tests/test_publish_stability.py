@@ -738,10 +738,19 @@ def test_class_a_line_counts_puts_copies_and_lists(tmp_path, bucket, capsys):
     out = capsys.readouterr().out
     assert f"publish: class-A this run = {n} (≈ {n * 30} per month of 1,000,000 free)" in out
     assert "::warning::" not in out
+    # Bytes, from the bucket's own record of what it was sent: serving and raw apart.
+    sent = {k: len(bucket.objects[k]["body"]) for k in bucket.puts}
+    raw_b = sum(v for k, v in sent.items() if k.startswith("raw/"))
+    serving_b = sum(sent.values()) - raw_b
+    assert (serving_b, raw_b) == (6, 48)
+    assert "publish: bytes written this run = serving 6 B (0.0 MiB) + raw 48 B " in out
 
     publish.run(data_dir=root, raw_dir=raw, dry_run=False)        # a quiet night
     n = 2 + 0 + 2                      # raw PUTs (dated partition), no copies, LISTs
-    assert f"publish: class-A this run = {n} " in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert f"publish: class-A this run = {n} " in out
+    # Nothing served changed, and the lake still grew by its full size.
+    assert "publish: bytes written this run = serving 0 B (0.0 MiB) + raw 48 B " in out
 
 
 def test_budget_warning_when_the_month_projects_past_700k(capsys):
