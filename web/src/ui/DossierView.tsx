@@ -537,7 +537,7 @@ export function DossierView({ dossier, tab, onSelectTab, onBack, onOpenPerson }:
       <footer className="dossier-foot">
         <p>{STRINGS.provenanceTagline}</p>
         <p className="muted">
-          pipeline {identity.provenance.pipeline_version} · generated {formatDate(dossier.generated_at)}
+          Last changed {formatDate(dossier.generated_at)} · pipeline {identity.provenance.pipeline_version}
         </p>
       </footer>
     </div>

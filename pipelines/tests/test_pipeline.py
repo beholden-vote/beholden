@@ -1933,12 +1933,15 @@ def test_fetch_orchestrator_runs_all_sources_and_records_timings(tmp_path, monke
     _stub_fetchers(monkeypatch, calls)
     manifest = _fetch.run(tmp_path / "raw", full=True)
     # every source fetcher ran (wa_pdc's stub returns a fragment here; the real
-    # fetcher returns None when disabled — covered separately below).
-    assert calls == {"unitedstates_legislators", "congress.gov", "voteview",
+    # fetcher returns None when disabled — covered separately below). A superset
+    # check: each work order that registers a source would otherwise have to edit
+    # this literal and collide with the others; dropping one of THESE still fails.
+    assert calls >= {"unitedstates_legislators", "congress.gov", "voteview",
                      "fec", "openstates", "house_clerk", "wa_pdc", "wikidata",
                      # WO-22: one fetcher per locality, so coverage and freshness
                      # stay meaningful per government rather than per "local".
                      "sumner_county", "hendersonville"}
+    assert calls == set(_fetch._FETCHERS)          # and every registered one ran
     for meta in manifest["sources"].values():
         assert meta["count"] == 1 and "retrieved_at" in meta
     timings = manifest["fetch_timings"]
@@ -2126,7 +2129,8 @@ def test_robots_txt_has_exactly_one_wildcard_group(slice_dirs):
 class _FakeR2:
     """Stand-in for the boto3 S3 client. Capitalised kwargs mirror boto3's real
     signature, which is what publish calls it with. HEAD answers from a preloaded
-    {key: etag} map and raises ClientError for anything absent, like R2 does."""
+    {key: stored stable digest} map (None = an object uploaded before digests
+    existed) and raises ClientError for anything absent, like R2 does."""
 
     def __init__(self, stored):
         self.stored = stored
@@ -2136,40 +2140,41 @@ class _FakeR2:
         from botocore.exceptions import ClientError
         if Key not in self.stored:
             raise ClientError({"Error": {"Code": "404"}}, "HeadObject")
-        return {"ETag": f'"{self.stored[Key]}"'}
+        digest = self.stored[Key]
+        return {"Metadata": {"stable-sha256": digest} if digest else {}}
 
-    def put_object(self, Bucket, Key, Body, ContentType, CacheControl):
+    def put_object(self, Bucket, Key, Body, ContentType, CacheControl, Metadata):
         self.puts.append(Key)
 
 
-def test_publish_skips_only_the_bytes_r2_already_holds(tmp_path):
-    """The class-A saver. An object whose stored ETag equals the content MD5 is
-    already correct, so its PUT is skipped. Everything else uploads: changed
-    bytes, an object that isn't there, and a multipart ETag (characterised here
-    because it is the shape most likely to be mishandled later — it is a digest
-    of part digests, never of the content).
+def test_publish_skips_only_the_content_r2_already_holds(tmp_path):
+    """The class-A saver, on WO-33's terms (the full suite is
+    test_publish_stability.py). An object whose stored stable digest equals the
+    local one already says what this build says, so its PUT is skipped.
+    Everything else uploads: changed content, an object that isn't there, and an
+    object with no stored digest at all -- which is every object written before
+    digests existed, whatever its bytes.
 
     The asymmetry is the whole design: skipping a file that DID change publishes
     stale data, while re-writing an unchanged one costs one class-A op. So every
     uncertain case must land on the upload side."""
-    import hashlib
     from beholden_etl.jobs import publish as _publish
 
     data = tmp_path / "data"
     data.mkdir()
-    for name in ("absent.json", "changed.json", "multipart.json", "same.json"):
+    for name in ("absent.json", "changed.json", "legacy.json", "same.json"):
         (data / name).write_text("{}")
-    md5 = hashlib.md5(b"{}", usedforsecurity=False).hexdigest()
 
     client = _FakeR2({
-        "same.json": md5,                                            # identical -> skip
-        "changed.json": hashlib.md5(b"stale", usedforsecurity=False).hexdigest(),
-        "multipart.json": f"{md5}-4",                                # not an MD5
+        "same.json": _publish.stable_digest("same.json", b"{}"),     # identical -> skip
+        "changed.json": _publish.stable_digest("changed.json", b'{"stale":1}'),
+        "legacy.json": None,                                         # no digest stored
     })                                                               # absent.json: 404
-    batch = [(p, p.name) for p in sorted(data.iterdir())]
+    batch = [(p, p.name) for p in sorted(data.iterdir())
+             if not _publish._already_stored(client, p.name, p)]
 
-    sent = _publish._put_batch(client, batch, "cc", skip_unchanged=True)
-    assert set(client.puts) == {"absent.json", "changed.json", "multipart.json"}
+    sent = _publish._put_batch(client, batch, "cc", with_digest=True)
+    assert set(client.puts) == {"absent.json", "changed.json", "legacy.json"}
     assert sent == 3
 
 
@@ -2177,15 +2182,15 @@ def test_publish_force_all_writes_even_unchanged_objects(tmp_path):
     """--force-all (and therefore a full_rebuild dispatch) writes unconditionally.
     The point of that run is to replace whatever sits in the bucket, so it must
     not defer to the bucket's own account of what it holds."""
-    import hashlib
     from beholden_etl.jobs import publish as _publish
 
     data = tmp_path / "data"
     data.mkdir()
     (data / "same.json").write_text("{}")
-    client = _FakeR2({"same.json": hashlib.md5(b"{}", usedforsecurity=False).hexdigest()})
+    client = _FakeR2({"same.json": _publish.stable_digest("same.json", b"{}")})
 
-    # skip_unchanged defaults off — this is exactly what run(force_all=True) does.
+    # _put_batch never consults the bucket: run(force_all=True) hands it every
+    # serving file without asking _already_stored first.
     assert _publish._put_batch(client, [(data / "same.json", "same.json")], "cc") == 1
     assert client.puts == ["same.json"]
 

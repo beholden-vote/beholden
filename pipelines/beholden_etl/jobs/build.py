@@ -23,6 +23,8 @@ from typing import Callable
 from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..build.context import BuildContext
+from ..build import areas as area_facts                         # WO-34 (county/city facts; `areas` is a loop var below)
+from ..build import votes                                       # WO-23a (votes/rollcalls/bills)
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
@@ -84,6 +86,9 @@ Content-Signal: search=yes,ai-input=yes
 Disallow: /dossiers/
 Disallow: /graph/
 Disallow: /raw/
+Disallow: /votes/
+Disallow: /rollcalls/
+Disallow: /bills/
 Allow: /
 """
 
@@ -298,6 +303,8 @@ STYLED_LAYERS = ("cd", "states", "sldu", "sldl")
 #   ("votes", votes.publish),        # WO-23a
 ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
     # --- insertion point: one line per writer, in dependency order ---
+    ("areas", area_facts.publish),   # WO-34
+    ("votes", votes.publish),        # WO-23a
 ]
 
 
@@ -395,6 +402,7 @@ def _current_holders(con) -> list[dict]:
         LEFT JOIN ideology_scores i
                ON i.person_id = p.person_id AND i.scheme='dw_nominate_dim1' AND i.scope = ?
         WHERE t.end_date IS NULL
+        ORDER BY d.ocd_id, p.person_id, o.office_id, t.start_date
         """, [str(CONGRESS)])
     cols = [c[0] for c in cur.description]
     out = []
@@ -466,7 +474,8 @@ def _legislative_stats(con, state_bill_urls: dict[str, str]) -> dict[str, dict]:
            FROM sponsorships s JOIN bills b USING(bill_id)
            WHERE s.role='sponsor'
            QUALIFY row_number() OVER (PARTITION BY s.person_id
-                   ORDER BY b.latest_action_on DESC NULLS LAST, b.bill_id) <= 10""").fetchall():
+                   ORDER BY b.latest_action_on DESC NULLS LAST, b.bill_id) <= 10
+           ORDER BY s.person_id, b.latest_action_on DESC NULLS LAST, b.bill_id""").fetchall():
         stats.setdefault(str(pid), {"sponsored": 0, "became_law": 0, "recent_bills": []})
         # WO-12: introduced_on / latest_action_on were already warehoused (used
         # for the recency sort above); published verbatim, null when the source
@@ -480,9 +489,11 @@ def _legislative_stats(con, state_bill_urls: dict[str, str]) -> dict[str, dict]:
 
 def _cosponsored_spine(con) -> dict[str, int]:
     """person_id -> count of role='cosponsor' sponsorship rows (WO-17). The
-    federal path never warehouses cosponsor rows (the count comes per-member
-    from raw congress.gov snapshots, _cosponsored_counts), so this is the
-    state legislators' cosponsored figure — same table, different source path."""
+    federal path takes its count per-member from raw congress.gov snapshots
+    (_cosponsored_counts), so this is the state legislators' cosponsored figure
+    — same table, different source path. Federal cosponsor rows DO exist since
+    WO-23a, but only for bills a roll call reached: a partial set, never a
+    federal count, so the federal branch must not read this map."""
     return {str(pid): n for pid, n in con.execute(
         "SELECT person_id, count(*) FROM sponsorships"
         " WHERE role='cosponsor' GROUP BY person_id").fetchall()}
