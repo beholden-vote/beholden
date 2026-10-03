@@ -17,6 +17,7 @@
 | FEC API key | api.open.fec.gov | campaign finance |
 | Cloudflare account | cloudflare.com | Pages + R2 + analytics |
 | OpenStates key (later) | open.pluralpolicy.com | state layer (E4) |
+| Census Data API key | api.census.gov/data/key_signup.html (free; the key is emailed to you) | county and city facts (`CENSUS_API_KEY`). The Data API refuses keyless data requests; **without the key the area-facts fetch is skipped** (a loud `CENSUS_API_KEY is NOT SET` line in the fetch log) and nothing new is built, so the `areas/` files already published stay as they are |
 
 ## 2. Cloudflare resources
 1. **R2:** create bucket `beholden` (free tier: 10 GB). Enable versioning.
@@ -37,7 +38,7 @@ git remote add origin git@github.com:<you>/beholden.git
 git push -u origin main
 ```
 Then add **Actions secrets** (Settings → Secrets and variables → Actions):
-`CONGRESS_GOV_API_KEY` · `FEC_API_KEY` · `R2_ACCESS_KEY_ID` ·
+`CONGRESS_GOV_API_KEY` · `FEC_API_KEY` · `CENSUS_API_KEY` · `R2_ACCESS_KEY_ID` ·
 `R2_SECRET_ACCESS_KEY` · `R2_ENDPOINT` · `CLOUDFLARE_API_TOKEN` ·
 `CLOUDFLARE_ACCOUNT_ID`
 
