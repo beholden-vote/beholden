@@ -455,6 +455,32 @@ def run(raw_dir: str | Path = RAW_DIST, db_path: str = DEFAULT_DB) -> str:
         store.insert(con, "bills", list(bills.values()))
         store.insert(con, "sponsorships", sponsorships)
 
+    # --- WO-23a: bills that reached a roll call (bill detail + cosponsors) ---
+    # The block above knows only bills a SITTING member sponsored, so a roll call
+    # on a bill whose sponsor has since left linked to nothing: no title, no
+    # topic. fetch lands one record per bill a roll call references; loading
+    # them here, BEFORE the roll calls, is what lets those roll calls link.
+    # ON CONFLICT DO NOTHING keeps the sponsored-list row where both exist (same
+    # source, same normalizer). Cosponsors are linked by bioguide id only: one
+    # who is not in office today has no persons row and therefore no
+    # sponsorships row — build publishes their name from the raw record with
+    # person_id null rather than resolving anyone by name.
+    rc_bills, cosponsorships = [], []
+    for bid, rec in congress_gov.landed_bills(raw).items():
+        rc_bills.append(congress_gov.bill_row(rec["bill"]))
+        seen_co: set[str] = set()
+        for c in rec.get("cosponsors") or []:
+            pid = bioguide_to_person.get(c.get("bioguideId"))
+            if pid and pid not in seen_co:
+                seen_co.add(pid)
+                cosponsorships.append({
+                    "bill_id": bid, "person_id": pid, "role": "cosponsor",
+                    "is_original": c.get("isOriginalCosponsor"),
+                    "sponsored_on": c.get("sponsorshipDate") or None,
+                    "withdrawn_on": c.get("sponsorshipWithdrawnDate") or None})
+    store.insert(con, "bills", rc_bills)
+    store.insert(con, "sponsorships", cosponsorships)
+
     # --- roll-call votes (WO-1) -> roll_calls + vote_positions ---
     # rollcalls first (roll_calls rows + the valid-id set that gates positions on
     # the FK), then the ~500k votes table, streamed and chunk-inserted. bill_id
