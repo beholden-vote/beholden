@@ -1,9 +1,10 @@
 /** Small shared UI atoms: party chip, avatar, section shell, provenance line. */
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { Dossier, Provenance } from "../types";
 import { PARTY_COLORS } from "../map";
 import { STRINGS } from "../strings";
-import { formatDate } from "../lib/data";
+import { formatDate, loadCoverage, type Coverage } from "../lib/data";
 import { isBelowMinGrade, useMinGrade } from "./gradeFilter";
 
 export function PartyChip({ code, display }: { code: string; display?: string }) {
@@ -39,6 +40,37 @@ function GradeChip({ provenance }: { provenance: Provenance }) {
   );
 }
 
+// Coverage as last loaded, so a section mounted later (every tab switch) renders
+// the full line at once instead of flashing the short form for a frame.
+let coverageSeen: Coverage | null = null;
+
+/** "checked ‹coverage date› · unchanged since ‹envelope date›" (contracts §8.1).
+ *  The envelope date is when this document last CHANGED, so it is never shown
+ *  as the time of the last check; that comes from coverage.json. Without a
+ *  usable coverage date — not loaded, source missing, or an edge-cached copy
+ *  older than the document — the line says only what the envelope can vouch for. */
+function ProvenanceLine({ provenance }: { provenance: Provenance }) {
+  const [coverage, setCoverage] = useState(coverageSeen);
+  useEffect(() => {
+    let live = true;
+    void loadCoverage().then((c) => {
+      coverageSeen = c;
+      if (live) setCoverage(c);
+    });
+    return () => { live = false; };
+  }, []);
+  const unchanged =
+    `${STRINGS.retrievedLabel.unchanged} ${formatDate(provenance.retrieved_at) ?? provenance.retrieved_at}`;
+  const checkedAt = coverage?.sources?.[provenance.source]?.retrieved_at;
+  const checked =
+    checkedAt && Date.parse(checkedAt) >= Date.parse(provenance.retrieved_at) ? formatDate(checkedAt) : null;
+  return (
+    <p className="retrieved">
+      {checked ? `${STRINGS.retrievedLabel.checked} ${checked} · ${unchanged}` : unchanged}
+    </p>
+  );
+}
+
 /** Every section is cited or it doesn't ship: the provenance line is part of
  *  the section shell, not an optional extra (rule #1). WO-28 puts the grade
  *  chip and the grade filter in this same shell for the same reason — a
@@ -66,11 +98,7 @@ export function Section({ title, provenance, children }: {
         )}
       </div>
       {hidden ? <EmptyNote>{STRINGS.gradeHiddenNote}</EmptyNote> : children}
-      {provenance && !hidden && (
-        <p className="retrieved">
-          {STRINGS.retrievedLabel} {formatDate(provenance.retrieved_at) ?? provenance.retrieved_at}
-        </p>
-      )}
+      {provenance && !hidden && <ProvenanceLine provenance={provenance} />}
     </section>
   );
 }

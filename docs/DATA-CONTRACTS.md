@@ -428,7 +428,7 @@ Three values in a served document record *when* rather than *what*:
 | Stamp | Where |
 |---|---|
 | `generated_at` | top level of every document |
-| `pipeline_version`, `retrieved_at` | inside every `provenance` envelope |
+| `pipeline_version`, `retrieved_at` | inside every provenance envelope: a dict stored under exactly one of the keys `provenance`, `votes_provenance`, `committees_provenance` |
 | `as_of` | top level of a graph neighborhood |
 
 Until WO-33, every one of them changed on every run, so no document was ever byte-identical
@@ -452,6 +452,15 @@ to it will not be published. That is correct for a stamp and a silent staleness 
 fact. The stamp list above is closed: nothing is added to it without a contract change, and
 any field carrying a fact — including fact-bearing dates such as an ideology score's
 `as_of` — stays in the digest.
+
+The three envelope keys are part of that closed list and are matched by exact name, not by
+a `*provenance` suffix. The failure is chosen: an envelope written under a new key is not
+recognised, so its stamps stay in the digest and every document carrying it is re-uploaded
+nightly — visible in the write-budget line and failed by name in
+`test_publish_stability.py` — instead of a suffix rule quietly excluding fields of a key
+nobody reviewed. `legislative.votes_provenance` and `legislative.committees_provenance`
+are in the list because the legislative section cites more than one source and carries
+an envelope for each.
 
 Non-JSON objects (tiles, `robots.txt`) are compared on their raw bytes, as before.
 
