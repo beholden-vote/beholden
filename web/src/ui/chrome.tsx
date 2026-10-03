@@ -367,6 +367,8 @@ function Sources() {
     ["OpenStates", "State legislators nationwide, plus bills and roll-call votes in pilot states."],
     ["Wikidata", "Education history only, labeled as a publicly edited source wherever it appears."],
     ["U.S. Census Bureau", "District boundaries (TIGER) and address geocoding."],
+    ["U.S. Census Bureau, American Community Survey", "Population, households, median household income, and median age for every county and city, each with its margin of error. Five-year estimates, 2020-2024; a figure the Bureau withholds is left out, never filled in."],
+    ["U.S. Census Bureau, Gazetteer", "County and city names and land area."],
     ["Sumner County, TN", "County commissioners: who holds each of the 24 district seats, from the county's own commission roster."],
     ["City of Hendersonville, TN", "The mayor and Board of Aldermen, from the city's own officials directory."],
   ];
@@ -391,6 +393,10 @@ function Sources() {
       <p className="info-note">
         All public record. The pipeline that assembles it is reproducible by design — a
         transparent method is itself a credibility feature.
+      </p>
+      <p className="info-note">
+        This product uses the Census Bureau Data API but is not endorsed or certified by
+        the Census Bureau.
       </p>
     </>
   );

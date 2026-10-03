@@ -23,6 +23,7 @@ from typing import Callable
 from ..config import CONGRESS, FEC_CYCLE, PAGES_DIST, SOURCES, grade_for, pipeline_version
 from ..build import dossiers, graph, key_votes, stylefeeds
 from ..build.context import BuildContext
+from ..build import areas as area_facts                         # WO-34 (county/city facts; `areas` is a loop var below)
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
@@ -298,6 +299,7 @@ STYLED_LAYERS = ("cd", "states", "sldu", "sldl")
 #   ("votes", votes.publish),        # WO-23a
 ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
     # --- insertion point: one line per writer, in dependency order ---
+    ("areas", area_facts.publish),   # WO-34
 ]
 
 

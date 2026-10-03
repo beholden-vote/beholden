@@ -108,6 +108,14 @@ SOURCES: dict[str, Source] = {
                             grade_reason="official_web_roster"),
     "hendersonville": Source("hendersonville", "https://www.hvilletn.org", 24 * 7,
                              grade_reason="official_web_roster"),
+    # WO-34: facts about every county and city. Both vintages are PINNED constants
+    # (sources/census_areas.py), so the SLA only governs re-checking an unchanged
+    # vintage for errata: ACS quarterly, the Gazetteer yearly. A new vintage is a code
+    # change plus a full fetch, never a clock event. The Census Data API requires a
+    # key (CENSUS_API_KEY); without one the fetcher skips and no area files publish.
+    "census_acs": Source("census_acs", "https://api.census.gov/data", 24 * 90, True),
+    "census_gazetteer": Source("census_gazetteer",
+                               "https://www2.census.gov/geo/docs/maps-data/data/gazetteer", 24 * 365),
 }
 
 # Quality gates (pipeline FAILS closed — nothing partial publishes)
