@@ -12,7 +12,7 @@ same `ocd_id` this script produces, so the OCD convention here MUST match the
 convention the ETL uses when it assigns divisions to office-holders
 (see beholden_etl.divisions). That shared key is the whole join.
 
-Usage:  stamp_ocd_ids.py <level>       level ∈ {states,cd,sldu,sldl,county}
+Usage:  stamp_ocd_ids.py <level>       level ∈ {states,cd,sldu,sldl,county,place}
 """
 from __future__ import annotations
 
@@ -101,6 +101,75 @@ def county_slug(name: str) -> str:
     return s
 
 
+# --- incorporated places (WO-21, data-contracts 8.5) ------------------------
+# The place file mixes incorporated places with Census designated places, which
+# are statistical areas with no government. The Bureau's own feature catalog for
+# cb_*_us_place_500k lists the LSAD codes: 57 = CDP, and 55 (comunidad) / 62
+# (zona urbana) are the Puerto Rico equivalents. A place is dropped if its LSAD
+# is one of those OR its descriptor (NAMELSAD minus NAME) is, so a Bureau change
+# to either field alone cannot let a CDP through.
+CDP_LSAD = frozenset({"55", "57", "62"})
+CDP_KINDS = frozenset({"cdp", "comunidad", "zona urbana"})
+
+# GEOID -> slug. Two places in one state can slug to the same ocd_id (PA has
+# two Centerville boroughs; WI has a Waukesha city and a Waukesha village). A
+# duplicate fails the build (stamp_stream); it is resolved HERE, per GEOID, and
+# never by keeping one. Every member of a colliding group is listed, so the
+# plain slug is published for none of them and a roster that slugs by name
+# alone matches no polygon rather than the wrong one. Mirrored in
+# beholden_etl.divisions.PLACE_SLUG_OVERRIDES (the stamper runs standalone);
+# test_place_tiles pins the two equal. Seeded from the Bureau's TIGERweb place
+# layer; a collision the first real build finds is a new line here and there.
+PLACE_SLUG_OVERRIDES: dict[str, str] = {
+    "1782088": "wilmington~1782088",  # IL Wilmington village
+    "1782101": "wilmington~1782101",  # IL Wilmington city
+    "1782309": "windsor~1782309",  # IL Windsor village
+    "1782322": "windsor~1782322",  # IL Windsor city
+    "2756680": "st_anthony~2756680",  # MN St. Anthony city
+    "2756698": "st_anthony~2756698",  # MN St. Anthony city
+    "3957750": "oakwood~3957750",  # OH Oakwood village
+    "3957764": "oakwood~3957764",  # OH Oakwood city
+    "3957792": "oakwood~3957792",  # OH Oakwood village
+    "4212184": "centerville~4212184",  # PA Centerville borough
+    "4212224": "centerville~4212224",  # PA Centerville borough
+    "4214584": "coaldale~4214584",  # PA Coaldale borough
+    "4214600": "coaldale~4214600",  # PA Coaldale borough
+    "4227360": "franklin~4227360",  # PA Franklin borough
+    "4227456": "franklin~4227456",  # PA Franklin city
+    "4237880": "jefferson~4237880",  # PA Jefferson borough
+    "4237944": "jefferson~4237944",  # PA Jefferson borough
+    "4243064": "liberty~4243064",  # PA Liberty borough
+    "4243128": "liberty~4243128",  # PA Liberty borough
+    "4253336": "newburg~4253336",  # PA Newburg borough
+    "4253344": "newburg~4253344",  # PA Newburg borough
+    "4261496": "pleasantville~4261496",  # PA Pleasantville borough
+    "4261512": "pleasantville~4261512",  # PA Pleasantville borough
+    "4840738": "lakeside~4840738",  # TX Lakeside town
+    "4840744": "lakeside~4840744",  # TX Lakeside town
+    "4853154": "oak_ridge~4853154",  # TX Oak Ridge town
+    "4853160": "oak_ridge~4853160",  # TX Oak Ridge town
+    "4861592": "reno~4861592",  # TX Reno city
+    "4861604": "reno~4861604",  # TX Reno city
+    "5562240": "pewaukee~5562240",  # WI Pewaukee city
+    "5562250": "pewaukee~5562250",  # WI Pewaukee village
+    "5578650": "superior~5578650",  # WI Superior city
+    "5578660": "superior~5578660",  # WI Superior village
+    "5584250": "waukesha~5584250",  # WI Waukesha city
+    "5584275": "waukesha~5584275",  # WI Waukesha village
+}
+
+
+def place_kind(name: str, namelsad: str) -> str:
+    """The Bureau's descriptor for a place: NAMELSAD with the NAME prefix removed,
+    '(balance)' stripped, lowercased -- 'Hendersonville city' -> 'city', and
+    'Milford city (balance)' with NAME 'Milford' -> 'city'. Empty when the Bureau
+    gives no descriptor (LSAD 00). NAMELSAD is NAME + descriptor by construction,
+    so a mismatch means the file is not what we think it is: stop."""
+    if not namelsad.startswith(name):
+        raise SystemExit(f"stamp_ocd_ids: place NAMELSAD {namelsad!r} does not start with NAME {name!r}")
+    return " ".join(namelsad[len(name):].replace("(balance)", "").split()).lower()
+
+
 def feature_props(level: str, src: dict) -> dict | None:
     """Map raw Census attributes -> tile-contract properties, or None to drop
     the feature (e.g. undefined SLD districts that carry no representation)."""
@@ -149,12 +218,31 @@ def feature_props(level: str, src: dict) -> dict | None:
             "geoid": _get(src, "GEOID"),   # 5-digit STATEFP+COUNTYFP
         }
 
-    raise SystemExit(f"unknown level: {level!r} (want states|cd|sldu|sldl|county)")
+    if level == "place":
+        name, geoid, namelsad = (_get(src, k) for k in ("NAME", "GEOID", "NAMELSAD"))
+        if not (name and namelsad and re.fullmatch(r"\d{7}", geoid or "")):
+            raise SystemExit(f"stamp_ocd_ids: place without NAME, NAMELSAD and a 7-digit GEOID: {src!r}")
+        kind = place_kind(name, namelsad)
+        if _get(src, "LSAD") in CDP_LSAD or kind in CDP_KINDS:
+            return None           # statistical area, no government
+        # The county slug rule IS the place slug rule (divisions._ocd_slug serves both).
+        slug = PLACE_SLUG_OVERRIDES.get(geoid) or county_slug(name)
+        return {
+            "ocd_id": f"{state_ocd(usps)}/place:{slug}",
+            "geoid": geoid,            # STATEFP+PLACEFP, the join key to the area facts
+            "state": usps,
+            "name": name,
+            "kind": kind,
+        }
+
+    raise SystemExit(f"unknown level: {level!r} (want states|cd|sldu|sldl|county|place)")
 
 
 def stamp_stream(level: str, lines, out) -> int:
-    """Transform a GeoJSONSeq stream. Returns count of features written."""
+    """Transform a GeoJSONSeq stream. Returns count of features written. Exits
+    non-zero if two places stamp the same ocd_id (see PLACE_SLUG_OVERRIDES)."""
     written = 0
+    place_geoids: dict[str, list[str]] = {}      # place ocd_id -> GEOIDs claiming it
     for raw in lines:
         raw = raw.strip().lstrip("\x1e")   # tolerate RFC 8142 record separators
         if not raw:
@@ -166,6 +254,14 @@ def stamp_stream(level: str, lines, out) -> int:
         feat["properties"] = props
         out.write(json.dumps(feat, separators=(",", ":")) + "\n")
         written += 1
+        if level == "place":
+            place_geoids.setdefault(props["ocd_id"], []).append(props["geoid"])
+    dupes = {k: v for k, v in place_geoids.items() if len(v) > 1}
+    if dupes:
+        raise SystemExit(
+            "stamp_ocd_ids: duplicate place ocd_id; add each GEOID to PLACE_SLUG_OVERRIDES "
+            "(here and in beholden_etl.divisions): "
+            + "; ".join(f"{k} <- {', '.join(g)}" for k, g in sorted(dupes.items())))
     return written
 
 

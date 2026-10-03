@@ -83,10 +83,57 @@ def county_ocd(usps: str, name: str) -> str:
     return f"{state_ocd(usps)}/{kind}:{_ocd_slug(name)}"
 
 
-def place_ocd(usps: str, name: str) -> str:
+# GEOID -> slug for the places whose plain slug collides with another place in
+# the same state (WO-21). MIRROR of spike/stamp_ocd_ids.py:PLACE_SLUG_OVERRIDES —
+# the stamper runs standalone — and pinned equal by test_place_tiles. A roster
+# for one of these places passes its `geoid` to place_ocd; with the name alone it
+# slugs to an id no polygon carries, which is the safe failure.
+PLACE_SLUG_OVERRIDES: dict[str, str] = {
+    "1782088": "wilmington~1782088",  # IL Wilmington village
+    "1782101": "wilmington~1782101",  # IL Wilmington city
+    "1782309": "windsor~1782309",  # IL Windsor village
+    "1782322": "windsor~1782322",  # IL Windsor city
+    "2756680": "st_anthony~2756680",  # MN St. Anthony city
+    "2756698": "st_anthony~2756698",  # MN St. Anthony city
+    "3957750": "oakwood~3957750",  # OH Oakwood village
+    "3957764": "oakwood~3957764",  # OH Oakwood city
+    "3957792": "oakwood~3957792",  # OH Oakwood village
+    "4212184": "centerville~4212184",  # PA Centerville borough
+    "4212224": "centerville~4212224",  # PA Centerville borough
+    "4214584": "coaldale~4214584",  # PA Coaldale borough
+    "4214600": "coaldale~4214600",  # PA Coaldale borough
+    "4227360": "franklin~4227360",  # PA Franklin borough
+    "4227456": "franklin~4227456",  # PA Franklin city
+    "4237880": "jefferson~4237880",  # PA Jefferson borough
+    "4237944": "jefferson~4237944",  # PA Jefferson borough
+    "4243064": "liberty~4243064",  # PA Liberty borough
+    "4243128": "liberty~4243128",  # PA Liberty borough
+    "4253336": "newburg~4253336",  # PA Newburg borough
+    "4253344": "newburg~4253344",  # PA Newburg borough
+    "4261496": "pleasantville~4261496",  # PA Pleasantville borough
+    "4261512": "pleasantville~4261512",  # PA Pleasantville borough
+    "4840738": "lakeside~4840738",  # TX Lakeside town
+    "4840744": "lakeside~4840744",  # TX Lakeside town
+    "4853154": "oak_ridge~4853154",  # TX Oak Ridge town
+    "4853160": "oak_ridge~4853160",  # TX Oak Ridge town
+    "4861592": "reno~4861592",  # TX Reno city
+    "4861604": "reno~4861604",  # TX Reno city
+    "5562240": "pewaukee~5562240",  # WI Pewaukee city
+    "5562250": "pewaukee~5562250",  # WI Pewaukee village
+    "5578650": "superior~5578650",  # WI Superior city
+    "5578660": "superior~5578660",  # WI Superior village
+    "5584250": "waukesha~5584250",  # WI Waukesha city
+    "5584275": "waukesha~5584275",  # WI Waukesha village
+}
+
+
+def place_ocd(usps: str, name: str, geoid: str | None = None) -> str:
     """Incorporated place (city/town). Census PLACE NAME is bare of its legal
-    suffix in the cartographic files, matching the registry's slug."""
-    return f"{state_ocd(usps)}/place:{_ocd_slug(name)}"
+    suffix in the cartographic files, matching the registry's slug. `geoid`
+    (7-digit state+place FIPS) selects a PLACE_SLUG_OVERRIDES entry when the
+    name alone is ambiguous within the state."""
+    slug = PLACE_SLUG_OVERRIDES.get(geoid or "") or _ocd_slug(name)
+    return f"{state_ocd(usps)}/place:{slug}"
 
 
 def _seat_ocd(parent_ocd: str, kind: str, district: object) -> str | None:
