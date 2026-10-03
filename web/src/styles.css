@@ -803,8 +803,11 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .sheet-head .close-btn { top: 2px; right: 4px; width: 44px; height: 44px; font-size: 24px; }
 .sheet-body {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-  padding: 16px 20px 26px;
+  padding: 0 20px 26px;
 }
+/* The top gap belongs to the view, not the scroller: a sticky bar (the dossier
+   tabs) sticks below a scroller's padding, and rows would show through the gap. */
+.sheet-body > * { margin-top: 16px; }
 /* Focus is visible everywhere in the panel, in the one action colour. Headings
    take focus by script when a view opens; they show the ring to keyboard users. */
 .panel :focus-visible, .arrive-prompt :focus-visible { outline: 2px solid var(--sig); outline-offset: 2px; }
@@ -963,7 +966,8 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .sheet-handle:focus-visible { outline-offset: -6px; }
   .panel.is-dragging .sheet-handle { cursor: grabbing; }
   .sheet-head { padding-left: 16px; }
-  .sheet-body { padding: 14px 16px 26px; }
+  .sheet-body { padding: 0 16px 26px; }
+  .sheet-body > * { margin-top: 14px; }
   /* Half a phone screen is not much: tighten what stands between the title and
      the first representative. */
   .place h2 { margin: 0 0 10px; font-size: 18px; }

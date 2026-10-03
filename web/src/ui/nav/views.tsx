@@ -5,7 +5,7 @@
  *  no longer exists -- the official left office and the object was removed --
  *  did nothing at all. It now says so.
  */
-import { Suspense, useEffect, useState, type ComponentType } from "react";
+import { Suspense, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import type { Dossier } from "../../types";
 import { loadDossier } from "../../lib/data";
 import type { DossierTab } from "../../router";
@@ -26,13 +26,14 @@ export function PersonView({ personId, tab, onReady }: {
 
   useEffect(() => {
     let live = true;
-    void loadDossier(personId).then((d) => {
-      if (!live) return;
-      setDossier(d);
-      if (d) nav.retitle(d.identity.full_name);
-    });
+    void loadDossier(personId).then((d) => { if (live) setDossier(d); });
     return () => { live = false; };
   }, [personId]);
+
+  // Name the crumb. Checked on every render, not once: the same dossier can
+  // come back as a different history entry (Back, a typed tab link) that has
+  // not been named yet. A no-op when the name already matches.
+  useEffect(() => { if (dossier) nav.retitle(dossier.identity.full_name); });
 
   useEffect(() => { if (dossier !== undefined) onReady(); }, [dossier, onReady]);
 
@@ -61,14 +62,22 @@ export function PersonView({ personId, tab, onReady }: {
   );
 }
 
+/** Tells the shell when a lazily loaded view has actually mounted. */
+function Mounted({ onReady, children }: { onReady: () => void; children: ReactNode }) {
+  useEffect(onReady, [onReady]);
+  return children;
+}
+
 /** A bill, a roll call or a comparison: whatever the registry has for it. The
- *  router only yields a record view when an entry exists, so `View` is set. */
-export function RecordView({ route }: { route: RecordRoute }) {
+ *  router only yields a record view when an entry exists, so `View` is set.
+ *  The wait has a heading of its own, so focus has somewhere to be while the
+ *  view's code loads; onReady then moves it to the view's own heading. */
+export function RecordView({ route, onReady }: { route: RecordRoute; onReady: () => void }) {
   const View = RECORD_VIEWS[route.kind] as unknown as ComponentType<RecordViewProps> | undefined;
   if (!View) return null;
   return (
-    <Suspense fallback={<p className="empty-note">{STRINGS.viewLoading}</p>}>
-      <View route={route} onTitle={nav.retitle} />
+    <Suspense fallback={<div className="view-wait"><h2 tabIndex={-1}>{STRINGS.viewLoading}</h2></div>}>
+      <Mounted onReady={onReady}><View route={route} onTitle={nav.retitle} /></Mounted>
     </Suspense>
   );
 }

@@ -348,7 +348,7 @@ export function App({ mapRef, handleRef }: {
           {view.kind === "person" && (
             <PersonView key={view.personId} personId={view.personId} tab={view.tab} onReady={onReady} />
           )}
-          {view.kind === "record" && <RecordView route={view.route} />}
+          {view.kind === "record" && <RecordView route={view.route} onReady={onReady} />}
         </Sheet>
       )}
 

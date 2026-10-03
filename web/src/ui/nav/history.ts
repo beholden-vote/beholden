@@ -233,7 +233,9 @@ export const nav = {
     for (let j = cur; views.has(j); j--) {
       const v = views.get(j)!;
       if (v.kind === "home") break;
-      if (v === above) continue;        // an info-overlay entry over the same view
+      // One crumb per view, however many entries it holds: an info page laid
+      // over it, or the same dossier reached again on another tab by a typed link.
+      if (above && (v === above || (v.kind === "person" && above.kind === "person" && v.personId === above.personId))) continue;
       above = v;
       out.unshift({ label: titleOf(v), href: urlFor(v), delta: j - cur });
     }
@@ -254,9 +256,11 @@ export const nav = {
     else nav.push(HOME);
   },
 
-  /** Step up one altitude (Escape); from the top of the trail, close. */
+  /** Step up one altitude (Escape): to the crumb before this one. From the
+   *  top of the trail, close. */
   up() {
-    if (nav.trail().length > 1) go(-1);
+    const t = nav.trail();
+    if (t.length > 1) go(t[t.length - 2].delta);
     else nav.close();
   },
 
