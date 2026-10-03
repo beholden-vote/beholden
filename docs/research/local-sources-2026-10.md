@@ -6,7 +6,7 @@ Two determinations per source:
 - (1) FREE REPUBLISH — may facts from it be republished on a free public website with attribution?
 - (2) PAID DATASET — may those facts be included in a compiled dataset that is sold?
 
-Status log (appended as sources complete): 
+Status log (appended as sources complete): sections 1-7 read 2026-10-03; section 8 (MEDSL) and the summary table added later the same day.
 
 ---
 
@@ -304,3 +304,60 @@ JSON or XML (`<api-root>` wrapper for XML). Endpoint docs in the repo cover amen
 - **(2) Paid compiled dataset: YES for bill/member/House-vote facts, same basis**, with those same caveats: no commercial-use prohibition found; the API key and rate limit (5,000/hour; stay under with caching) are the only conditions. Exclude third-party copyrighted content (e.g. some CRS products) and do not imply Library/Congress endorsement.
 - Attribution wording: none specified. API key: required (free, api.data.gov). Rate limit: 5,000 requests per hour; max 250 results per page.
 - Confidence: **read partially** (README, loc.gov legal and copyright pages, api.data.gov manual read; congress.gov legal-notices **terms not read**; no dedicated API ToS exists to read).
+
+---
+
+## 8. MIT Election Data + Science Lab (MEDSL): County Presidential Election Returns 2000-2024 (Harvard Dataverse)
+
+Read 2026-10-03. Pages and endpoints read: the Dataverse dataset record via its metadata API (`https://dataverse.harvard.edu/api/datasets/:persistentId/?persistentId=doi:10.7910/DVN/VOQCHQ`, plus `/versions/:latest/metadata` and `/versions/:latest/citation`); the guestbook definition `https://dataverse.harvard.edu/api/guestbooks/458`; the file-level tabular metadata `https://dataverse.harvard.edu/api/access/datafile/13573089/metadata/ddi`; the Harvard Dataverse General Terms of Use via `https://dataverse.harvard.edu/api/info/applicationTermsOfUse` (the human page https://support.dataverse.harvard.edu/harvard-dataverse-general-terms-use returned HTTP 403 to my fetch; the dataset HTML landing page returned HTTP 202 with no content, i.e. a script or bot challenge, so I used the API); the lab's data index https://electionlab.mit.edu/data (the lab site's only terms-like link found on its home page is /about; no separate data-terms page found). I did NOT download the data file (see 8c).
+
+### 8a. Licence statement (verbatim, machine-readable field on the dataset record)
+Source: dataset record, `latestVersion.license` (read 2026-10-03):
+
+> name "CC0 1.0", uri "http://creativecommons.org/publicdomain/zero/1.0", rightsIdentifier "CC0-1.0" (SPDX)
+
+The same record's free-text terms fields are all empty: `termsOfUse`, `confidentialityDeclaration`, `specialPermissions`, `restrictions`, `citationRequirements`, `depositorRequirements`, `conditions`, `disclaimer` are each null. The JSON-LD export says `"schema:license":"http://creativecommons.org/publicdomain/zero/1.0"` and `"dvcore:fileRequestAccess": false` (files are not restricted). No NonCommercial, ShareAlike, attribution-required or no-resale wording exists anywhere on the record.
+
+Platform terms (https://dataverse.harvard.edu/api/info/applicationTermsOfUse, "Harvard Dataverse General Terms of Use"), the operative sentences:
+
+> "You acknowledge that Harvard Dataverse's default data usage license agreement for all uploaded materials is a Creative Commons Zero ('CC0') Public Domain Dedication Waiver."
+> "Downloaders must be registered Users of the Site or agree to the Guest Terms of Use in order to take advantage of the Site's Services, including downloading any materials or datasets."
+> Downloaders represent that they "will abide by the applicable data usage license agreement attached to the dataset" and "acknowledge that their account information (for Users) or temporary site identification information (for Guests) may be recorded upon download, which can then be viewed by the owner of the User Upload".
+
+(The fetched text rendered curly quotes as replacement characters; wording otherwise as shown.) The Terms also disclaim accuracy: "DOES NOT WARRANT THAT: (A) THE CONTENT OR USER UPLOADS ARE TIMELY, ACCURATE, COMPLETE, RELIABLE OR CORRECT IN THEIR POSTED FORMS ON THE SERVICE".
+
+### 8b. What the dataset is
+- Title "County Presidential Election Returns 2000-2024", author "MIT Election Data and Science Lab" (Massachusetts Institute of Technology). DOI https://doi.org/10.7910/DVN/VOQCHQ. Description: "This dataset contains county-level returns for presidential elections from 2000 to 2024." Version 20.0, `lastUpdateTime` 2026-02-25T19:00:32Z, first published 2018-10-11. Dataverse-generated citation: MIT Election Data and Science Lab, 2018, "County Presidential Election Returns 2000-2024", https://doi.org/10.7910/DVN/VOQCHQ, Harvard Dataverse, V20, UNF:6:xvsJJxrfXMIvzAuDYlfvVw== [fileUNF]. The licence requires no citation; this is the platform's suggested citation.
+- Files (all `restricted: false`): `countypres_2000-2024.tab` (9,845,506 bytes, tab-separated, file id 13573089), `County Presidential Returns 2000-2024.md` (codebook, 2,604 bytes, id 11723285), `sources-president.tab` (5,038 bytes, per-state sources, id 10493708).
+- Columns (from the file's DDI metadata): `state, county_name, year, state_po, county_fips, office, candidate, party, candidatevotes, totalvotes, version, mode`; 12 variables, 94,151 cases. It is election RESULTS by county (candidate vote counts), not a list of officials.
+- Provenance: a per-state `sources-president.tab` file ships with it (so the underlying state and county official sources are recorded); I did not read it or those sources' terms, since the file is behind the guestbook.
+
+### 8c. Access: not keyless in the strict sense
+Every file download returned HTTP 400 for an anonymous GET:
+
+> {"status":"ERROR","message":"You may not download this file without the required Guestbook response for guestbookID 458."}
+
+Guestbook 458 ("General guestbook", enabled) requires name, email, institution and position (`nameRequired`, `emailRequired`, `institutionRequired`, `positionRequired` all true; no custom questions). So a person must submit those four fields to download, even though the licence is CC0. I did not submit a guestbook response (a form submission with personal data; that is for the maintainers to decide), and I did not use the API route that supplies a guestbook response with a download request. The metadata (variables, sizes, licence) is readable with no key. Consequence for the pipeline: a nightly keyless fetch of the file does not work as-is; options are a one-off manual download by a maintainer (the data change only after each presidential election, so one download per cycle is realistic) with the guestbook response recorded, or asking the lab whether a no-guestbook mirror exists. The dataset's contact is listed in the record's metadata (an MIT address; not copied here).
+
+### 8 DETERMINATIONS
+- **(1) Free public site with attribution: YES.** The dataset record carries CC0 1.0, the platform's stated default, and no other terms field is filled. Attribution is not required by CC0; citing "MIT Election Data and Science Lab, County Presidential Election Returns 2000-2024, https://doi.org/10.7910/DVN/VOQCHQ" is the courteous form and fits the provenance envelope.
+- **(2) Paid compiled dataset: YES on the stated terms.** CC0 permits commercial reuse; no NC/SA/resale clause found on the record or in the platform Terms. Caveats: (i) CC0 covers what MEDSL owns; the figures are official results compiled from state and county sources (recorded in `sources-president.tab`, not read), so the underlying official-source terms are unread, though election returns are public government records; (ii) the guestbook gate and the "agree to Guest Terms" step mean a human accepts a click-through on download; (iii) the lab's own site states no data terms that I could find, so the CC0 on the Dataverse record is the only grant; (iv) accuracy is disclaimed, so keep the `version` column and the DOI/version in each source envelope; (v) no implied MIT endorsement.
+- Attribution wording: none required. Rate limit / key: none stated for metadata; file download is gated by the guestbook, not by an API key.
+- Confidence: **read in full** for the dataset record, licence field, guestbook definition, DDI and the Dataverse Terms of Use (via the API text); the lab's /about page, the codebook `.md` and the sources file **not read** (behind the guestbook; not submitted).
+
+---
+
+## Summary table (all eight sources)
+
+Verdict key: YES, NO, UNDETERMINED. (1) = free public republish with attribution; (2) = inclusion in a sold compiled dataset. Verdicts record what the published wording supports; they are not legal advice, and where terms are silent the verdict is UNDETERMINED.
+
+| # | Source | Licence wording found (short) | Keyless? | (1) Free site | (2) Paid dataset | Main caveat |
+|---|---|---|---|---|---|---|
+| 1 | Open States / Plural | "public domain dedication"; ToS: "No attribution is required" | People CSV and Postgres dump yes; session CSV/JSON need free login; API needs key | YES | YES | Upstream state-site terms and full bill text unread; dump unsupported |
+| 2 | UT CTAS county officials (TN) | "content ... is copyrighted"; permission needed; no grant | Yes (HTML + CSV) | UNDETERMINED | UNDETERMINED | Disclaimer page 403; awaits written permission; no commissioner districts |
+| 3 | UT MTAS municipal officials (TN) | "content ... is copyrighted"; no grant | Yes (CSV + undocumented JSON endpoints) | UNDETERMINED | UNDETERMINED | Awaits written permission; no wards or term dates |
+| 4 | Legistar Web API (Granicus) | No API terms exist; content owned by each client government | Per client (token only if the client requires one) | UNDETERMINED | UNDETERMINED | Terms are per jurisdiction and unread |
+| 5 | unitedstates/congress-legislators | CC0 1.0 | Yes | YES | YES | Upstream committee-history sources unread |
+| 6 | Voteview (UCLA) | No data licence; citation requested | Yes | UNDETERMINED | UNDETERMINED | Ask for an explicit statement; else drop NOMINATE |
+| 7 | Congress.gov API (LoC) | "view, retrieve, and re-use machine-readable data"; no restriction found | Key required (free) | YES | YES | Legal-notices page 403; 5,000 requests/hour |
+| 8 | MEDSL county presidential returns (Harvard Dataverse) | Dataset licence field "CC0 1.0"; no other terms | No: download needs a guestbook response (name, email, institution, position) | YES | YES | Guestbook gate; underlying state sources unread; accuracy disclaimed |
