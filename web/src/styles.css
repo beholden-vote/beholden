@@ -837,6 +837,7 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 
 /* ---------- shared buttons: one primary (amber fill, hard shadow), one ghost ---------- */
 .fix-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.fix-actions > * { flex: 1 1 auto; }           /* wrapped on a small phone, each fills its row */
 .fix-primary, .fix-ghost {
   min-height: 44px; padding: 0 14px; cursor: pointer;
   border: 2px solid var(--sig);
@@ -917,3 +918,64 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .arrive-prompt h2 { margin: 0 36px 4px 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 .arrive-prompt p { margin: 0 0 12px; color: var(--mut); font-size: 13px; line-height: 1.5; }
 .arrive-prompt .close-btn { top: 0; right: 0; width: 44px; height: 44px; }
+
+/* ---------- wide: keep the footer clear of the open drawer ----------
+   The footer is centred on the viewport, so the drawer used to cover its right
+   end -- Privacy, now that the page keeps something. Centre it on the map. */
+@media (min-width: 720px) {
+  .panel ~ .site-foot { right: min(480px, 100vw); }
+}
+
+/* ---------- narrow: the panel is a bottom sheet (WO-35) ----------
+   Three stops, set by data-stop (ui/sheet/Sheet.tsx): FULL covers the screen,
+   HALF leaves the top half of the map visible and live, PEEK leaves only the
+   header strip. The sheet is always full height and is pushed DOWN by a
+   transform, so a drag is one property and never a layout.
+   --sheet-peek mirrors PEEK_PX in Sheet.tsx: 3px rule + 25px grip + 48px head. */
+:root { --sheet-peek: 76px; }
+@media (max-width: 719px) {
+  .panel {
+    top: auto; left: 0; right: 0; bottom: 0; width: auto;
+    height: 100vh; height: 100dvh;
+    overflow: visible;                         /* the handle's target reaches above the edge */
+    border-left: none; border-top: 3px solid var(--sig);
+    box-shadow: 0 -6px 0 rgba(0, 0, 0, 0.3);
+    animation: none;
+    transform: translateY(0);
+    transition: transform 180ms ease-out;
+  }
+  .panel[data-stop="half"] { transform: translateY(50%); }
+  .panel[data-stop="peek"] { transform: translateY(calc(100% - var(--sheet-peek))); }
+  .panel.is-dragging { transition: none; }
+
+  .sheet-grip { display: block; position: relative; flex: none; height: 25px; touch-action: none; }
+  /* A real button: 44px tall, the upper 19px of it above the sheet's edge. */
+  .sheet-handle {
+    position: absolute; left: 0; right: 0; top: -19px; width: 100%; height: 44px;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 0 0 10px; background: none; border: none; cursor: grab; touch-action: none;
+  }
+  .sheet-handle span { display: block; width: 48px; height: 4px; background: var(--line-2); }
+  .sheet-handle:hover span, .sheet-handle:focus-visible span { background: var(--sig); }
+  .sheet-handle:focus-visible { outline-offset: -6px; }
+  .panel.is-dragging .sheet-handle { cursor: grabbing; }
+  .sheet-head { padding-left: 16px; }
+  .sheet-body { padding: 14px 16px 26px; }
+  /* At half the lower half of the sheet is below the screen. Pad the scroller
+     by that much, so its last row can still be scrolled (and tabbed) into view. */
+  .panel[data-stop="half"] .sheet-body { padding-bottom: calc(50vh + 26px); padding-bottom: calc(50dvh + 26px); scroll-padding-bottom: 50vh; }
+  .dtab-bar { margin: 0 -16px; padding: 0 16px; }
+
+  /* The map's own controls stay reachable above the sheet at peek and half. */
+  .panel[data-stop="peek"] ~ .site-foot { bottom: var(--sheet-peek); }
+  .panel[data-stop="peek"] ~ .layer-ctl { bottom: 116px; }
+  .panel[data-stop="peek"] ~ .level-toast-wrap { bottom: 172px; }
+  .panel[data-stop="half"] ~ .layer-ctl { bottom: calc(50vh + 10px); bottom: calc(50dvh + 10px); }
+  .panel[data-stop="half"] ~ .layer-ctl .layer-ctl-body { max-height: calc(50vh - 200px); }
+  .panel[data-stop="half"] ~ .level-toast-wrap { bottom: calc(50vh + 60px); }
+  body:has(.panel[data-stop="peek"]) .maplibregl-ctrl-bottom-right { bottom: var(--sheet-peek); }
+  body:has(.panel[data-stop="half"]) .maplibregl-ctrl-bottom-right { bottom: calc(50vh - 42px); bottom: calc(50dvh - 42px); }
+}
+@media (max-width: 719px) and (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
+}

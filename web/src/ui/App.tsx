@@ -111,6 +111,8 @@ export function App({ mapRef, handleRef }: {
   const searchRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLElement>(null);
   const flight = useRef<OwnFlight | null>(null);
+  /** The view about to open was not asked for (arrival): it must not take focus. */
+  const unasked = useRef(false);
   // An info page is opened and closed only by navigations, and every navigation
   // yields a new snapshot -- so the hash is read once per snapshot.
   const info = useMemo(hashToInfo, [snap]);
@@ -163,6 +165,7 @@ export function App({ mapRef, handleRef }: {
     };
     // Remembered only when the reader confirmed it -- never the edge's guess.
     if (own?.origin === "confirmed") savePlace(at);
+    unasked.current = !!own && own.origin !== "confirmed";
     setPrompt(false);
     // The next district explored, or a guess corrected, takes the place of the
     // one on screen. Anything else is a step the Back button can undo.
@@ -271,6 +274,8 @@ export function App({ mapRef, handleRef }: {
   useEffect(() => {
     const prev = shown.current;
     shown.current = view;
+    const quiet = unasked.current;
+    unasked.current = false;
     if (prev === view) return;                                // renamed, or an info page over it
     if (view.kind === "home") mapRef.current?.clearSelection();
     else {
@@ -281,6 +286,8 @@ export function App({ mapRef, handleRef }: {
       if (body) body.scrollTop = 0;
       // The reader is working the map (district after district): leave focus there.
       if (move === "replace" && document.activeElement?.closest("#root")) return;
+      // Arrival opened this by itself. Taking focus would move a reader who did nothing.
+      if (quiet) return;
     }
     wantFocus.current = move === "back" ? "opener" : view.kind === "home" ? null : "heading";
   }, [view, move, mapRef]);

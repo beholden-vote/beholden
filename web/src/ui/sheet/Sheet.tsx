@@ -7,8 +7,8 @@
  *  above it at peek and half.
  *
  *  No library: the stop is a data attribute, the position is a CSS transform
- *  (styles.css), and a drag is pointer events writing that transform directly
- *  until release. The handle is a real button -- click steps the sheet, Up and
+ *  (styles.css), and a drag is pointer events on the handle writing that
+ *  transform directly until release. The handle is a real button -- click steps the sheet, Up and
  *  Down arrows resize it, Home/End jump to the ends. Focus is trapped only at
  *  FULL, where the sheet is the whole screen; at peek and half the map and the
  *  search bar stay reachable. At peek the hidden body is inert, so Tab cannot
@@ -66,20 +66,22 @@ export function Sheet({ sheetRef, label, stop, onStop, onClose, header, children
     if (modal && !sheetRef.current?.contains(document.activeElement)) handleRef.current?.focus();
   }, [modal, sheetRef]);
 
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     const el = sheetRef.current;
     dragged.current = false;
     if (!narrow || !el) return;
+    // Captured from the first touch: a quick flick leaves the handle within a
+    // frame, and its moves must keep arriving here.
+    e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { y0: e.clientY, base: yOf(stop, el.offsetHeight), dy: 0, live: false };
   };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
     const d = drag.current, el = sheetRef.current;
     if (!d || !el) return;
     d.dy = e.clientY - d.y0;
     if (!d.live) {
       if (Math.abs(d.dy) < 6) return;          // a tap, not a drag -- leave it to click
       d.live = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
       el.classList.add("is-dragging");
     }
     const max = el.offsetHeight - PEEK_PX;
@@ -123,9 +125,10 @@ export function Sheet({ sheetRef, label, stop, onStop, onClose, header, children
   return (
     <aside ref={sheetRef} className="panel" data-stop={stop} role="dialog" aria-label={label}
            aria-modal={modal || undefined} onKeyDown={trapTab}>
-      <div className="sheet-grip" onPointerDown={onPointerDown} onPointerMove={onPointerMove}
-           onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}>
+      <div className="sheet-grip">
         <button ref={handleRef} type="button" className="sheet-handle"
+                onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+                onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd}
                 aria-label={`${STRINGS.sheetHandle}: ${STRINGS.sheetStops[stop]}. ${STRINGS.sheetHandleHint}`}
                 onClick={() => { if (!dragged.current) onStop(stop === "half" ? "full" : "half"); }}
                 onKeyDown={onHandleKey}>
