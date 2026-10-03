@@ -246,7 +246,7 @@ export function App({ mapRef, handleRef }: {
       .then((w) => {
         const here = w && typeof w.lat === "number" && typeof w.lng === "number" ? w : null;
         // The reader may have opened or searched for something while we asked.
-        if (cold && nav.current().kind === "home" && !flight.current) {
+        if (cold && nav.current().kind === "home" && !flight.current && !hashToInfo()) {
           if (here) goOwn(here.lng, here.lat, "approximate", fill); else setPrompt(true);
         } else if (here && !exact.current) mapRef.current?.setUserLocation(here.lng, here.lat, false);
       });

@@ -6,18 +6,20 @@
  *  the component that draws it. A later lane adds ONE entry below and ONE file
  *  in its own directory -- nothing else in the shell changes:
  *
- *      import { lazy } from "react";
- *      bill: lazy(() => import("../votes/BillView")),
+ *      import { lazy } from "react";                          // with the first entry
+ *      bill: lazy(() => import("../votes/BillView")),         // #/b/{bill_id}
+ *      vote: lazy(() => import("../votes/RollCallView")),     // #/v/{roll_call_id}
+ *      compare: lazy(() => import("../stand/CompareView")),   // #/c/{id}/{id}
  *
- *  The component is the file's default export and takes RecordViewProps. It
- *  should render an <h2> (the shell moves focus to the first <h2> of a new
- *  view) and call `onTitle` once it knows what to call itself. To link TO a
- *  record from anywhere, write a plain anchor -- <a href={billHash(id)}> -- and
- *  the shell turns the navigation into a pushed history entry.
+ *  The component is the file's default export and takes RecordViewProps<kind>.
+ *  It must render an <h2> (the shell moves focus to the first <h2> of a new
+ *  view) and should call `onTitle` once it knows what to call itself. To link
+ *  TO a record from anywhere, write a plain anchor -- <a href={billHash(id)}>
+ *  -- and the shell turns the navigation into a pushed history entry, with the
+ *  crumb, Back, Escape and focus handling every other view gets.
  *
  *  A route kind with no entry here falls back to home. No placeholder screens.
- *  Place and person views are not registered: they are the shell's own, and
- *  both are needed on first paint.
+ *  Place and person views are not registered: they are the shell's own.
  */
 import type { ComponentType, LazyExoticComponent } from "react";
 import type { Route } from "../../router";

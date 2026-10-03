@@ -10,9 +10,13 @@ import type { Dossier } from "../../types";
 import { loadDossier } from "../../lib/data";
 import type { DossierTab } from "../../router";
 import { STRINGS } from "../../strings";
-import { DossierView } from "../DossierView";
 import { nav } from "./history";
 import { RECORD_VIEWS, type RecordRoute, type RecordViewProps } from "./registry";
+
+// The dossier's code loads with the first dossier, not with the map: a reader
+// who arrives on a place has not asked for one yet.
+const dossierCode = () => import("../DossierView");
+type DossierViewType = Awaited<ReturnType<typeof dossierCode>>["DossierView"];
 
 export function PersonView({ personId, tab, onReady }: {
   personId: string;
@@ -23,10 +27,15 @@ export function PersonView({ personId, tab, onReady }: {
 }) {
   // Keyed by person in the shell, so this state is always this person's.
   const [dossier, setDossier] = useState<Dossier | null | undefined>(undefined);
+  const [DossierView, setView] = useState<DossierViewType | null>(null);
 
   useEffect(() => {
     let live = true;
-    void loadDossier(personId).then((d) => { if (live) setDossier(d); });
+    // Data and code together, so the wait is one round trip, not two. Code that
+    // will not load is the same dead end as data that is not there.
+    void Promise.all([loadDossier(personId), dossierCode()])
+      .then(([d, code]) => { if (live) { setView(() => code.DossierView); setDossier(d); } })
+      .catch(() => { if (live) setDossier(null); });
     return () => { live = false; };
   }, [personId]);
 
@@ -40,7 +49,7 @@ export function PersonView({ personId, tab, onReady }: {
   if (dossier === undefined) {
     return <div className="view-wait"><h2 tabIndex={-1}>{STRINGS.dossierLoading}</h2></div>;
   }
-  if (dossier === null) {
+  if (dossier === null || !DossierView) {
     return (
       <div className="not-found">
         <h2 tabIndex={-1}>{STRINGS.notFoundTitle}</h2>
