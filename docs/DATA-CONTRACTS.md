@@ -780,7 +780,19 @@ added: each measure is published on its own, with its own formula at `/methodolo
 - **Symmetry.** Every field is defined identically for every member regardless of party; a
   test builds the artifact from a fixture with parties swapped and requires equal measures.
 
-### 8.8 Roster spec — WO-22b / WO-39 · *target*
+### 8.8 Roster spec — WO-22b / WO-39 · **shipped** (WO-22b Part A; WO-39 pending)
+
+*Status (WO-22b):* `sources/roster.py` ships the interface below with Sumner County and
+Hendersonville as its two specs (`sources/tn_local.py`). Corrections to the shape, from
+building it: a spec carries `grade_reason` (its grade is implied, `config.GRADE_REASONS`) rather
+than a bare `grade`; it also carries `chamber`, `term_start` (the date the body took office),
+`seat_size` (members per seat label, 2 for a two-alderman ward) and `sla_hours`. `RosterRow`
+gains `photo_url` (linked, never re-hosted). The duplicate gate reads "no `(office_title,
+seat_label)` more than `seat_size` times, an at-large title once", plus no person twice and an
+adapter's own structural gate. A withheld locality is served from its last good landed page,
+and its keys are passed to publish in `dist/publish_hints.json` (beside, not inside, the
+serving tree) with the one-time map from the seat-keyed ids published before WO-22b.
+
 
 Local rosters (Tennessee through CTAS and MTAS; metros through Legistar) are built against
 **one** interface in `pipelines/beholden_etl/sources/roster.py`, so a new locality is a spec
@@ -828,7 +840,11 @@ without exactly four segments. `/votes/{person_id}.json` is unchanged; its rows 
 roll-call id verbatim. A roll call whose `positions` cover fewer than all seated members says so
 in `positions_cover`, as §8.3 already requires.
 
-### 8.10 Coverage state per division — WO-22b · *target*
+### 8.10 Coverage state per division — WO-22b · **shipped**
+
+*Status (WO-22b):* written by `build/coverage_divisions.py`. `partial` is not emitted yet (no
+current source declares a vacant seat); `seats_expected` is the spec's seat maximum.
+
 
 Who we cover, said plainly. **`/coverage/{st}.json`** (one file per state that has at least one
 locality attempted; absence of a division means *not covered*):
@@ -854,7 +870,10 @@ colours the polygon by that. Local polygons are never coloured by party (the sou
 publish local party); coverage state is their fill. `coverage.json → counts` gains
 `localities_covered`, `localities_partial` and `localities_withheld`.
 
-### 8.11 State-sharded pins — WO-22b (feed) / WO-37 (loader) · *target*
+### 8.11 State-sharded pins — WO-22b (feed) **shipped** / WO-37 (loader) · *target*
+
+*Status (WO-22b):* written by `build/pin_shards.py`, cut from the monolithic file the same build wrote.
+
 
 Today every pin in the country is fetched at startup. Adding every county commission and city
 council multiplies the rows, so the two local layers are sharded by state:
