@@ -313,3 +313,33 @@ def test_two_builds_are_identical(real):
             continue
         assert publish.stable_digest(key, (real / key).read_bytes()) == \
             publish.stable_digest(key, (again / key).read_bytes()), key
+
+
+# --- photo/name pairing (regression: each commissioner showed the NEXT one's photo) ---
+
+def _surname(name: str) -> str:
+    return name.split(",")[0].split()[-1]
+
+
+def test_sumner_photos_belong_to_their_commissioner():
+    """The county page renders each post's image BEFORE its title widget, so the
+    photo is the last <img> before the title, not the first one after it. Every
+    filename carries the commissioner's surname (first names vary: 'Darrel' for
+    Darrell Rogers, 'Dan' for Daniel Bristol)."""
+    rows = tn_local.parse_sumner((ROSTER_FIXTURES / "sumner_county.html").read_text(encoding="utf-8"))
+    assert len(rows) == 24
+    for r in rows:
+        filename = r["photo_url"].rsplit("/", 1)[-1].lower()
+        assert _surname(r["full_name"]).lower() in filename, (r["full_name"], filename)
+
+
+def test_hendersonville_photos_belong_to_their_member():
+    """The h-card puts the u-photo inside the member's own card; the image's alt
+    text names the member ('D.Ward', 'M.Evans' for two of them)."""
+    import re
+    page = (ROSTER_FIXTURES / "hendersonville.html").read_text(encoding="utf-8")
+    alt = dict(re.findall(r'<img src="([^"]+)" alt="([^"]*)"[^>]*class="field u-photo"', page))
+    rows = tn_local.parse_hendersonville(page)
+    assert len(rows) == 13
+    for r in rows:
+        assert _surname(r["full_name"]).lower() in alt[r["photo_url"]].lower(), r["full_name"]
