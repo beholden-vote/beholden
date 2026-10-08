@@ -51,6 +51,40 @@ interaction.
                               purple-gray that is deliberately NEITHER hue */
 --vacant:        #2b2f33
 ```
+### Boundary lines by zoom (WO-37)
+Stacked same-looking outlines were confusing, so one level is PRIMARY per zoom band
+and the level it replaces recedes to a faint reference line, then fades out. The
+numbers live in one table, `BANDS` in `web/src/lib/levels.ts`; `map.ts` paints from it
+and the level gates derive from it. `[zoom, primary, reference]` stops, linear:
+```
+cd      0:1  6:1  7:0                         federal, fades out as chambers arrive
+sldl/u  6:0  7:1  8:1  9:ref .35  10.5:0      one chamber at a time in auto
+county  8:0  9:1  10:1  11:ref .40 (dashed)   stays as a faint reference
+place   10:0 11:1                             primary from z11
+state outline: always, solid, widest, pale (#a9c0cf), above every fill
+```
+At most two boundary sets (plus the state outline) at any zoom; levels differ by
+width, dash and strength, never by new hues. Auto draws State House by default
+(State Senate via the layer control); both together is manual-only. A level past its
+band only goes invisible: it keeps hit-testing, so a click still returns the full
+stack, and a selected division is always shown. Reference layers have no `-fill`
+layer and never take hover. The level rail says "Showing: X boundaries".
+
+### Coverage scale (WO-37) — data, never party
+Local polygons (counties, cities) are filled by coverage state, because local
+sources publish no party. One neutral near-grey lightness ramp; each step also has
+a pattern and a word, so no state is carried by colour alone:
+```
+covered      #aab4bc  solid                      L 0.45
+partial      #7d878f  dots                       L 0.24
+withheld     #4a545c  diagonal hatch             L 0.09
+not covered  (none)   outline only, dashed swatch
+```
+Checked by simulating protanopia, deuteranopia and tritanopia (Machado matrices):
+relative luminance of the three fills moves by under 0.01 in each, so the ramp
+order is preserved; being near-achromatic it cannot be read as red/blue or
+green/red. The legend and the area card state each state in words.
+
 Roles: **amber = the only chromatic action color** (anti-slop: no teal, one accent).
 Party hues are tuned to matched luminance so neither reads "louder." `--flag`/
 `--bad` are deliberately off the party-red hue so accountability signals never

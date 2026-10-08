@@ -23,6 +23,7 @@
  "sources": {
   "census_gazetteer": {
    "age_hours": 6.23,
+   "changed_at": "2026-09-20T08:00:00+00:00",
    "retrieved_at": "2026-10-03T11:10:15+00:00",
    "sla_hours": 8760,
    "within_sla": true
@@ -35,6 +36,7 @@
   },
   "fec": {
    "age_hours": 27.64,
+   "changed_at": "2026-10-02T13:45:21+00:00",
    "retrieved_at": "2026-10-02T13:45:21+00:00",
    "sla_hours": 72,
    "within_sla": true
@@ -59,6 +61,7 @@
   },
   "sumner_county": {
    "age_hours": 29.36,
+   "changed_at": "2026-09-28T12:00:00+00:00",
    "retrieved_at": "2026-10-02T12:02:17+00:00",
    "sla_hours": 168,
    "within_sla": true

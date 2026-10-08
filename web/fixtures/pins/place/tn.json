@@ -1,0 +1,15 @@
+[
+ {
+  "chamber": null,
+  "full_name": "Fixture Member Two",
+  "lat": null,
+  "lng": null,
+  "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
+  "office": "Hendersonville Mayor",
+  "party": "U",
+  "person_id": "fixture-0002",
+  "photo_url": null,
+  "term_ends": null,
+  "vacant": false
+ }
+]

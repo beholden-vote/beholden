@@ -187,7 +187,7 @@ export interface Dossier {
 /** One rendered polygon level under a clicked point. Mirrors map.ts's LayerId
  *  (kept inline so this contract file stays free of engine imports). */
 export interface StackEntry {
-  layer: "states" | "cd" | "sldu" | "sldl" | "county";
+  layer: "states" | "cd" | "sldu" | "sldl" | "county" | "place";
   ocdId: string;
   pins: Pin[];
   /** Tile attributes of the clicked polygon (name / geoid / district_num).
@@ -244,3 +244,39 @@ export interface Bill {
   roll_calls: { roll_call_id: string; held_at: string; question: string; result: string; yea_count: number; nay_count: number }[];
   provenance: Provenance;
 }
+// WO-37 ----------------------------------------------------------------------
+/** A survey estimate and its margin of error (contracts 8.4). `moe` is null where
+ *  the Bureau publishes none (a controlled count such as a county population). */
+export interface AreaEstimate { estimate: number; moe: number | null }
+
+export interface AreaFacts {
+  name: string;
+  land_sqmi?: number;
+  population?: AreaEstimate;
+  households?: AreaEstimate;
+  median_household_income?: AreaEstimate;
+  median_age?: AreaEstimate;
+}
+
+/** /areas/{level}/{st}.json (contracts 8.4). */
+export interface AreasFile {
+  level: "county" | "place";
+  state: string;
+  geography: { vintage: number; provenance: Provenance };
+  survey: { vintage: string; provenance: Provenance };
+  areas: Record<string, AreaFacts>;
+}
+
+/** Coverage state of a local division (contracts 8.10). Absence = "none". */
+export type CoverageState = "covered" | "partial" | "withheld";
+export interface CoverageDivision {
+  state: CoverageState;
+  seats_listed: number;
+  seats_expected: number;
+  roster_as_of: string;
+  reason: string | null;
+  source: string;
+  votes: boolean;
+}
+/** /coverage/{st}.json */
+export interface CoverageShard { state: string; divisions: Record<string, CoverageDivision> }

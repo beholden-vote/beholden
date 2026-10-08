@@ -17,7 +17,8 @@ published", not as an error.
 | `bills/…`, `bills/index.json` | **Synthetic.** Live bill pages did not exist yet; shaped by `DATA-CONTRACTS.md` 8.3 around a real roll call; cosponsor names are placeholders |
 | `areas/…` | **Synthetic**, shaped by 8.4; numbers are plausible, not Census figures |
 | `coverage/tn.json` | **Synthetic**, shaped by 8.10: one `covered`, one `withheld`, one `partial` |
-| `pins/county/tn.json` | **Synthetic**, 8.11 |
+| `pins/county/tn.json`, `pins/place/tn.json` | **Synthetic**, 8.11 |
+| `coverage.json` → `sources.{census_gazetteer,sumner_county,fec}.changed_at` | **Added for WO-37**: an optional per-source "last changed" date so the coverage page can be exercised with checked and changed dates that differ (and one pair that match). The contract defines no such field yet; see the WO-37 PR |
 | `positions/house.json` | **Synthetic**, 8.7; three placeholder members including an independent (`with_other_party: null`) |
 
 Synthetic names read "Fixture Member …" on purpose. Never present fixture numbers as facts.
