@@ -793,6 +793,15 @@ adapter's own structural gate. A withheld locality is served from its last good 
 and its keys are passed to publish in `dist/publish_hints.json` (beside, not inside, the
 serving tree) with the one-time map from the seat-keyed ids published before WO-22b.
 
+*Status (WO-22b, shared files and at-large members):* a `SourceRef` may name a `shared`
+source: one export covering many localities, fetched once per run and split into one slice
+per locality, each then gated, landed and kept as last good on its own. If the shared file
+cannot be fetched or split, every locality it feeds is withheld (last good served) and the
+run continues; a page source's network error still fails the run. A `RosterRow` with
+`at_large: true` is a member of the body without a seat label (elected at large, or the
+source lists no seat): several under one title are separate people, not a duplicate seat,
+and the duplicate-seat gate applies only to seat-labelled rows and the executive.
+
 
 Local rosters (Tennessee through CTAS and MTAS; metros through Legistar) are built against
 **one** interface in `pipelines/beholden_etl/sources/roster.py`, so a new locality is a spec
@@ -843,7 +852,9 @@ in `positions_cover`, as §8.3 already requires.
 ### 8.10 Coverage state per division — WO-22b · **shipped**
 
 *Status (WO-22b):* written by `build/coverage_divisions.py`. `partial` is not emitted yet (no
-current source declares a vacant seat); `seats_expected` is the spec's seat maximum.
+current source declares a vacant seat); `seats_expected` is the spec's seat minimum (the size the source states; equal to the maximum for a fixed-size body).
+A `covered` entry may carry a plain source note in `reason` where the source disagrees with
+itself without failing the gate (e.g. `roster lists 40; county page states 35`).
 
 
 Who we cover, said plainly. **`/coverage/{st}.json`** (one file per state that has at least one

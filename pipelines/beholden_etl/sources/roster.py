@@ -18,11 +18,26 @@ the landed page, never the network.
 
 PARTY is `"U"` (not published by the source) unless a row states one. Never inferred,
 never `"NP"`.
+
+SHARED FILES. Some publishers export one file covering many localities (a statewide
+directory). A spec whose `SourceRef.shared` names a `SharedSource` gets its page from
+that file: it is downloaded ONCE per run (whatever the number of localities), split
+into one slice per locality, and each slice is then gated, landed and kept as last
+good exactly like a page of its own. If the shared file itself cannot be fetched or
+split, every locality it feeds is withheld (last good served) and the run continues:
+that, and only that, is how a shared fetch differs from a page fetch.
+
+AT-LARGE MEMBERS. A row with no seat label is either the executive (one per title) or,
+with `at_large=True`, a member of the body whose seat is not separately labelled
+(elected at large, or the source lists no seat). Several of those under one title are
+separate people, not a duplicate seat; the person check still applies.
 """
 from __future__ import annotations
 
 import json
 import re
+import threading
+import time
 import uuid
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -53,6 +68,9 @@ class RosterRow:
     contact: dict = field(default_factory=dict)    # any of phone / email / url
     source_row_url: str | None = None
     photo_url: str | None = None      # linked, never re-hosted (see the terms_ref)
+    # A member of the body with no seat label (see the module doc). False with no
+    # seat label = the executive.
+    at_large: bool = False
 
 
 @dataclass(frozen=True)
@@ -60,6 +78,7 @@ class SourceRef:
     source_key: str                   # the config.SOURCES key this spec generates
     url: str                          # the roster page
     adapter: str                      # an ADAPTERS id
+    shared: str | None = None         # a SHARED id: the page is a slice of that file
 
 
 @dataclass(frozen=True)
@@ -112,15 +131,37 @@ class Adapter:
     # WO-22b one-time id migration: the seat-keyed id a row was published under
     # before ids became person-keyed. Delete once the old keys are gone.
     legacy_person_id: Callable[[RosterRow], str] | None = None
+    # A plain source note for a locality that PASSED its gate but where the
+    # source disagrees with itself (e.g. more members listed than its stated
+    # size). Carried as the coverage entry's `reason` on `covered` (§8.10).
+    note: Callable[[RosterSpec, list[RosterRow]], str | None] | None = None
+
+
+@dataclass(frozen=True)
+class SharedSource:
+    """One file (or a few, fetched together) that carries many localities."""
+    key: str                             # stable id (logs, the memo)
+    files: tuple[tuple[str, str], ...]   # (name, url), each fetched once per run
+    # {name: bytes} -> {locality_id: slice bytes}. Raises on a file it cannot read.
+    split: Callable[[dict[str, bytes]], dict[str, bytes]]
 
 
 ADAPTERS: dict[str, Adapter] = {}
+SHARED: dict[str, SharedSource] = {}
+
+
+# Modules (under sources/) whose SPECS list registers localities. One line each,
+# append-only, so parallel additions stay one-line diffs.
+SPEC_MODULES = (
+    "tn_local",
+)
 
 
 def specs() -> list[RosterSpec]:
     """Every registered locality, in a stable order."""
-    from . import tn_local
-    return list(tn_local.SPECS)
+    import importlib
+    return [s for m in SPEC_MODULES
+            for s in importlib.import_module(f"{__package__}.{m}").SPECS]
 
 
 def reported_by(source_key: str) -> str | None:
@@ -145,7 +186,8 @@ def check(spec: RosterSpec, rows: list[RosterRow]) -> None:
     names = [n for n, c in Counter(slug(r.name) for r in rows).items() if c > 1]
     if names:
         raise RosterError(f"{spec.name} {spec.body}: the same person is listed twice ({names})")
-    seats = Counter((r.office_title, r.seat_label) for r in rows)
+    # At-large members are told apart by person (checked above), not by seat.
+    seats = Counter((r.office_title, r.seat_label) for r in rows if not r.at_large)
     over = sorted(f"{t} {s or 'at large'}" for (t, s), c in seats.items()
                   if c > (spec.seat_size if s else 1))
     if over:
@@ -158,6 +200,11 @@ def check(spec: RosterSpec, rows: list[RosterRow]) -> None:
 
 def parse(spec: RosterSpec, raw: bytes) -> list[RosterRow]:
     return ADAPTERS[spec.source.adapter].parse(raw, spec)
+
+
+def note(spec: RosterSpec, rows: list[RosterRow]) -> str | None:
+    fn = ADAPTERS[spec.source.adapter].note
+    return fn(spec, rows) if fn else None
 
 
 # ── Landed state ────────────────────────────────────────────────────────────
@@ -188,12 +235,57 @@ def load(spec: RosterSpec, raw_dir: str | Path, manifest: dict) -> tuple[list[Ro
 
 # ── Fetch (network) ─────────────────────────────────────────────────────────
 
+USER_AGENT = "Beholden roster fetch, maintainers@beholden.vote (+https://beholden.vote)"
+SHARED_PAUSE_S = 1.0                  # between the files of one shared source
+
+
 def _get(url: str) -> bytes:
     import httpx
-    r = httpx.get(url, timeout=30.0, follow_redirects=True,
-                  headers={"User-Agent": "beholden.vote ETL (+https://beholden.vote)"})
-    r.raise_for_status()
+    r = httpx.get(url, timeout=60.0, follow_redirects=True,
+                  headers={"User-Agent": USER_AGENT})
+    r.raise_for_status()                # a 403 / 429 stops here: no retry, no workaround
     return r.content
+
+
+# One download per shared source per run, however many localities (threads) ask.
+# ponytail: memo keyed on (source, raw dir) for the life of the process; one
+# process is one run. A long-lived caller would clear _shared_memo per run.
+_shared_lock = threading.Lock()
+_shared_memo: dict[tuple[str, str], dict[str, bytes] | RosterError] = {}
+
+
+def _shared_slices(shared: SharedSource, raw: Path) -> dict[str, bytes]:
+    memo_key = (shared.key, str(Path(raw).resolve()))
+    with _shared_lock:
+        if memo_key not in _shared_memo:
+            try:
+                files = {}
+                for i, (name, url) in enumerate(shared.files):
+                    if i:
+                        time.sleep(SHARED_PAUSE_S)
+                    files[name] = _get(url)
+                # Only the slices are kept (landed per locality): a statewide export
+                # can carry fields we never publish, so the whole file is not stored.
+                _shared_memo[memo_key] = shared.split(files)
+            # Approved scope (WO-22b): a shared file that cannot be fetched or
+            # split withholds every locality it feeds, and only those.
+            except Exception as e:  # noqa: BLE001
+                print(f"fetch: shared source {shared.key} FAILED: {type(e).__name__}: {e}")
+                _shared_memo[memo_key] = RosterError(
+                    f"the shared source file could not be read ({type(e).__name__})")
+        got = _shared_memo[memo_key]
+    if isinstance(got, RosterError):
+        raise got
+    return got
+
+
+def _page(spec: RosterSpec, raw: Path) -> bytes:
+    if not spec.source.shared:
+        return _get(spec.source.url)
+    slices = _shared_slices(SHARED[spec.source.shared], raw)
+    if spec.locality_id not in slices:
+        raise RosterError(f"{spec.name} {spec.body}: not listed in the shared source file")
+    return slices[spec.locality_id]
 
 
 def _restore_last_good(spec: RosterSpec, raw: Path) -> dict | None:
@@ -229,14 +321,16 @@ def fetch(spec: RosterSpec, raw: Path, prior: dict) -> dict | None:
     locality: the last good page stays landed and the manifest row keeps its
     ORIGINAL retrieved_at, plus the reason. Any other error propagates."""
     key = spec.source.source_key
-    page = _get(spec.source.url)
-    rows = parse(spec, page)
     d = Path(raw) / key
     d.mkdir(parents=True, exist_ok=True)
+    page = None
     try:
+        page = _page(spec, Path(raw))   # raises RosterError only for a shared source
+        rows = parse(spec, page)
         check(spec, rows)
     except RosterError as e:
-        (d / "rejected.html").write_bytes(page)
+        if page is not None:
+            (d / "rejected.html").write_bytes(page)
         print(f"fetch: roster {spec.locality_id} WITHHELD: {e}")
         last = (prior.get("sources") or {}).get(key)
         if not last or not landed(spec, raw).exists():
@@ -277,6 +371,8 @@ def seat_ocd(spec: RosterSpec, label: str | None) -> str:
 
 
 def office_display(spec: RosterSpec, row: RosterRow) -> str:
+    if row.at_large:
+        return f"{spec.name} {spec.body}"
     if row.seat_label is None:
         return f"{row.office_title} of {spec.name}"
     return f"{spec.name} {spec.body} · {row.seat_label}"
@@ -293,6 +389,7 @@ def spine_rows(spec: RosterSpec, rows: list[RosterRow]) -> dict[str, list[dict]]
     for r in rows:
         ocd = seat_ocd(spec, r.seat_label)
         pid = person_id(spec, r.name)
+        executive = r.seat_label is None and not r.at_large
         if ocd != spec.ocd_id:
             out["divisions"].append({
                 "ocd_id": ocd, "parent_ocd": spec.ocd_id, "level": spec.level,
@@ -303,10 +400,9 @@ def spine_rows(spec: RosterSpec, rows: list[RosterRow]) -> dict[str, list[dict]]
                                    f"office:{ocd}:{slug(r.office_title)}:{slug(r.name)}"))
         out["offices"].append({
             "office_id": office_id, "ocd_id": ocd,
-            # ponytail: at large = executive holds for a mayor; an at-large
-            # council seat would need a branch on the row.
-            "branch": "executive" if r.seat_label is None else "legislative",
-            "chamber": None if r.seat_label is None else spec.chamber,
+            # No seat label and not at large = the executive (a mayor).
+            "branch": "executive" if executive else "legislative",
+            "chamber": None if executive else spec.chamber,
             "role": r.office_title})
         out["persons"].append({"person_id": pid, "full_name": r.name, "given_name": None,
                                "family_name": None, "birth_year": None, "wikidata_qid": None})
