@@ -90,7 +90,8 @@ def parse_sumner(page_html: str) -> list[dict]:
     the official, which is what the dossier cites.
     """
     rows: list[dict] = []
-    for block in re.split(r"(?=elementor-widget-theme-post-title)", page_html)[1:]:
+    chunks = re.split(r"(?=elementor-widget-theme-post-title)", page_html)
+    for prev, block in zip(chunks, chunks[1:]):
         title = re.search(r'<h3[^>]*><a href="([^"]+)"[^>]*>(.*?)</a></h3>', block, re.DOTALL)
         excerpt = re.search(
             r'theme-post-excerpt.*?<div class="elementor-widget-container">\s*(.*?)\s*</div>',
@@ -101,12 +102,16 @@ def parse_sumner(page_html: str) -> list[dict]:
         if not district:
             continue                    # not a district post (page furniture)
         email = re.search(r'mailto:([^"\']+)', block)
-        photo = re.search(r'<img[^>]+src="([^"]+)"', block)
+        # The page renders each post's image BEFORE its title widget, so this
+        # person's photo is the last <img> of the chunk that precedes the title.
+        # Reading the first <img> of the title's own chunk gives the NEXT person's.
+        photos = re.findall(r'<img[^>]+src="([^"]+)"', prev)
+        photo = photos[-1] if photos else None
         rows.append({
             "full_name": _text(title.group(2)),
             "district": int(district.group(1)),
             "email": email.group(1).strip() if email else None,
-            "photo_url": photo.group(1) if photo else None,
+            "photo_url": photo,
             "source_record_url": title.group(1),
         })
     return rows
