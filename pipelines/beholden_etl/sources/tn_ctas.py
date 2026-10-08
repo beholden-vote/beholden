@@ -26,15 +26,23 @@ THE GATE, per county. The expected size is the "Number of Commissioners" the cou
 own CTAS page states (STATED_SIZE, read 2026-10-08). A county is WITHHELD when the
 export lists fewer members than that (a partial roster), or no single executive. It
 is published when the export lists more, with a plain source note on its coverage
-entry ("roster lists 40; county page states 35"): the two CTAS pages disagree, and
+entry ("roster lists 12; county page states 11"): the two CTAS pages disagree, and
 the reader is told so. The ceiling is the statutory maximum of 25 members for a
-county legislative body (Davidson's charter council: 40), so a county page that
-under-states its size never passes a duplicated or merged export unnoticed.
+county legislative body, so a county page that under-states its size never passes
+a duplicated or merged export unnoticed.
 The gate counts the executive too: seats = (stated + 1, ceiling + 1).
 
 PARTY is not in the export: "U".
 
-Sumner County is NOT taken from CTAS: its own roster (tn_local) carries districts.
+NO TERM DATES. The export publishes none, so none is served: `term_start` is the
+internal sentinel 1900-01-01 (terms.start_date is NOT NULL in the spine). Roster
+terms are always current (end_date NULL), and only ended terms are ever served
+(build._previous_roles), so the sentinel never reaches a dossier or a pin; a test
+holds that.
+
+NOT FROM CTAS: Sumner County (its own roster, tn_local, carries districts) and
+Davidson County (a consolidated government: its "commissioners" are Nashville's
+Metro Council, published once through the cities source's Nashville entry).
 """
 from __future__ import annotations
 
@@ -56,8 +64,9 @@ TERMS_REF = "docs/research/ctas-permission-2026-10.md"
 REPORTED_BY = "UT County Technical Assistance Service (CTAS)"
 USPS = "TN"
 
-# Covered by its own, finer source (districts): tn_local.
-EXCLUDED = {"Sumner"}
+# Sumner: its own, finer source (districts). Davidson: consolidated with Nashville,
+# whose Metro Council and mayor come from the cities source.
+EXCLUDED = {"Sumner", "Davidson"}
 
 # "Number of Commissioners" from each county's CTAS page, read 2026-10-08.
 STATED_SIZE = {
@@ -79,17 +88,14 @@ STATED_SIZE = {
     "Washington": 15, "Wayne": 14, "Weakley": 18, "White": 14, "Williamson": 24, "Wilson": 25,
 }
 # The size ceiling: a county legislative body has at most 25 members (Tenn. Code Ann.
-# § 5-5-102); a metropolitan charter sets its own (Davidson: 35 district + 5 at large).
+# § 5-5-102).
 STATUTORY_CEILING = 25
-CEILING = {"Davidson": 40}
-# The body each export title names. Davidson and Moore are metropolitan governments.
+# The body each export title names. Moore is a metropolitan government.
 BODY = {"County Commissioner": "County Commission", "Metro Councilmember": "Metropolitan Council"}
-METRO = {"Davidson", "Moore"}
+METRO = {"Moore"}
 EXECUTIVE_TITLES = {"County Mayor", "County Executive", "Metro Mayor", "Metro Executive"}
-# The date the current body took office: TN county officials elected in August 2026
-# took office on September 1, 2026. Davidson's Metro Council was elected in 2023.
-TERM_START = "2026-09-01"
-TERM_START_OVERRIDE = {"Davidson": "2023-09-01"}
+# The export publishes no term dates. Internal sentinel, never served (module doc).
+TERM_START = "1900-01-01"
 
 # ── Email allow-rule (owner decision 2026-10-08) ─────────────────────────────
 # An email is published only when its domain is a government domain: any *.gov,
@@ -202,7 +208,7 @@ SHARED[SHARED_KEY] = SharedSource(
 
 def _spec(county: str) -> RosterSpec:
     stated = STATED_SIZE[county]
-    ceiling = CEILING.get(county, max(STATUTORY_CEILING, stated))
+    ceiling = max(STATUTORY_CEILING, stated)
     metro = county in METRO
     return RosterSpec(
         locality_id=locality_id(county), ocd_id=D.county_ocd(USPS, county), level="county",
@@ -211,7 +217,7 @@ def _spec(county: str) -> RosterSpec:
                          ADAPTER, shared=SHARED_KEY),
         seats=(stated + 1, ceiling + 1),          # members + the one executive
         terms_ref=TERMS_REF, chamber="county_commission", reported_by=REPORTED_BY,
-        term_start=TERM_START_OVERRIDE.get(county, TERM_START))
+        term_start=TERM_START)
 
 
 SPECS = [_spec(c) for c in sorted(STATED_SIZE) if c not in EXCLUDED]

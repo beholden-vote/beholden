@@ -1,7 +1,7 @@
 """WO-22b Part B: Tennessee counties from the CTAS directory exports. Offline.
 
 Fixtures (tests/fixtures/roster/ctas_*.csv) are the two real public CTAS exports
-fetched 2026-10-08, trimmed to eight counties and redacted: street address, city,
+fetched 2026-10-08, trimmed to nine counties and redacted: street address, city,
 ZIP, fax and phone blanked, and the local part of every non-government email
 replaced by "redacted" (the domain, which is all the allow-rule reads, is kept).
 """
@@ -22,7 +22,7 @@ COMMISSIONERS = (ROSTER_FIXTURES / "ctas_commissioners.csv").read_bytes()
 EXECUTIVES = (ROSTER_FIXTURES / "ctas_executives.csv").read_bytes()
 SPEC = {s.name: s for s in tn_ctas.SPECS}
 # In the fixture: lists >= the county page's size, one executive each.
-COVERED = {"Davidson", "Grundy", "Hamilton", "Lake", "Unicoi", "Wilson"}
+COVERED = {"Grundy", "Hamilton", "Lake", "Meigs", "Unicoi", "Wilson"}
 
 
 def _serve(monkeypatch, commissioners: bytes = COMMISSIONERS) -> list[str]:
@@ -84,18 +84,18 @@ def built(tmp_path_factory):
 
 # ── specs ─────────────────────────────────────────────────────────────────────
 
-def test_ninety_four_counties_sumner_left_to_its_own_roster():
-    assert len(tn_ctas.SPECS) == 94 and "Sumner" not in SPEC
-    assert len({s.source.source_key for s in tn_ctas.SPECS}) == 94
-    assert len({s.ocd_id for s in tn_ctas.SPECS}) == 94
+def test_ninety_three_counties_sumner_and_davidson_left_to_their_own_sources():
+    assert len(tn_ctas.SPECS) == 93 and not {"Sumner", "Davidson"} & set(SPEC)
+    assert len({s.source.source_key for s in tn_ctas.SPECS}) == 93
+    assert len({s.ocd_id for s in tn_ctas.SPECS}) == 93
     assert all(s in roster.specs() for s in tn_ctas.SPECS)
 
 
 def test_each_gate_is_the_stated_size_up_to_the_ceiling_plus_the_executive():
     for name, s in SPEC.items():
         stated = tn_ctas.STATED_SIZE[name]
-        assert s.seats == (stated + 1, tn_ctas.CEILING.get(name, max(25, stated)) + 1)
-    assert SPEC["Davidson"].seats == (36, 41) and SPEC["Knox"].seats == (12, 26)
+        assert s.seats == (stated + 1, max(25, stated) + 1)
+    assert SPEC["Knox"].seats == (12, 26)
 
 
 def test_every_spec_credits_and_links_back_to_ctas():
@@ -130,13 +130,14 @@ def test_email_allow_rule(county, email, published):
 
 def test_the_split_keeps_only_publishable_fields():
     slices = tn_ctas.split({"commissioners.csv": COMMISSIONERS, "executives.csv": EXECUTIVES})
-    assert set(slices) == {tn_ctas.locality_id(c) for c in COVERED | {"Knox", "Sumner"}}
+    assert set(slices) == {tn_ctas.locality_id(c)
+                           for c in COVERED | {"Knox", "Sumner", "Davidson"}}
     for body in slices.values():
         doc = json.loads(body)
         for p in doc["members"] + doc["executives"]:
             assert set(p) == {"name", "title", "email"}
             assert p["email"] is None or "redacted" not in p["email"]
-    davidson = json.loads(slices["tn-davidson-county"])
+    davidson = json.loads(slices["tn-davidson-county"])        # in the export, not a spec
     assert len(davidson["members"]) == 40
     assert davidson["executives"] == [{"email": "mayor@nashville.gov",
                                        "name": "Freddie O'Connell", "title": "Metro Mayor"}]
@@ -149,7 +150,7 @@ def test_a_changed_export_withholds_every_county(tmp_path, monkeypatch):
 
 # ── gates and coverage ──────────────────────────────────────────────────────
 
-def test_shared_exports_are_fetched_once_each_for_all_94_counties(tmp_path, monkeypatch):
+def test_shared_exports_are_fetched_once_each_for_all_93_counties(tmp_path, monkeypatch):
     calls = _serve(monkeypatch)
     frags = _fetch(tmp_path)
     assert calls == [tn_ctas.COMMISSIONERS_CSV, tn_ctas.EXECUTIVES_CSV]
@@ -166,9 +167,10 @@ def test_coverage_names_each_county_and_its_source_note(built):
     ctas = {k: v for k, v in cov.items() if v["source"].startswith("ctas_")}
     assert {SPEC[n].ocd_id for n in COVERED} == set(ctas)
     assert all(v["state"] == "covered" for v in ctas.values())
-    dav = cov[SPEC["Davidson"].ocd_id]
-    assert (dav["reason"], dav["seats_listed"], dav["seats_expected"]) == \
-        ("roster lists 40; county page states 35", 41, 36)
+    meigs = cov[SPEC["Meigs"].ocd_id]
+    assert (meigs["reason"], meigs["seats_listed"], meigs["seats_expected"]) == \
+        ("roster lists 12; county page states 11", 13, 12)
+    assert "ocd-division/country:us/state:tn/county:davidson" not in cov
     assert cov[SPEC["Grundy"].ocd_id]["reason"] is None
     assert SPEC["Knox"].ocd_id not in cov
 
@@ -178,7 +180,7 @@ def test_coverage_names_each_county_and_its_source_note(built):
 def test_every_dossier_credits_ctas_and_links_to_its_county_page(built):
     data, _ = built
     docs = _ctas_docs(data)
-    assert len(docs) == 40 + 9 + 11 + 9 + 9 + 25 + 6          # members + one executive each
+    assert len(docs) == 9 + 11 + 9 + 12 + 9 + 25 + 6          # members + one executive each
     for d in docs.values():
         prov = d["identity"]["provenance"]
         county = d["identity"]["office"]["display"]
@@ -195,14 +197,17 @@ def test_no_address_fax_or_personal_email_is_published(built):
     assert "redacted" not in text
     emails = {d["identity"]["contact"].get("email") for d in _ctas_docs(data).values()
               if (d["identity"].get("contact") or {}).get("email")}
-    assert emails and all(e.lower().endswith((".gov", ".tn.us")) for e in emails)
+    own = set(tn_ctas.COUNTY_DOMAINS.values())
+    assert emails and all(e.lower().endswith((".gov", ".tn.us"))
+                          or e.lower().split("@")[1] in own for e in emails)
+    assert any(e.lower().endswith("@meigscountytn.org") for e in emails)   # Meigs's own site
 
 
 def test_offices_read_as_the_body_and_the_mayor(built):
     data, _ = built
     displays = {d["identity"]["office"]["display"] for d in _ctas_docs(data).values()}
-    assert {"Grundy County Commission", "County Mayor of Grundy",
-            "Davidson Metropolitan Council", "Metro Mayor of Davidson"} <= displays
+    assert {"Grundy County Commission", "County Mayor of Grundy"} <= displays
+    assert not any("Davidson" in x for x in displays)
 
 
 def test_county_pins_carry_the_commission_and_the_mayor(built):
@@ -233,3 +238,17 @@ def test_a_broken_county_withholds_exactly_one_county(built, tmp_path, monkeypat
     assert sorted(_ctas_docs(data)) == sorted(_ctas_docs(good))
     hints = json.loads((data.parent / coverage_divisions.HINTS_FILE).read_text(encoding="utf-8"))
     assert len(hints["live"]) == 10                            # Grundy's 9 + its mayor
+
+
+def test_no_term_date_is_invented(built):
+    """The export publishes no term dates; the spine's NOT NULL start_date holds
+    an internal sentinel that no served object may carry."""
+    data, _ = built
+    assert {s.term_start for s in tn_ctas.SPECS} == {"1900-01-01"}
+    served = list(data.rglob("*.json"))
+    assert served
+    for p in served:
+        assert "1900-01-01" not in p.read_text(encoding="utf-8"), p.relative_to(data)
+    for d in _ctas_docs(data).values():
+        assert d["identity"]["tenure"]["first_took_office"] is None
+        assert not d.get("previous_roles")

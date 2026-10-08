@@ -801,7 +801,7 @@ run continues; a page source's network error still fails the run. A `RosterRow` 
 `at_large: true` is a member of the body without a seat label (elected at large, or the
 source lists no seat): several under one title are separate people, not a duplicate seat,
 and the duplicate-seat gate applies only to seat-labelled rows and the executive.
-Tennessee's 94 other counties (all but Sumner) are specs of this kind: `sources/tn_ctas.py`, two CTAS exports shared by every county.
+Tennessee's other 93 counties (all but Sumner and Davidson) are specs of this kind: `sources/tn_ctas.py`, two CTAS exports shared by every county.
 
 
 Local rosters (Tennessee through CTAS and MTAS; metros through Legistar) are built against

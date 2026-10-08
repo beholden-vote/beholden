@@ -44,8 +44,8 @@ authoritative for term dates) and show "as reported by CTAS" with the retrieval 
 
 ## How the pipeline applies it (WO-22b Part B)
 
-This file is the `terms_ref` of the 94 county specs in
-`pipelines/beholden_etl/sources/tn_ctas.py`; Sumner County is left to its own roster.
+This file is the `terms_ref` of the 93 county specs in
+`pipelines/beholden_etl/sources/tn_ctas.py`. Sumner County is left to its own roster, and Davidson (consolidated with Nashville) to the cities source.
 
 - **Fetch:** the County Commissioners and the County Executives and Mayors CSV exports, each
   once per run, 1s apart, and only when a county's 7-day SLA is due. The User-Agent names the
@@ -61,3 +61,6 @@ This file is the `terms_ref` of the 94 county specs in
 - **Expected size:** "Number of Commissioners" on each county's CTAS page, read once on
   2026-10-08 and fixed in the spec. These pages were read to set the expected sizes only;
   nothing is republished from them.
+- **Term dates:** the exports publish none, so none is served. The spine's NOT NULL
+  `start_date` holds the internal sentinel 1900-01-01, which a test keeps out of every served
+  object.
