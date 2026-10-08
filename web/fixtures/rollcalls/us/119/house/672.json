@@ -1,0 +1,373 @@
+{
+ "bill_id": "us/119/hr/9340",
+ "bill_title": "Ratepayer Protection Act",
+ "by_party": [
+  {
+   "nay": 3,
+   "not_voting": 5,
+   "party": "D",
+   "present": 0,
+   "yea": 206
+  },
+  {
+   "nay": 0,
+   "not_voting": 0,
+   "party": "I",
+   "present": 0,
+   "yea": 1
+  },
+  {
+   "nay": 0,
+   "not_voting": 7,
+   "party": "R",
+   "present": 0,
+   "yea": 210
+  }
+ ],
+ "chamber": "house",
+ "description": "Ratepayer Protection Act",
+ "generated_at": "2026-10-03T17:23:51+00:00",
+ "held_at": "2026-09-16",
+ "policy_area": "Energy",
+ "positions": [
+  {
+   "name": "Alma S. Adams",
+   "ocd_id": "ocd-division/country:us/state:nc/cd:12",
+   "party": "D",
+   "person_id": "effd5144-0f35-5665-a776-449ac01a4955",
+   "position": "yea",
+   "state": "NC"
+  },
+  {
+   "name": "Robert B. Aderholt",
+   "ocd_id": "ocd-division/country:us/state:al/cd:4",
+   "party": "R",
+   "person_id": "6d4a07b7-4872-568b-96be-200d77710440",
+   "position": "yea",
+   "state": "AL"
+  },
+  {
+   "name": "Pete Aguilar",
+   "ocd_id": "ocd-division/country:us/state:ca/cd:33",
+   "party": "D",
+   "person_id": "ab5a7785-07e1-5075-a6bc-d9c5d4891759",
+   "position": "yea",
+   "state": "CA"
+  },
+  {
+   "name": "Mark Alford",
+   "ocd_id": "ocd-division/country:us/state:mo/cd:4",
+   "party": "R",
+   "person_id": "9267b56c-1258-5c44-8338-18d4553cc92f",
+   "position": "yea",
+   "state": "MO"
+  },
+  {
+   "name": "Rick W. Allen",
+   "ocd_id": "ocd-division/country:us/state:ga/cd:12",
+   "party": "R",
+   "person_id": "1b1acb0c-a526-58ef-9739-13fb64ed247f",
+   "position": "yea",
+   "state": "GA"
+  },
+  {
+   "name": "Gabe Amo",
+   "ocd_id": "ocd-division/country:us/state:ri/cd:1",
+   "party": "D",
+   "person_id": "fa74672b-838d-58f2-8a76-27a56621ce4b",
+   "position": "yea",
+   "state": "RI"
+  },
+  {
+   "name": "Mark E. Amodei",
+   "ocd_id": "ocd-division/country:us/state:nv/cd:2",
+   "party": "R",
+   "person_id": "96677e70-d637-50bc-829b-55c30c09edd8",
+   "position": "yea",
+   "state": "NV"
+  },
+  {
+   "name": "Yassamin Ansari",
+   "ocd_id": "ocd-division/country:us/state:az/cd:3",
+   "party": "D",
+   "person_id": "44e09a52-6c9e-5cfe-87fb-06c39ae6e9c4",
+   "position": "yea",
+   "state": "AZ"
+  },
+  {
+   "name": "Jodey C. Arrington",
+   "ocd_id": "ocd-division/country:us/state:tx/cd:19",
+   "party": "R",
+   "person_id": "a7d5ea81-54f6-5fef-b1d1-cf288cf07fde",
+   "position": "yea",
+   "state": "TX"
+  },
+  {
+   "name": "Jake Auchincloss",
+   "ocd_id": "ocd-division/country:us/state:ma/cd:4",
+   "party": "D",
+   "person_id": "6a5bd80d-8287-5b0a-b2d5-e98b9156f58f",
+   "position": "yea",
+   "state": "MA"
+  },
+  {
+   "name": "Brian Babin",
+   "ocd_id": "ocd-division/country:us/state:tx/cd:36",
+   "party": "R",
+   "person_id": "3f92eee6-7705-5eea-b2f2-8d9c46938cee",
+   "position": "yea",
+   "state": "TX"
+  },
+  {
+   "name": "Don Bacon",
+   "ocd_id": "ocd-division/country:us/state:ne/cd:2",
+   "party": "R",
+   "person_id": "77d0bd65-399c-59e5-9e2d-64ee964066ab",
+   "position": "yea",
+   "state": "NE"
+  },
+  {
+   "name": "James R. Baird",
+   "ocd_id": "ocd-division/country:us/state:in/cd:4",
+   "party": "R",
+   "person_id": "2b75831f-a27a-53f5-8387-79b709b9111d",
+   "position": "yea",
+   "state": "IN"
+  },
+  {
+   "name": "Troy Balderson",
+   "ocd_id": "ocd-division/country:us/state:oh/cd:12",
+   "party": "R",
+   "person_id": "b28b363e-56ec-50da-8fca-ac6b18d5c5e5",
+   "position": "yea",
+   "state": "OH"
+  },
+  {
+   "name": "Becca Balint",
+   "ocd_id": "ocd-division/country:us/state:vt/cd:1",
+   "party": "D",
+   "person_id": "af5e0888-626e-5f70-977e-005d0b3c5947",
+   "position": "yea",
+   "state": "VT"
+  },
+  {
+   "name": "Andy Barr",
+   "ocd_id": "ocd-division/country:us/state:ky/cd:6",
+   "party": "R",
+   "person_id": "42226147-10c9-5c79-9fc6-f61322ddc9ec",
+   "position": "yea",
+   "state": "KY"
+  },
+  {
+   "name": "Nanette Diaz Barragán",
+   "ocd_id": "ocd-division/country:us/state:ca/cd:44",
+   "party": "D",
+   "person_id": "81327102-fa80-5c45-bda9-574a8aa48cf8",
+   "position": "yea",
+   "state": "CA"
+  },
+  {
+   "name": "Tom Barrett",
+   "ocd_id": "ocd-division/country:us/state:mi/cd:7",
+   "party": "R",
+   "person_id": "531c8817-5d0b-5fda-a2df-072559814f47",
+   "position": "yea",
+   "state": "MI"
+  },
+  {
+   "name": "Michael Baumgartner",
+   "ocd_id": "ocd-division/country:us/state:wa/cd:5",
+   "party": "R",
+   "person_id": "4d1907a7-1fa2-5185-8632-8dee601e44c8",
+   "position": "yea",
+   "state": "WA"
+  },
+  {
+   "name": "Aaron Bean",
+   "ocd_id": "ocd-division/country:us/state:fl/cd:4",
+   "party": "R",
+   "person_id": "f21d80d9-23a0-58b0-96c3-c8cf28f3e521",
+   "position": "yea",
+   "state": "FL"
+  },
+  {
+   "name": "Joyce Beatty",
+   "ocd_id": "ocd-division/country:us/state:oh/cd:3",
+   "party": "D",
+   "person_id": "570fdc11-4e64-548f-b65b-a96b6bb2eb8c",
+   "position": "yea",
+   "state": "OH"
+  },
+  {
+   "name": "Nicholas J. Begich III",
+   "ocd_id": "ocd-division/country:us/state:ak/cd:1",
+   "party": "R",
+   "person_id": "8dda2328-60be-53f8-b966-3133f0264490",
+   "position": "yea",
+   "state": "AK"
+  },
+  {
+   "name": "Wesley Bell",
+   "ocd_id": "ocd-division/country:us/state:mo/cd:1",
+   "party": "D",
+   "person_id": "c89cf6e6-2f2b-55f2-b533-1bd8dd05b2f4",
+   "position": "yea",
+   "state": "MO"
+  },
+  {
+   "name": "Cliff Bentz",
+   "ocd_id": "ocd-division/country:us/state:or/cd:2",
+   "party": "R",
+   "person_id": "02036389-4ebb-5b45-851b-272db934075b",
+   "position": "yea",
+   "state": "OR"
+  },
+  {
+   "name": "Ami Bera",
+   "ocd_id": "ocd-division/country:us/state:ca/cd:6",
+   "party": "D",
+   "person_id": "f8341baa-8ccd-5b12-a59b-2df7901925ee",
+   "position": "yea",
+   "state": "CA"
+  },
+  {
+   "name": "Jack Bergman",
+   "ocd_id": "ocd-division/country:us/state:mi/cd:1",
+   "party": "R",
+   "person_id": "1a5c4f84-8793-5760-94db-30391d3194ab",
+   "position": "yea",
+   "state": "MI"
+  },
+  {
+   "name": "Donald S. Beyer, Jr.",
+   "ocd_id": "ocd-division/country:us/state:va/cd:8",
+   "party": "D",
+   "person_id": "3969a4aa-2c87-5d18-8dc7-496f4a9a250f",
+   "position": "yea",
+   "state": "VA"
+  },
+  {
+   "name": "Stephanie I. Bice",
+   "ocd_id": "ocd-division/country:us/state:ok/cd:5",
+   "party": "R",
+   "person_id": "531dcf82-4c1f-5182-b3ae-6dfcd5412b32",
+   "position": "yea",
+   "state": "OK"
+  },
+  {
+   "name": "Andy Biggs",
+   "ocd_id": "ocd-division/country:us/state:az/cd:5",
+   "party": "R",
+   "person_id": "5e44d9a2-ac50-50ff-971b-2699efa351da",
+   "position": "not_voting",
+   "state": "AZ"
+  },
+  {
+   "name": "Sheri Biggs",
+   "ocd_id": "ocd-division/country:us/state:sc/cd:3",
+   "party": "R",
+   "person_id": "405ab9f2-da0e-5885-bf69-33531d6cbe08",
+   "position": "yea",
+   "state": "SC"
+  },
+  {
+   "name": "Gus M. Bilirakis",
+   "ocd_id": "ocd-division/country:us/state:fl/cd:12",
+   "party": "R",
+   "person_id": "55260018-4b89-5973-b68b-6cc64c8baeeb",
+   "position": "yea",
+   "state": "FL"
+  },
+  {
+   "name": "Sanford D. Bishop, Jr.",
+   "ocd_id": "ocd-division/country:us/state:ga/cd:2",
+   "party": "D",
+   "person_id": "b3d7d2ba-388b-5e25-9822-637d5d3f1307",
+   "position": "yea",
+   "state": "GA"
+  },
+  {
+   "name": "Everton Blair Jr.",
+   "ocd_id": "ocd-division/country:us/state:ga/cd:13",
+   "party": "D",
+   "person_id": "72090357-e7f9-5596-844b-4db2b45a9b72",
+   "position": "yea",
+   "state": "GA"
+  },
+  {
+   "name": "Lauren Boebert",
+   "ocd_id": "ocd-division/country:us/state:co/cd:4",
+   "party": "R",
+   "person_id": "51d6ff41-9f92-57b1-a935-98862bbc3b86",
+   "position": "yea",
+   "state": "CO"
+  },
+  {
+   "name": "Suzanne Bonamici",
+   "ocd_id": "ocd-division/country:us/state:or/cd:1",
+   "party": "D",
+   "person_id": "fd0e5657-197a-58d1-bf4b-08f06127ebbc",
+   "position": "yea",
+   "state": "OR"
+  },
+  {
+   "name": "Mike Bost",
+   "ocd_id": "ocd-division/country:us/state:il/cd:12",
+   "party": "R",
+   "person_id": "09f5f6aa-c33c-519b-abe3-0f6372a9b104",
+   "position": "yea",
+   "state": "IL"
+  },
+  {
+   "name": "Brendan F. Boyle",
+   "ocd_id": "ocd-division/country:us/state:pa/cd:2",
+   "party": "D",
+   "person_id": "e839d9c8-d2b7-5e07-b679-3953d1bff4ca",
+   "position": "not_voting",
+   "state": "PA"
+  },
+  {
+   "name": "Josh Brecheen",
+   "ocd_id": "ocd-division/country:us/state:ok/cd:2",
+   "party": "R",
+   "person_id": "f761bdd3-06cd-59db-be71-a0a85d9dc433",
+   "position": "yea",
+   "state": "OK"
+  },
+  {
+   "name": "Robert P. Bresnahan, Jr.",
+   "ocd_id": "ocd-division/country:us/state:pa/cd:8",
+   "party": "R",
+   "person_id": "bdc382be-9188-5358-8289-4b3e8e4d9f8a",
+   "position": "yea",
+   "state": "PA"
+  },
+  {
+   "name": "Shontel M. Brown",
+   "ocd_id": "ocd-division/country:us/state:oh/cd:11",
+   "party": "D",
+   "person_id": "c728a38d-39ab-5cf9-b1b5-0a804c25fa14",
+   "position": "yea",
+   "state": "OH"
+  }
+ ],
+ "positions_cover": "current_members",
+ "provenance": {
+  "grade": "A",
+  "grade_reason": "official_structured",
+  "methodology_id": null,
+  "pipeline_version": "etl-2026.39.1641",
+  "retrieved_at": "2026-10-03T11:10:16+00:00",
+  "source": "voteview",
+  "source_url": "https://clerk.house.gov/Votes/2026312"
+ },
+ "question": "On Motion to Suspend the Rules and Pass, as Amended",
+ "result": "Passed",
+ "roll_call_id": "us/119/house/672",
+ "schema_version": "1.0",
+ "totals": {
+  "nay": 3,
+  "yea": 417
+ },
+ "url": "https://clerk.house.gov/Votes/2026312"
+}

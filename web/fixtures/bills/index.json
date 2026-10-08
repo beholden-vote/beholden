@@ -1,0 +1,22 @@
+{
+ "bills": [
+  {
+   "bill_id": "us/119/s/2403",
+   "last_vote_at": "2026-09-16",
+   "number": "FIXTURE us/119/s/2403",
+   "policy_area": "Labor and Employment",
+   "title": "Retire through Ownership Act"
+  }
+ ],
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "provenance": {
+  "grade": "A",
+  "grade_reason": "official_structured",
+  "methodology_id": null,
+  "pipeline_version": "etl-2026.39.1641",
+  "retrieved_at": "2026-10-03T11:10:16+00:00",
+  "source": "voteview",
+  "source_url": "https://clerk.house.gov/Votes/2026314"
+ },
+ "schema_version": "1.0"
+}

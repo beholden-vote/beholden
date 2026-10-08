@@ -728,3 +728,137 @@ Moving between altitudes — place, person, record — **pushes** a history entr
 browser's Back button steps up one level. Changing a tab within a dossier **replaces** it. A
 reader's own location is never written into a URL: a place is addressed by division id, and a
 remembered place is kept in the browser's storage only.
+
+### 8.7 Position profile — WO-36 · *target*
+
+**`/positions/{chamber}.json`**, `chamber` = `house` | `senate`. One file per chamber, every
+sitting member, every member the same fields. There is **no composite score** and none is ever
+added: each measure is published on its own, with its own formula at `/methodology`.
+
+```jsonc
+{
+  "schema_version": "1.0", "chamber": "house", "generated_at": "…", "scope": "119th Congress",
+  "members": [                       // ordered by person_id
+    { "person_id": "…", "name": "…", "party": "R", "state": "TN",
+      "nominate": { "dim1": 0.41, "dim2": -0.12 },   // Voteview; either may be null, never 0-filled
+      "measures": {
+        "with_own_party":   { "n": 930, "of": 990,  "pct": 93.9 },
+        "with_other_party": { "n": 12,  "of": 140,  "pct": 8.6  },
+        "missed":           { "n": 50,  "of": 1042, "pct": 4.8  },
+        "party_line_by_policy_area": [               // ordered by policy_area, alphabetically
+          { "policy_area": "Health", "n": 41, "of": 44, "pct": 93.2 } ]
+      },
+      "layout": { "x": -0.318, "y": 0.742 } }        // similarity map; null when below the vote floor
+  ],
+  "methodology_ids": { "with_own_party": "…", "with_other_party": "…", "missed": "…",
+                       "party_line": "…", "layout": "…" },
+  "provenance": { "source": "voteview", … }
+}
+```
+
+- **Definitions** reuse §8.3's party-agreement rule: decided votes are `yea`/`nay` only; a
+  party's position is its majority; an evenly split party has none and that vote counts toward
+  neither side. `with_own_party` = votes with the member's own party majority, of the votes
+  where it had one. `with_other_party` = of the roll calls where **both major parties had a
+  majority and the majorities differed**, the votes that matched the *other* party's majority;
+  it is `null` for a member of neither major party, never imputed. `missed` = `not_voting` of
+  all roll calls the member was eligible for (§8.3 *Eligibility*). `party_line_by_policy_area`
+  is `with_own_party` computed per bill policy area; roll calls with no policy area are left
+  out of it and nowhere else.
+- **Floors.** Any `pct` whose `of` is below `key_votes.MIN_AGREEMENT_VOTES` is `null`; `n` and
+  `of` are always exact. A policy area below the floor is omitted for that member.
+- **Layout.** A deterministic 2-D embedding of the agreement matrix `build/graph.py`
+  `co_voting_edges` already computes: no randomness that is not seeded, coordinates rounded to
+  3 decimals and scaled into `[-1, 1]` on both axes, the same procedure for both parties and
+  both chambers. Axes carry no meaning; the file names no cluster, bloc or label and a client
+  must not invent one.
+- **Symmetry.** Every field is defined identically for every member regardless of party; a
+  test builds the artifact from a fixture with parties swapped and requires equal measures.
+
+### 8.8 Roster spec — WO-22b / WO-39 · *target*
+
+Local rosters (Tennessee through CTAS and MTAS; metros through Legistar) are built against
+**one** interface in `pipelines/beholden_etl/sources/roster.py`, so a new locality is a spec
+and a fixture, not a new adapter. The module, not this document, is the source of truth for
+names; this section fixes the shape.
+
+- **`RosterSpec`** (frozen record): `locality_id` (stable slug, e.g. `tn-sumner-county`), `ocd_id`
+  (the division, built with `divisions.place_ocd` / the county rule; a place sharing its name
+  with another passes its GEOID), `level` (`county` | `place`), `name`, `body` (display name of
+  the body, e.g. `County Commission`), `source` (`source_key` from `config.SOURCES`, `url`,
+  `adapter` id), `seats` (`min`, `max` — the gate), `terms_ref` (pointer into
+  `docs/research/` naming the licence determination this spec relies on — **a spec without one
+  does not load**), `grade` (§credibility, `A`–`D`).
+- **An adapter** is `parse(raw: bytes, spec) -> list[RosterRow]`, pure and offline-testable.
+  `RosterRow`: `name`, `office_title`, `seat_label` (or `null` for at-large), `party` (`null` when
+  the source does not state one — never `"NP"` or inferred), `term_start`, `term_end` (each
+  `null` when not published), `contact` (any of `phone`, `email`, `url`), `source_row_url`.
+- **Gates**, fail-closed per locality: seat count within `seats`, no duplicate `(office_title,
+  seat_label)`, no blank name. A gate failure **withholds that locality** (see 8.10) and never
+  stops the run; any other error class (a bug, a schema break in shared code) still fails the build.
+- **Last-good retention.** A withheld locality keeps its previously published dossiers, pins
+  and graph objects; they are not stale (WO-33's stale-deletion manifest must treat a withheld
+  locality's keys as live) and its coverage state says `withheld` with the date of the roster
+  being served.
+- **Ids.** A person's id is keyed on the person within the locality — name, and the locality's
+  `ocd_id` — not on the seat, so a member who changes districts keeps one dossier.
+- **No empty graph documents** for an official with no edges.
+
+### 8.9 Roll-call and bill ids beyond the federal government — WO-22b / WO-39 · *target*
+
+§8.3's ids generalise to `{scope}/{session}/{body}/{n}` (roll call) and
+`{scope}/{session}/{type}/{number}` (bill), four `/`-separated segments, characters
+`[a-z0-9._-]` only, used verbatim as the object key under `/rollcalls/` and `/bills/`.
+
+| Segment | Federal (today) | State | Local |
+|---|---|---|---|
+| `scope` | `us` | USPS code, lowercase (`tn`) | `{st}.{place-or-county-slug}` — the slug of the division's `ocd_id`, `slug_GEOID` where `PLACE_SLUG_OVERRIDES` applies (`tn.hendersonville`, `tn.sumner`) |
+| `session` | Congress number (`119`) | the legislature's own session slug (`2025`, `2025-2026`) | calendar year of the meeting |
+| `body` | `house` \| `senate` | `house` \| `senate` \| `assembly` | the body's slug (`council`, `commission`) |
+| `n` | Voteview roll number | source's roll number | per body per session, assigned in meeting order and **never reassigned** |
+
+The grammar guarantees no id of one kind can equal an id of another: `scope` never contains `/`
+and the federal scope is exactly `us`. A writer refuses a key outside the character set or
+without exactly four segments. `/votes/{person_id}.json` is unchanged; its rows carry the
+roll-call id verbatim. A roll call whose `positions` cover fewer than all seated members says so
+in `positions_cover`, as §8.3 already requires.
+
+### 8.10 Coverage state per division — WO-22b · *target*
+
+Who we cover, said plainly. **`/coverage/{st}.json`** (one file per state that has at least one
+locality attempted; absence of a division means *not covered*):
+
+```jsonc
+{
+  "schema_version": "1.0", "state": "tn", "generated_at": "…",
+  "divisions": {                               // keyed by ocd_id
+    "ocd-division/country:us/state:tn/county:sumner": {
+      "state": "covered",                      // 'covered' | 'partial' | 'withheld'
+      "seats_listed": 24, "seats_expected": 24,
+      "roster_as_of": "2026-10-02",            // date of the roster being served
+      "reason": null,                          // plain-language string when 'withheld' or 'partial'
+      "source": "census-style source key", "votes": false } } }
+```
+
+`covered` = the gate passed this run. `withheld` = the gate failed this run and the last good
+roster is still served (`reason` says which gate); if no last-good exists the division is
+absent, not `withheld`. `partial` = some seats published, others not (e.g. vacant seats
+declared by the source). `votes` is true only when roll calls for that body are published.
+Divisions with no attempt do not appear: a client treats absence as **not covered yet** and
+colours the polygon by that. Local polygons are never coloured by party (the sources do not
+publish local party); coverage state is their fill. `coverage.json → counts` gains
+`localities_covered`, `localities_partial` and `localities_withheld`.
+
+### 8.11 State-sharded pins — WO-22b (feed) / WO-37 (loader) · *target*
+
+Today every pin in the country is fetched at startup. Adding every county commission and city
+council multiplies the rows, so the two local layers are sharded by state:
+
+**`/pins/county/{st}.json`**, **`/pins/place/{st}.json`** — rows identical to today's pins
+(§8.2 included), only the rows whose division is in that state; ordered as the monolithic file
+is. A state with no rows has no file; a client treats 404 as an empty list. `states`, `cd`,
+`sldu` and `sldl` stay monolithic. The monolithic `/pins/county.json` keeps publishing until
+WO-37's loader has shipped and been verified live; removing it is then a separate, one-line
+follow-up. The loader fetches a state's shard when the map first shows a division of that state
+(or the reader's place resolves into it), caches it for the session, and never fetches a shard
+for a state the reader has not reached.

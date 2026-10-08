@@ -1,0 +1,15 @@
+[
+ {
+  "chamber": null,
+  "full_name": "Fixture Member One",
+  "lat": null,
+  "lng": null,
+  "ocd_id": "ocd-division/country:us/state:tn/county:sumner",
+  "office": "Sumner County Commission",
+  "party": "U",
+  "person_id": "fixture-0001",
+  "photo_url": null,
+  "term_ends": "2026-08-31",
+  "vacant": false
+ }
+]
