@@ -469,7 +469,7 @@ Non-JSON objects (tiles, `robots.txt`) are compared on their raw bytes, as befor
 `/pins/{layer}.json` rows gain `term_ends`: the ISO date the current term ends, or `null`
 where the source publishes none. Never inferred.
 
-### 8.3 Votes, roll calls, bills — WO-23a · *target*
+### 8.3 Votes, roll calls, bills — WO-23a · **shipped**
 
 Three artifacts, all keyed by ids the warehouse already uses. Ids are path-like and are used
 **as the object key verbatim**; they contain only `[a-z0-9/._-]`, a test pins that, and the
