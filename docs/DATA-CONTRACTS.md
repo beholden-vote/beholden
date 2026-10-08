@@ -803,6 +803,14 @@ source lists no seat): several under one title are separate people, not a duplic
 and the duplicate-seat gate applies only to seat-labelled rows and the executive.
 Tennessee's other 93 counties (all but Sumner and Davidson) are specs of this kind: `sources/tn_ctas.py`, two CTAS exports shared by every county.
 
+*Status (WO-22b Part B, MTAS cities):* `sources/tn_mtas.py` registers 344 Tennessee cities from the
+MTAS public CSV export as one shared source (`terms_ref` `docs/research/mtas-authorization-2026-10.md`).
+Place ids use the Census GEOID pinned in `tn_mtas_cities.json`. The export states no ward, party or term
+dates: members are `at_large` rows, party is `U`, and an unknown term start is stored as the internal
+sentinel `1900-01-01` (`terms.start_date` is NOT NULL), never served (`build._previous_roles` nulls it).
+Seat gate: fewer members than the count pinned at review withholds the city; more publishes with a
+coverage note.
+
 
 Local rosters (Tennessee through CTAS and MTAS; metros through Legistar) are built against
 **one** interface in `pipelines/beholden_etl/sources/roster.py`, so a new locality is a spec

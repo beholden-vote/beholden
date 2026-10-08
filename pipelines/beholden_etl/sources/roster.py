@@ -155,6 +155,7 @@ SHARED: dict[str, SharedSource] = {}
 SPEC_MODULES = (
     "tn_local",
     "tn_ctas",
+    "tn_mtas",
 )
 
 

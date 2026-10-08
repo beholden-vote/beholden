@@ -1,6 +1,6 @@
 # CTAS (UT County Technical Assistance Service) - written permission
 
-**Status: PERMISSION RECEIVED for CTAS directory data. MTAS: not yet answered.**
+**Status: PERMISSION RECEIVED for CTAS directory data. MTAS: see `mtas-authorization-2026-10.md` (owner authorization, no written copy).**
 Recorded 2026-10-08. Source: two replies from CTAS staff to the Beholden Maintainers'
 request of 2026-10 (reply dated 2026-10-05). Names and addresses of individual staff are
 deliberately not recorded here.

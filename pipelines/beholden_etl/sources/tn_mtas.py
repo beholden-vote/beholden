@@ -2,7 +2,7 @@
 
 ONE public CSV, fetched once per run (roster._get caches per URL), serves ~344 city
 specs. Each spec's adapter cuts the export down to its own city's governing-body rows
-(`narrow`) BEFORE the gate, so only a small slice is landed per city and the export's
+(`split`, a framework SharedSource) BEFORE the gate, so only a small slice is landed per city and the export's
 billing-address columns never leave the process.
 
 TERMS: docs/research/mtas-authorization-2026-10.md. Owner-authorized, no written copy
@@ -10,7 +10,7 @@ on file; credit and link back on every record (reported_by + source_row_url), pu
 export only, nightly at most, grade B. No determination covers a priced bulk dataset.
 
 WHAT THE EXPORT DOES NOT SAY, and therefore what we never publish: party ("U"), ward or
-district (members carry roster.MEMBER, no seat), term dates (stored as the
+district (members are at_large rows, no seat), term dates (stored as the
 TERM_START sentinel, never served or displayed), vacancies (rows named VACANT are dropped).
 
 SEAT-COUNT GATE. Neither the export nor the city table states a body's size, so the
@@ -37,8 +37,8 @@ from collections import defaultdict
 from pathlib import Path
 
 from .. import divisions as D
-from .roster import (ADAPTERS, MEMBER, Adapter, RosterError, RosterRow, RosterSpec,
-                     SourceRef, slug)
+from .roster import (ADAPTERS, SHARED, Adapter, RosterError, RosterRow, RosterSpec,
+                     SharedSource, SourceRef, slug)
 
 EXPORT_URL = "https://www.mtas.tennessee.edu/mtas_api/v1/csv/official"
 DIRECTORY_URL = "https://www.mtas.tennessee.edu/directories/cities"   # link back, per record
@@ -82,24 +82,26 @@ def _name(r: dict) -> str:
     return "" if n.upper() == "VACANT" else n
 
 
-def narrow(raw: bytes, spec: RosterSpec) -> bytes:
-    """The export -> this city's governing-body rows, five columns. A changed header is
-    a schema break (ValueError, fails the run), not a gate."""
-    reader = csv.DictReader(io.StringIO(raw.decode("utf-8-sig")))
+def split(files: dict[str, bytes]) -> dict[str, bytes]:
+    """The export -> {locality_id: that city's governing-body rows, five columns}. A changed
+    header is a schema break and raises (the framework withholds every city, last good kept)."""
+    reader = csv.DictReader(io.StringIO(files["export"].decode("utf-8-sig")))
     if reader.fieldnames != EXPORT_HEADER:
         raise ValueError(f"MTAS export header changed: {reader.fieldnames}")
-    org = _ORG[spec.source.source_key]
-    out = io.StringIO()
-    w = csv.writer(out, lineterminator="\n")
-    w.writerow(SLIM)
+    out: dict[str, csv.writer] = {}
+    bufs: dict[str, io.StringIO] = {}
     for r in reader:
-        if r["Organization"] != org:
-            continue
+        loc = _LOCALITY.get(r["Organization"])
         m = _TITLE.match(r["Title"].split(";")[0].strip())
-        if not m or (m.group(2) and m.group(2) != org) or not _name(r):
+        if not loc or not m or (m.group(2) and m.group(2) != r["Organization"]) or not _name(r):
             continue
-        w.writerow([org, _name(r), m.group(1), r["Phone"].strip(), r["Email"].strip().lower()])
-    return out.getvalue().encode("utf-8")
+        if loc not in out:
+            bufs[loc] = io.StringIO()
+            out[loc] = csv.writer(bufs[loc], lineterminator="\n")
+            out[loc].writerow(SLIM)
+        out[loc].writerow([r["Organization"], _name(r), m.group(1), r["Phone"].strip(),
+                           r["Email"].strip().lower()])
+    return {loc: b.getvalue().encode("utf-8") for loc, b in bufs.items()}
 
 
 def parse(raw: bytes, spec: RosterSpec) -> list[RosterRow]:
@@ -120,35 +122,41 @@ def parse(raw: bytes, spec: RosterSpec) -> list[RosterRow]:
             continue
         rows[key] = RosterRow(
             name=r["Name"], office_title=r["Title"],
-            seat_label=None if r["Title"] in MAYORS else MEMBER,
+            seat_label=None, at_large=r["Title"] not in MAYORS,
             contact=contact, source_row_url=DIRECTORY_URL)
     return list(rows.values())
 
 
 def check(rows: list[RosterRow]) -> None:
-    mayors = [r.name for r in rows if r.seat_label is None]
+    mayors = [r.name for r in rows if not r.at_large]
     if len(mayors) > 1:
         raise RosterError(f"{len(mayors)} mayors listed ({mayors}); a city has one")
     if len(rows) > MAX_SEATS:
         raise RosterError(f"{len(rows)} seats listed, above the {MAX_SEATS} ceiling")
 
 
-ADAPTERS["tn_mtas_city"] = Adapter(parse, check, narrow=narrow)
+def note(spec: RosterSpec, rows: list[RosterRow]) -> str | None:
+    return (f"MTAS lists {len(rows)} officials; {spec.seats[0]} at review (2026-10-08)"
+            if len(rows) > spec.seats[0] else None)
+
+
+ADAPTERS["tn_mtas_city"] = Adapter(parse, check, note=note)
+SHARED["tn_mtas_export"] = SharedSource("tn_mtas_export", (("export", EXPORT_URL),), split)
 
 
 # -- The pinned city table -----------------------------------------------------------
 
 _TABLE = json.loads(TABLE.read_text(encoding="utf-8"))
-_ORG: dict[str, str] = {}
+_LOCALITY: dict[str, str] = {}      # MTAS organization -> locality_id
 SPECS: list[RosterSpec] = []
 for _c in _TABLE["cities"]:
     _key = f"mtas_{slug(_c['name']).replace('-', '_')}"
-    _ORG[_key] = _c["org"]
+    _LOCALITY[_c["org"]] = f"tn-{slug(_c['name'])}"
     _body, _chamber = BODIES[_c["kind"]]
     SPECS.append(RosterSpec(
         locality_id=f"tn-{slug(_c['name'])}",
         ocd_id=D.place_ocd("TN", _c["name"], _c["geoid"]), level="place", name=_c["name"],
-        body=_body, source=SourceRef(_key, EXPORT_URL, "tn_mtas_city"),
+        body=_body, source=SourceRef(_key, EXPORT_URL, "tn_mtas_city", shared="tn_mtas_export"),
         seats=(_c["n"], MAX_SEATS), terms_ref=TERMS_REF, chamber=_chamber,
         reported_by=REPORTED_BY, term_start=TERM_START))
 
@@ -186,17 +194,19 @@ def regenerate(export_csv: str, gazetteer_place_txt: str) -> None:
         # Consolidated governments: the Census name is the government's, readers say the city.
         name = org if org in ("Hartsville", "Lynchburg", "Nashville") else _CENSUS_SUFFIX.sub("", cname)
         cities.append({"org": org, "name": name, "geoid": geoid})
-    _ORG.update({f"mtas_{slug(c['name']).replace('-', '_')}": c["org"] for c in cities})
+    _LOCALITY.clear()
+    _LOCALITY.update({c["org"]: c["org"] for c in cities})
+    slices = split({"export": raw})
     for c in cities:
         spec = RosterSpec(
-            locality_id="x", ocd_id=D.place_ocd("TN", c["name"], c["geoid"]), level="place",
+            locality_id=c["org"], ocd_id=D.place_ocd("TN", c["name"], c["geoid"]), level="place",
             name=c["name"], body="x", terms_ref=TERMS_REF, chamber="x", reported_by="x",
             term_start=TERM_START, seats=(1, MAX_SEATS),
-            source=SourceRef(f"mtas_{slug(c['name']).replace('-', '_')}", EXPORT_URL, "tn_mtas_city"))
-        rows = parse(narrow(raw, spec), spec)
+            source=SourceRef("x", EXPORT_URL, "tn_mtas_city"))
+        rows = parse(slices[c["org"]], spec)
         titles = defaultdict(int)
         for r in rows:
-            titles[r.office_title] += r.seat_label == MEMBER and r.office_title in BODIES
+            titles[r.office_title] += r.at_large and r.office_title in BODIES
         c["n"] = len(rows)
         c["kind"] = max(BODIES, key=lambda t: (titles[t], t == "Alderman"))
     TABLE.write_text(json.dumps({"as_of": "2026-10-08", "excluded": dict(sorted(excluded.items())),
