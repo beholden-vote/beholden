@@ -10,9 +10,8 @@ on file; credit and link back on every record (reported_by + source_row_url), pu
 export only, nightly at most, grade B. No determination covers a priced bulk dataset.
 
 WHAT THE EXPORT DOES NOT SAY, and therefore what we never publish: party ("U"), ward or
-district (members carry roster.MEMBER, no seat), term dates (every term carries
-TERM_START, the day this listing was adopted; it is "first listed", never a start of
-term, and local dossiers do not display it), vacancies (rows named VACANT are dropped).
+district (members carry roster.MEMBER, no seat), term dates (stored as the
+TERM_START sentinel, never served or displayed), vacancies (rows named VACANT are dropped).
 
 SEAT-COUNT GATE. Neither the export nor the city table states a body's size, so the
 only authority is the count in the export reviewed at adoption (`n`, pinned in
@@ -45,7 +44,11 @@ EXPORT_URL = "https://www.mtas.tennessee.edu/mtas_api/v1/csv/official"
 DIRECTORY_URL = "https://www.mtas.tennessee.edu/directories/cities"   # link back, per record
 TERMS_REF = "docs/research/mtas-authorization-2026-10.md"
 REPORTED_BY = "UT Municipal Technical Advisory Service (MTAS) directory"
-TERM_START = "2026-10-08"
+# terms.start_date is NOT NULL in the spine and a nullable column cannot be migrated
+# (DuckDB cannot ALTER a table carrying idx_terms_current). So an unknown start is stored as this
+# internal sentinel, never served: current terms are excluded from previous_roles and
+# build._previous_roles nulls the sentinel if a term ever ends. The UI shows no date.
+TERM_START = "1900-01-01"
 MAX_SEATS = 45
 TABLE = Path(__file__).with_name("tn_mtas_cities.json")
 
