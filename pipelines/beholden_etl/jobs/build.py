@@ -442,7 +442,8 @@ def _previous_roles(con) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     for pid, role, chamber, start_date, end_date, party in con.execute(
         """SELECT t.person_id, o.role, o.chamber,
-                  t.start_date::VARCHAR, t.end_date::VARCHAR, t.party
+                  NULLIF(t.start_date, DATE '1900-01-01')::VARCHAR,  -- unknown start (tn_mtas.TERM_START)
+                  t.end_date::VARCHAR, t.party
            FROM terms t JOIN offices o USING(office_id)
            WHERE t.end_date IS NOT NULL
            ORDER BY t.person_id, t.end_date DESC, t.start_date DESC""").fetchall():
