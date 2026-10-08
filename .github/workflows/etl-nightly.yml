@@ -85,10 +85,10 @@ jobs:
         run: |
           flags=""
           # Stale objects (under a prefix the build writes, not produced by this
-          # build) are LISTED in this step's log on every run and deleted only
-          # with --delete-stale. The integrator uncomments the next line after
-          # reading one night's listing:
-          # flags="$flags --delete-stale"
+          # build) are deleted (--delete-stale) and listed in this step's log.
+          # Enabled after two consecutive nightlies showed the same stale set
+          # (officials who left office); raw/, tiles/ and fonts/ are never deleted.
+          flags="$flags --delete-stale"
           if [ "${{ github.event.inputs.allow_mass_delete }}" = "true" ]; then
             flags="$flags --allow-mass-delete"
           fi
