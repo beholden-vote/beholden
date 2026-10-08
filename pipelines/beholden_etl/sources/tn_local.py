@@ -198,13 +198,14 @@ SPECS = [
         level="county", name=SUMNER_COUNTY_NAME, body="County Commission",
         source=SourceRef("sumner_county", SUMNER_URL, "tn_sumner_commission"),
         seats=(SUMNER_DISTRICTS, SUMNER_DISTRICTS), terms_ref=TERMS_REF,
-        chamber="county_commission",
+        chamber="county_commission", reported_by="Sumner County, TN", photos=True,
         term_start="2024-09-01"),        # TN county terms begin Sept 1 after the August election
     RosterSpec(
         locality_id="tn-hendersonville", ocd_id=D.place_ocd(USPS, HENDERSONVILLE_PLACE_NAME),
         level="place", name=HENDERSONVILLE_PLACE_NAME, body="Board of Aldermen",
         source=SourceRef("hendersonville", HENDERSONVILLE_URL, "tn_hendersonville_boma"),
         seats=(13, 13), seat_size=HENDERSONVILLE_ALDERMEN_PER_WARD, terms_ref=TERMS_REF,
-        chamber="board_of_aldermen",
+        # No photos: the city's copyright page reserves all rights (terms_ref).
+        chamber="board_of_aldermen", reported_by="City of Hendersonville, TN",
         term_start="2024-11-18"),        # BOMA seated after the November 2024 city election
 ]

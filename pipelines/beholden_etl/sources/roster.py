@@ -73,8 +73,12 @@ class RosterSpec:
     seats: tuple[int, int]            # (min, max): the gate
     terms_ref: str                    # docs/research/… licence determination
     chamber: str                      # offices.chamber of a seated (non-at-large) member
+    reported_by: str                  # the publishing government, as a reader names it
     term_start: str                   # date the current body took office; never today
     seat_size: int = 1                # members elected per seat label (2 per ward)
+    # Photos publish only where the terms determination allows them (an explicit
+    # "All rights reserved" site gets none). Off unless a spec turns it on.
+    photos: bool = False
     grade_reason: str = "official_web_roster"
     sla_hours: int = 24 * 7
 
@@ -117,6 +121,12 @@ def specs() -> list[RosterSpec]:
     """Every registered locality, in a stable order."""
     from . import tn_local
     return list(tn_local.SPECS)
+
+
+def reported_by(source_key: str) -> str | None:
+    """The government a roster-built fact is "as reported by" (shown on the
+    provenance line), or None for a source that is not a roster."""
+    return next((s.reported_by for s in specs() if s.source.source_key == source_key), None)
 
 
 def slug(name: str) -> str:
@@ -186,6 +196,34 @@ def _get(url: str) -> bytes:
     return r.content
 
 
+def _restore_last_good(spec: RosterSpec, raw: Path) -> dict | None:
+    """Pull this locality's last good page and manifest row from the lake's
+    raw/latest/ pointer. None when there are no R2 credentials or the lake has
+    neither; any other error propagates."""
+    from botocore.exceptions import ClientError
+
+    from .. import rawlake
+    if not rawlake.r2_available():
+        return None
+    client = rawlake._client()
+    key = spec.source.source_key
+    try:
+        manifest = json.loads(client.get_object(
+            Bucket=rawlake.R2_BUCKET, Key=f"{rawlake.LATEST_PREFIX}manifest.json")["Body"].read())
+        page = client.get_object(Bucket=rawlake.R2_BUCKET,
+                                 Key=f"{rawlake.LATEST_PREFIX}{key}/roster.html")["Body"].read()
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            return None
+        raise
+    last = (manifest.get("sources") or {}).get(key)
+    if not (last and last.get("retrieved_at")):
+        return None
+    landed(spec, raw).write_bytes(page)
+    print(f"fetch: roster {spec.locality_id} restored its last good page from the lake")
+    return {k: v for k, v in last.items() if k != "withheld"}
+
+
 def fetch(spec: RosterSpec, raw: Path, prior: dict) -> dict | None:
     """Land the page only if it passes its gate. A gate failure withholds the
     locality: the last good page stays landed and the manifest row keeps its
@@ -202,7 +240,12 @@ def fetch(spec: RosterSpec, raw: Path, prior: dict) -> dict | None:
         print(f"fetch: roster {spec.locality_id} WITHHELD: {e}")
         last = (prior.get("sources") or {}).get(key)
         if not last or not landed(spec, raw).exists():
-            return None                 # nothing good ever landed: absent
+            # A full rebuild skips hydration, so the last good page is not on
+            # disk. It is still in the lake: restore it, so the locality is
+            # served (and kept live for publish) exactly as on any other night.
+            last = _restore_last_good(spec, Path(raw))
+        if not last:
+            return None                 # nothing good ever landed anywhere: absent
         return {**{k: v for k, v in last.items() if k != "withheld"}, "withheld": str(e)}
     landed(spec, raw).write_bytes(page)
     (d / "rejected.html").unlink(missing_ok=True)
@@ -278,7 +321,7 @@ def spine_rows(spec: RosterSpec, rows: list[RosterRow]) -> dict[str, list[dict]]
             "start_date": start, "end_date": None, "is_vacant_marker": False,
             # build reads these keys back (image / source_url / source_key /
             # contact / term_ends / office_display) — no new read path.
-            "meta": {"seat": r.seat_label, "image": r.photo_url,
+            "meta": {"seat": r.seat_label, "image": r.photo_url if spec.photos else None,
                      "source_url": r.source_row_url, "source_key": spec.source.source_key,
                      "contact": r.contact or None, "social": None,
                      "term_ends": r.term_end, "office_display": office_display(spec, r)}})

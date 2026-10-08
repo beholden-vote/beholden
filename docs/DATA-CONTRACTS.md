@@ -786,7 +786,7 @@ added: each measure is published on its own, with its own formula at `/methodolo
 Hendersonville as its two specs (`sources/tn_local.py`). Corrections to the shape, from
 building it: a spec carries `grade_reason` (its grade is implied, `config.GRADE_REASONS`) rather
 than a bare `grade`; it also carries `chamber`, `term_start` (the date the body took office),
-`seat_size` (members per seat label, 2 for a two-alderman ward) and `sla_hours`. `RosterRow`
+`seat_size` (members per seat label, 2 for a two-alderman ward), `sla_hours`, `reported_by` (the government's name; every roster-built identity envelope carries it as an additive `reported_by` key, rendered "as reported by ‹it›, retrieved ‹date›" on the provenance line) and `photos` (off unless the `terms_ref` determination allows them; Hendersonville publishes none). `RosterRow`
 gains `photo_url` (linked, never re-hosted). The duplicate gate reads "no `(office_title,
 seat_label)` more than `seat_size` times, an at-large title once", plus no person twice and an
 adapter's own structural gate. A withheld locality is served from its last good landed page,

@@ -29,6 +29,7 @@ from ..build import positions                                   # WO-36 (positio
 from ..build import coverage_divisions, pin_shards              # WO-22b (coverage/{st}, pins/{layer}/{st})
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
+from ..sources import roster                                    # WO-22b (reported_by)
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
 from .transform import DEFAULT_DB
 from .. import store
@@ -824,6 +825,9 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         src = h.get("source_url")
         identity_prov = _provenance(h["source_key"],
                                     src or SOURCES[h["source_key"]].base_url, manifest)
+        # WO-22b: name the government the roster is "as reported by" on the
+        # provenance line (grade B rides in from the registry).
+        identity_prov["reported_by"] = roster.reported_by(h["source_key"])
         links = [{"type": "official", "url": src}] if src else []
     else:
         src = h.get("source_url")

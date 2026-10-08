@@ -114,7 +114,7 @@ def test_real_pages_reproduce_mains_output_ids_aside(real):
         d = json.loads(json.dumps(d))
         for k in ("person_id", "graph_ref", "generated_at"):
             d.pop(k, None)
-        for k in ("pipeline_version", "retrieved_at"):
+        for k in ("pipeline_version", "retrieved_at", "reported_by"):   # reported_by: tested below
             d["identity"]["provenance"].pop(k)
         docs.append(d)
     docs.sort(key=lambda d: (d["identity"]["office"]["display"], d["identity"]["full_name"]))
@@ -333,13 +333,100 @@ def test_sumner_photos_belong_to_their_commissioner():
         assert _surname(r["full_name"]).lower() in filename, (r["full_name"], filename)
 
 
-def test_hendersonville_photos_belong_to_their_member():
-    """The h-card puts the u-photo inside the member's own card; the image's alt
-    text names the member ('D.Ward', 'M.Evans' for two of them)."""
-    import re
-    page = (ROSTER_FIXTURES / "hendersonville.html").read_text(encoding="utf-8")
-    alt = dict(re.findall(r'<img src="([^"]+)" alt="([^"]*)"[^>]*class="field u-photo"', page))
-    rows = tn_local.parse_hendersonville(page)
-    assert len(rows) == 13
-    for r in rows:
-        assert _surname(r["full_name"]).lower() in alt[r["photo_url"]].lower(), r["full_name"]
+def test_no_hendersonville_photo_is_published(real):
+    """The city's copyright page reserves all rights, so the owner's terms
+    determination admits names, offices and public contact details only: no
+    photo, in the dossier or on the pin. Sumner's photos stay."""
+    docs = list(_local(real).values())
+    hville = [d for d in docs if d["identity"]["provenance"]["source"] == "hendersonville"]
+    sumner = [d for d in docs if d["identity"]["provenance"]["source"] == "sumner_county"]
+    assert len(hville) == 13 and all(d["identity"]["photo_url"] is None for d in hville)
+    assert len(sumner) == 24 and all(d["identity"]["photo_url"] for d in sumner)
+    for layer in ("place", "place/tn"):
+        pins = json.loads((real / "pins" / f"{layer}.json").read_text(encoding="utf-8"))
+        assert pins and all(p["photo_url"] is None for p in pins)
+    assert not HVILLE.photos and SUMNER.photos
+    assert roster.RosterSpec.__dataclass_fields__["photos"].default is False     # off by default
+
+
+def test_every_roster_envelope_is_grade_b_and_names_who_reported_it(real):
+    for d in _local(real).values():
+        prov = d["identity"]["provenance"]
+        assert (prov["grade"], prov["grade_reason"]) == ("B", "official_web_roster")
+        assert prov["reported_by"] == {"sumner_county": "Sumner County, TN",
+                                       "hendersonville": "City of Hendersonville, TN"}[prov["source"]]
+    # ...and no other source carries the field.
+    for f in (real / "dossiers").glob("*.json"):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if d["identity"]["provenance"]["source"] not in ("sumner_county", "hendersonville"):
+            assert "reported_by" not in d["identity"]["provenance"]
+
+
+class _Lake:
+    """raw/latest/ as R2 holds it, for the one targeted read a full rebuild makes."""
+    def __init__(self, objects):
+        self.objects = objects
+
+    def get_object(self, Bucket, Key):
+        import io
+
+        from botocore.exceptions import ClientError
+        if Key not in self.objects:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return {"Body": io.BytesIO(self.objects[Key])}
+
+
+def test_full_rebuild_with_a_failing_gate_keeps_the_published_locality(tmp_path, monkeypatch, bucket):
+    """A full rebuild skips hydration, so a locality whose page fails its gate
+    that night has no last good page on disk. It must not be published as gone
+    (with --delete-stale on, that would delete it): the last good page comes
+    back from the lake, the locality is withheld and rebuilt, and publish keeps
+    its keys live."""
+    from beholden_etl import rawlake
+    good = (ROSTER_FIXTURES / "sumner_county.html").read_bytes()
+    lake = _Lake({"raw/latest/manifest.json": json.dumps(
+                      {"sources": {"sumner_county": {"retrieved_at": AS_OF, "count": 24,
+                                                     "source_url": SUMNER.source.url}}}).encode(),
+                  "raw/latest/sumner_county/roster.html": good})
+    monkeypatch.setattr(rawlake, "r2_available", lambda: True)
+    monkeypatch.setattr(rawlake, "_client", lambda: lake)
+    _fake_page(monkeypatch, good.replace(b"	3rd District	", b"	99th District	", 1))
+
+    raw = tmp_path / "raw"
+    frag = roster.fetch(SUMNER, raw, {})                      # full rebuild: prior is {}
+    assert frag["retrieved_at"] == AS_OF and "missing districts [3]" in frag["withheld"]
+    assert roster.landed(SUMNER, raw).read_bytes() == good
+
+    # Through the pipeline: Sumner withheld but served, its keys in the hints.
+    (raw / "unitedstates_legislators").mkdir(parents=True)
+    (raw / "unitedstates_legislators" / "legislators-current.json").write_text(
+        json.dumps(LEGS), encoding="utf-8")
+    manifest = json.loads(json.dumps(MANIFEST))
+    manifest["sources"]["sumner_county"] = frag
+    (raw / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    db = str(tmp_path / "wh.duckdb")
+    transform.run(raw_dir=raw, db_path=db)
+    build.run(db_path=db, out_dir=tmp_path / "data", raw_dir=raw)
+    hints = json.loads((tmp_path / publish.HINTS_FILE).read_text(encoding="utf-8"))
+    assert len(hints["live"]) == 24
+    cov = json.loads((tmp_path / "data" / "coverage" / "tn.json").read_text(encoding="utf-8"))
+    assert cov["divisions"][SUMNER.ocd_id]["state"] == "withheld"
+
+    # Publish with deletion on: the 24 already-published dossiers survive, a
+    # departed official does not. Even a build that dropped them (simulated by
+    # removing them locally) cannot get them deleted while they are live.
+    for k in hints["live"] + ["dossiers/really-left.json"]:
+        bucket.seed(k)
+        (tmp_path / "data" / k).unlink(missing_ok=True)
+    publish.run(data_dir=tmp_path / "data", raw_dir=tmp_path / "noraw", dry_run=False,
+                delete_stale=True)
+    assert bucket.deleted == ["dossiers/really-left.json"]
+
+
+def test_full_rebuild_with_no_lake_is_absent_not_fabricated(tmp_path, monkeypatch):
+    from beholden_etl import rawlake
+    monkeypatch.setattr(rawlake, "r2_available", lambda: True)
+    monkeypatch.setattr(rawlake, "_client", lambda: _Lake({}))
+    good = (ROSTER_FIXTURES / "sumner_county.html").read_bytes()
+    _fake_page(monkeypatch, good.replace(b"	3rd District	", b"	99th District	", 1))
+    assert roster.fetch(SUMNER, tmp_path / "raw", {}) is None

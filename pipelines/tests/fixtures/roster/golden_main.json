@@ -24,7 +24,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5696",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -64,7 +64,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5583",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -104,7 +104,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=6556",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -144,7 +144,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5575",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -184,7 +184,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5585",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -224,7 +224,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5695",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -264,7 +264,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5571",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -304,7 +304,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5579",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -344,7 +344,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5710",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -384,7 +384,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5577",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -424,7 +424,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5694",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -464,7 +464,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=6555",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -504,7 +504,7 @@
      "code": "U",
      "display": "Not published"
     },
-    "photo_url": "/ImageRepository/Document?documentID=5697",
+    "photo_url": null,
     "provenance": {
      "grade": "B",
      "grade_reason": "official_web_roster",
@@ -1981,7 +1981,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5585",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -1993,7 +1993,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=6556",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2005,7 +2005,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5694",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2017,7 +2017,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5710",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2029,7 +2029,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 3",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5695",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2041,7 +2041,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5571",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2053,7 +2053,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5696",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2065,7 +2065,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 6",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=6555",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2077,7 +2077,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 1",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5583",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2089,7 +2089,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 2",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5575",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2101,7 +2101,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 5",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5577",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2113,7 +2113,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Hendersonville Board of Aldermen \u00b7 Ward 4",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5579",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    },
@@ -2125,7 +2125,7 @@
     "ocd_id": "ocd-division/country:us/state:tn/place:hendersonville",
     "office": "Mayor of Hendersonville",
     "party": "U",
-    "photo_url": "/ImageRepository/Document?documentID=5697",
+    "photo_url": null,
     "term_ends": null,
     "vacant": false
    }

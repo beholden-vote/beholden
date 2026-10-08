@@ -64,9 +64,14 @@ function ProvenanceLine({ provenance }: { provenance: Provenance }) {
   const checkedAt = coverage?.sources?.[provenance.source]?.retrieved_at;
   const checked =
     checkedAt && Date.parse(checkedAt) >= Date.parse(provenance.retrieved_at) ? formatDate(checkedAt) : null;
+  // WO-22b: a local roster says whose page it is and when that page was read.
+  const reported = provenance.reported_by
+    ? `${STRINGS.reportedLabel.by} ${provenance.reported_by}, ${STRINGS.reportedLabel.retrieved} ${
+        checked ?? formatDate(provenance.retrieved_at) ?? provenance.retrieved_at} · `
+    : "";
   return (
     <p className="retrieved">
-      {checked ? `${STRINGS.retrievedLabel.checked} ${checked} · ${unchanged}` : unchanged}
+      {reported}{checked ? `${STRINGS.retrievedLabel.checked} ${checked} · ${unchanged}` : unchanged}
     </p>
   );
 }

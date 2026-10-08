@@ -1,9 +1,14 @@
 # Terms of reuse: Sumner County and Hendersonville, TN roster pages
 
-> **DRAFT - not a determination until the owner signs off in the PR.**
-> Until then this file records what the two sites publish about reuse, verbatim, and a
-> proposed reading. It is the `terms_ref` of the `tn-sumner-county` and `tn-hendersonville`
-> roster specs (`pipelines/beholden_etl/sources/tn_local.py`), as DATA-CONTRACTS §8.8 requires.
+> **Status: Accepted by the owner on 2026-10-08 for names, offices and public contact details
+> only (facts-only reading); no photos from Hendersonville; source quality shown as grade B.**
+>
+> "Accepted" means the owner's written approval in chat on that date. It is our own
+> determination of how we read the sites' published terms. **It is not a licence grant
+> by either site**, and neither government has been asked for, or has given, permission.
+>
+> This file is the `terms_ref` of the `tn-sumner-county` and `tn-hendersonville` roster
+> specs (`pipelines/beholden_etl/sources/tn_local.py`), as DATA-CONTRACTS §8.8 requires.
 
 Read 2026-10-03, by plain GET with the pipeline's own User-Agent. Only the terms, copyright
 and robots pages were read; no other page of either site was fetched for this note.
@@ -68,12 +73,17 @@ are disallowed everywhere, and Siteimprove agents get `Crawl-delay: 20`. None of
 ## What we take from each page
 
 Facts only, never expression: each official's name, office and seat (district or ward),
-the official contact address or phone published for the office, the URL of the official's
-own page, and the URL of the photo the government itself hosts. The photo is **linked**
-(`photo_url` points at the government's server); it is not copied or re-hosted. One fetch
-of each page per refresh (SLA 7 days), and the raw page is kept in our lake for reproducibility.
+the official contact address or phone published for the office, and the URL of the
+official's own page. Every such fact carries grade B (`official_web_roster`) and is shown
+"as reported by" the publishing government with the date it was retrieved. One fetch of
+each page per refresh (SLA 7 days), and the raw page is kept in our lake for reproducibility.
 
-## Proposed reading (for the owner to accept or reject)
+**Photos.** Hendersonville: none, because its copyright page reserves all rights. The spec
+sets `photos=False`, so no `photo_url` reaches a dossier or a pin. Sumner County: the
+photo the county hosts is **linked** (`photo_url` points at the county's server), never
+copied or re-hosted. Its terms place no restriction on reuse.
+
+## Reading proposed on 2026-10-03 (accepted as narrowed in the status above)
 
 1. **Sumner County:** the terms are a disclaimer of accuracy and liability. They place no
    restriction on reuse and require no permission. Reuse of the roster facts is compatible,
@@ -90,4 +100,6 @@ of each page per refresh (SLA 7 days), and the raw page is kept in our lake for 
 
 ## Sign-off
 
-- [ ] Owner determination recorded (name the decision, date it, and remove the DRAFT banner).
+- [x] 2026-10-08: the owner accepted, in writing in chat, the facts-only reading above:
+  names, offices and public contact details; no Hendersonville photos; grade B. This
+  records our own determination. It is not permission from either government.
