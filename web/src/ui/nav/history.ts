@@ -27,6 +27,7 @@ import { useSyncExternalStore } from "react";
 import type { RawStackHit } from "../../map";
 import { isRouteHash, parseHash, personHash, routeHash, divisionHash, type DossierTab, type Route } from "../../router";
 import { hitTitle, hitsFromOcd, smallestDivision } from "../place/divisions";
+import { setLastOwnPlace } from "./lastPlace";
 import { RECORD_LABELS, RECORD_VIEWS, type RecordRoute } from "./registry";
 
 /** How a place came to be on screen. The first three are the reader's OWN
@@ -115,6 +116,7 @@ const listeners = new Set<() => void>();
 
 function emit(move: Move) {
   snap = { index: cur, view: views.get(cur)!, move };
+  if (snap.view.kind === "place" && isOwnPlace(snap.view)) setLastOwnPlace(snap.view.hits);
   listeners.forEach((l) => l());
 }
 function prune() {

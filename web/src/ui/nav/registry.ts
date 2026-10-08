@@ -21,7 +21,7 @@
  *  A route kind with no entry here falls back to home. No placeholder screens.
  *  Place and person views are not registered: they are the shell's own.
  */
-import type { ComponentType, LazyExoticComponent } from "react";
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { Route } from "../../router";
 
 export type RecordKind = "bill" | "vote" | "compare";
@@ -36,8 +36,8 @@ export interface RecordViewProps<K extends RecordKind = RecordKind> {
 export const RECORD_VIEWS: {
   [K in RecordKind]?: LazyExoticComponent<ComponentType<RecordViewProps<K>>>;
 } = {
-  // bill:    WO-23b
-  // vote:    WO-23b
+  bill: lazy(() => import("../votes/BillView")),       // WO-23b
+  vote: lazy(() => import("../votes/RollCallView")),   // WO-23b
   // compare: WO-38
 };
 
