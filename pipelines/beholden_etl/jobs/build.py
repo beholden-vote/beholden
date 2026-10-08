@@ -1194,6 +1194,8 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         # itself (a place) is the layer.
         if layer is None and h["chamber"] is None and "/place:" in h["ocd_id"]:
             layer = "place"
+        elif layer is None and h["chamber"] is None and "/county:" in h["ocd_id"]:
+            layer = "county"                                     # WO-22b: a county mayor
         if layer:
             by_layer[layer].append(h)
 

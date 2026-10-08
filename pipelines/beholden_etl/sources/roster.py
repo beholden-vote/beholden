@@ -154,6 +154,7 @@ SHARED: dict[str, SharedSource] = {}
 # append-only, so parallel additions stay one-line diffs.
 SPEC_MODULES = (
     "tn_local",
+    "tn_ctas",
 )
 
 
