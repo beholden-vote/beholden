@@ -38,9 +38,11 @@ def publish(ctx: BuildContext) -> dict[str, int]:
         retrieved = (ctx.manifest.get("sources", {}).get(spec.source.source_key) or {}) \
             .get("retrieved_at")
         divisions[spec.ocd_id] = {
-            "state": state, "seats_listed": len(rows), "seats_expected": spec.seats[1],
+            "state": state, "seats_listed": len(rows), "seats_expected": spec.seats[0],
             "roster_as_of": retrieved[:10] if retrieved else None,
-            "reason": reason, "source": spec.source.source_key, "votes": False}
+            # covered may still carry a plain source note (§8.10).
+            "reason": reason or roster.note(spec, rows),
+            "source": spec.source.source_key, "votes": False}
     d = ctx.out / "coverage"
     d.mkdir(parents=True, exist_ok=True)
     for st, divisions in sorted(by_state.items()):
