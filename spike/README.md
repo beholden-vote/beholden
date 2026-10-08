@@ -39,10 +39,8 @@ layer in `us-context` (Natural Earth city points): different archive, so MapLibr
   stamp the same `ocd_id`. The 17 collision groups found in the Bureau's TIGERweb place layer (35
   places, PA/TX/WI/IL/OH/MN) are resolved in `PLACE_SLUG_OVERRIDES`, mirrored in `divisions.py`. If
   the first real build finds another, it is a new GEOID line in both places.
-- **Real size: not measured yet.** GDAL and tippecanoe were not available where this was written, so
-  there is no number to record. The `tiles-build` workflow now lists every archive's size and runs
-  `measure_tiles.py` on the places archive (it fails the run past the 500 KB per-tile budget); record
-  the archive size and largest tile from that log here after the first run.
+- **Real size (first build):** `us-places-2025.pmtiles` is 13.8 MB; the largest tile is 82 KB
+  (budget 500 KB); 19,733 places.
 
 **Known gaps** (a follow-on, not this work order):
 - *Township and town states.* In the twelve states where the municipal government is a county
