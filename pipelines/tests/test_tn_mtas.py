@@ -85,7 +85,7 @@ def test_table_is_one_spec_per_city_with_exactly_one_census_place():
     assert len({c["geoid"] for c in t["cities"]}) == 344
     for s in tn_mtas.SPECS:
         assert s.terms_ref == tn_mtas.TERMS_REF and (REPO / s.terms_ref).exists()
-        assert s.seats[0] >= 1 and s.seats[1] == tn_mtas.MAX_SEATS
+        assert s.seats[0] >= 2 and s.seats[1] == tn_mtas.MAX_SEATS
     # GEOIDs resolve the consolidated governments and the collisions.
     assert BY_ORG["Nashville"].ocd_id == D.place_ocd("TN", "Nashville", "4752006")
     assert BY_ORG["Nashville"].ocd_id.endswith("/place:nashville")
@@ -148,6 +148,21 @@ def test_a_city_with_two_mayors_is_withheld_not_published(tmp_path, monkeypatch,
     _serve(monkeypatch, EXPORT)
     assert roster.fetch(BY_ORG["Sharon"], tmp_path, {}) is None   # nothing good ever: absent
     assert "Mayor at large" in capsys.readouterr().out
+
+
+def test_a_mayor_only_listing_is_withheld_with_a_plain_reason(tmp_path, monkeypatch, capsys):
+    _serve(monkeypatch, EXPORT)
+    for org in ("Normandy", "Oakdale"):
+        assert BY_ORG[org].seats[0] == 2
+    # Normandy and Oakdale are not in the trimmed fixture's city set; build their rows.
+    rows = list(csv.reader(io.StringIO(EXPORT.decode("utf-8"))))
+    extra = [r for r in rows[1:] if r[0] == "Greenbrier" and r[8].startswith("Mayor")]
+    extra[0][0], extra[0][8] = "Normandy", "Mayor, Normandy"
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\n").writerows([rows[0], *extra])
+    _serve(monkeypatch, out.getvalue().encode("utf-8"))
+    assert roster.fetch(BY_ORG["Normandy"], tmp_path, {}) is None   # no last good: absent
+    assert "MTAS lists only the mayor" in capsys.readouterr().out
 
 
 def test_fewer_members_than_reviewed_withholds_and_more_publishes_with_a_note(tmp_path, monkeypatch):

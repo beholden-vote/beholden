@@ -19,7 +19,7 @@ tn_mtas_cities.json beside the Census GEOID). Fewer than n is withheld (last goo
 until the pin is updated in a reviewed PR; more than n publishes (a larger body is not
 a half-parsed one) up to the absolute ceiling MAX_SEATS (Nashville is 41), and the
 coverage reason should carry a plain "source lists more than expected" note (framework).
-Never lower n to make a city pass.
+Never lower n to make a city pass. Floor 2: a city whose listing is only a mayor is withheld.
 Structural gate: at most one mayor.
 
 PLACE IDS come from the Census GEOID in the table (divisions.place_ocd), the Gazetteer's
@@ -124,7 +124,12 @@ def parse(raw: bytes, spec: RosterSpec) -> list[RosterRow]:
             name=r["Name"], office_title=r["Title"],
             seat_label=None, at_large=r["Title"] not in MAYORS,
             contact=contact, source_row_url=DIRECTORY_URL)
-    return list(rows.values())
+    out = list(rows.values())
+    # A body needs at least a member besides the mayor. Raised here (fetch gates the parse
+    # inside its RosterError handler) so the reason is plain; such a page is never landed.
+    if len(out) == 1 and out[0].office_title in MAYORS:
+        raise RosterError("MTAS lists only the mayor")
+    return out
 
 
 def check(rows: list[RosterRow]) -> None:
@@ -157,7 +162,7 @@ for _c in _TABLE["cities"]:
         locality_id=f"tn-{slug(_c['name'])}",
         ocd_id=D.place_ocd("TN", _c["name"], _c["geoid"]), level="place", name=_c["name"],
         body=_body, source=SourceRef(_key, EXPORT_URL, "tn_mtas_city", shared="tn_mtas_export"),
-        seats=(_c["n"], MAX_SEATS), terms_ref=TERMS_REF, chamber=_chamber,
+        seats=(max(2, _c["n"]), MAX_SEATS), terms_ref=TERMS_REF, chamber=_chamber,
         reported_by=REPORTED_BY, term_start=TERM_START))
 
 
