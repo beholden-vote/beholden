@@ -1,0 +1,2416 @@
+{
+ "as_of": "2026-10-08",
+ "excluded": {
+  "Hendersonville": "ships from the city's own roster (sources/tn_local.py)"
+ },
+ "cities": [
+  {
+   "org": "Adams",
+   "name": "Adams",
+   "geoid": "4700200",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Adamsville",
+   "name": "Adamsville",
+   "geoid": "4700240",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Alamo",
+   "name": "Alamo",
+   "geoid": "4700440",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Alcoa",
+   "name": "Alcoa",
+   "geoid": "4700540",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Alexandria",
+   "name": "Alexandria",
+   "geoid": "4700620",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Algood",
+   "name": "Algood",
+   "geoid": "4700640",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Allardt",
+   "name": "Allardt",
+   "geoid": "4700660",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Altamont",
+   "name": "Altamont",
+   "geoid": "4700940",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ardmore",
+   "name": "Ardmore",
+   "geoid": "4701640",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Arlington",
+   "name": "Arlington",
+   "geoid": "4701740",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ashland City",
+   "name": "Ashland City",
+   "geoid": "4702180",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Athens",
+   "name": "Athens",
+   "geoid": "4702320",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Atoka",
+   "name": "Atoka",
+   "geoid": "4702340",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Atwood",
+   "name": "Atwood",
+   "geoid": "4702380",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Auburntown",
+   "name": "Auburntown",
+   "geoid": "4702400",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Baileyton",
+   "name": "Baileyton",
+   "geoid": "4702780",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Baneberry",
+   "name": "Baneberry",
+   "geoid": "4703078",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Bartlett",
+   "name": "Bartlett",
+   "geoid": "4703440",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Baxter",
+   "name": "Baxter",
+   "geoid": "4703680",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Bean Station",
+   "name": "Bean Station",
+   "geoid": "4703760",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Beersheba Springs",
+   "name": "Beersheba Springs",
+   "geoid": "4704240",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Bell Buckle",
+   "name": "Bell Buckle",
+   "geoid": "4704460",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Belle Meade",
+   "name": "Belle Meade",
+   "geoid": "4704620",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Bells",
+   "name": "Bells",
+   "geoid": "4704720",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Benton",
+   "name": "Benton",
+   "geoid": "4705040",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Berry Hill",
+   "name": "Berry Hill",
+   "geoid": "4705140",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Bethel Springs",
+   "name": "Bethel Springs",
+   "geoid": "4705380",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Big Sandy",
+   "name": "Big Sandy",
+   "geoid": "4705860",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Blaine",
+   "name": "Blaine",
+   "geoid": "4706340",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Bluff City",
+   "name": "Bluff City",
+   "geoid": "4706960",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Bolivar",
+   "name": "Bolivar",
+   "geoid": "4707180",
+   "n": 9,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Braden",
+   "name": "Braden",
+   "geoid": "4707840",
+   "n": 4,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Bradford",
+   "name": "Bradford",
+   "geoid": "4707860",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Brentwood",
+   "name": "Brentwood",
+   "geoid": "4708280",
+   "n": 7,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Brighton",
+   "name": "Brighton",
+   "geoid": "4708500",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Bristol",
+   "name": "Bristol",
+   "geoid": "4708540",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Brownsville",
+   "name": "Brownsville",
+   "geoid": "4708920",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Bruceton",
+   "name": "Bruceton",
+   "geoid": "4708960",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Bulls Gap",
+   "name": "Bulls Gap",
+   "geoid": "4709560",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Burlison",
+   "name": "Burlison",
+   "geoid": "4709860",
+   "n": 3,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Burns",
+   "name": "Burns",
+   "geoid": "4709880",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Byrdstown",
+   "name": "Byrdstown",
+   "geoid": "4710180",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Calhoun",
+   "name": "Calhoun",
+   "geoid": "4710440",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Camden",
+   "name": "Camden",
+   "geoid": "4710560",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Carthage",
+   "name": "Carthage",
+   "geoid": "4711280",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Caryville",
+   "name": "Caryville",
+   "geoid": "4711360",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cedar Hill",
+   "name": "Cedar Hill",
+   "geoid": "4711980",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Celina",
+   "name": "Celina",
+   "geoid": "4712100",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Centertown",
+   "name": "Centertown",
+   "geoid": "4712380",
+   "n": 2,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Centerville",
+   "name": "Centerville",
+   "geoid": "4712420",
+   "n": 11,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Chapel Hill",
+   "name": "Chapel Hill",
+   "geoid": "4712880",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Charleston",
+   "name": "Charleston",
+   "geoid": "4713020",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Charlotte",
+   "name": "Charlotte",
+   "geoid": "4713080",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Chattanooga",
+   "name": "Chattanooga",
+   "geoid": "4714000",
+   "n": 10,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Church Hill",
+   "name": "Church Hill",
+   "geoid": "4714980",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Clarksburg",
+   "name": "Clarksburg",
+   "geoid": "4715140",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Clarksville",
+   "name": "Clarksville",
+   "geoid": "4715160",
+   "n": 13,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Cleveland",
+   "name": "Cleveland",
+   "geoid": "4715400",
+   "n": 8,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Clifton",
+   "name": "Clifton",
+   "geoid": "4715480",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Clinton",
+   "name": "Clinton",
+   "geoid": "4715580",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Coalmont",
+   "name": "Coalmont",
+   "geoid": "4715920",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Collegedale",
+   "name": "Collegedale",
+   "geoid": "4716300",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Collierville",
+   "name": "Collierville",
+   "geoid": "4716420",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Collinwood",
+   "name": "Collinwood",
+   "geoid": "4716480",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Columbia",
+   "name": "Columbia",
+   "geoid": "4716540",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Cookeville",
+   "name": "Cookeville",
+   "geoid": "4716920",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Coopertown",
+   "name": "Coopertown",
+   "geoid": "4716980",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Copperhill",
+   "name": "Copperhill",
+   "geoid": "4717000",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cornersville",
+   "name": "Cornersville",
+   "geoid": "4717180",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cottage Grove",
+   "name": "Cottage Grove",
+   "geoid": "4717340",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Covington",
+   "name": "Covington",
+   "geoid": "4717680",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cowan",
+   "name": "Cowan",
+   "geoid": "4717700",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Crab Orchard",
+   "name": "Crab Orchard",
+   "geoid": "4717840",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cross Plains",
+   "name": "Cross Plains",
+   "geoid": "4718420",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Crossville",
+   "name": "Crossville",
+   "geoid": "4718540",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Crump",
+   "name": "Crump",
+   "geoid": "4718620",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cumberland City",
+   "name": "Cumberland City",
+   "geoid": "4718820",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Cumberland Gap",
+   "name": "Cumberland Gap",
+   "geoid": "4718880",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dandridge",
+   "name": "Dandridge",
+   "geoid": "4719380",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dayton",
+   "name": "Dayton",
+   "geoid": "4719700",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Decatur",
+   "name": "Decatur",
+   "geoid": "4719880",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Decaturville",
+   "name": "Decaturville",
+   "geoid": "4719900",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Decherd",
+   "name": "Decherd",
+   "geoid": "4719920",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dickson",
+   "name": "Dickson",
+   "geoid": "4720620",
+   "n": 9,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Dover",
+   "name": "Dover",
+   "geoid": "4721400",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dowelltown",
+   "name": "Dowelltown",
+   "geoid": "4721420",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Doyle",
+   "name": "Doyle",
+   "geoid": "4721500",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dresden",
+   "name": "Dresden",
+   "geoid": "4721540",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ducktown",
+   "name": "Ducktown",
+   "geoid": "4721740",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Dunlap",
+   "name": "Dunlap",
+   "geoid": "4722000",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Dyer",
+   "name": "Dyer",
+   "geoid": "4722180",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Dyersburg",
+   "name": "Dyersburg",
+   "geoid": "4722200",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Eagleville",
+   "name": "Eagleville",
+   "geoid": "4722360",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "East Ridge",
+   "name": "East Ridge",
+   "geoid": "4722720",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Eastview",
+   "name": "Eastview",
+   "geoid": "4722920",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Elizabethton",
+   "name": "Elizabethton",
+   "geoid": "4723500",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Elkton",
+   "name": "Elkton",
+   "geoid": "4723660",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Englewood",
+   "name": "Englewood",
+   "geoid": "4724040",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Enville",
+   "name": "Enville",
+   "geoid": "4724240",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Erin",
+   "name": "Erin",
+   "geoid": "4724320",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Erwin",
+   "name": "Erwin",
+   "geoid": "4724360",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Estill Springs",
+   "name": "Estill Springs",
+   "geoid": "4724440",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ethridge",
+   "name": "Ethridge",
+   "geoid": "4724460",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Etowah",
+   "name": "Etowah",
+   "geoid": "4724480",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Fairview",
+   "name": "Fairview",
+   "geoid": "4725440",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Farragut",
+   "name": "Farragut",
+   "geoid": "4725760",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Fayetteville",
+   "name": "Fayetteville",
+   "geoid": "4725920",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Finger",
+   "name": "Finger",
+   "geoid": "4726160",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Forest Hills",
+   "name": "Forest Hills",
+   "geoid": "4727020",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Franklin",
+   "name": "Franklin",
+   "geoid": "4727740",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Friendship",
+   "name": "Friendship",
+   "geoid": "4727960",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Friendsville",
+   "name": "Friendsville",
+   "geoid": "4728060",
+   "n": 4,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Gadsden",
+   "name": "Gadsden",
+   "geoid": "4728380",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gainesboro",
+   "name": "Gainesboro",
+   "geoid": "4728420",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gallatin",
+   "name": "Gallatin",
+   "geoid": "4728540",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gallaway",
+   "name": "Gallaway",
+   "geoid": "4728560",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Garland",
+   "name": "Garland",
+   "geoid": "4728680",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gates",
+   "name": "Gates",
+   "geoid": "4728740",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gatlinburg",
+   "name": "Gatlinburg",
+   "geoid": "4728800",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Germantown",
+   "name": "Germantown",
+   "geoid": "4728960",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gibson",
+   "name": "Gibson",
+   "geoid": "4729020",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gilt Edge",
+   "name": "Gilt Edge",
+   "geoid": "4729160",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Gleason",
+   "name": "Gleason",
+   "geoid": "4729300",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Goodlettsville",
+   "name": "Goodlettsville",
+   "geoid": "4729920",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Gordonsville",
+   "name": "Gordonsville",
+   "geoid": "4730120",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Grand Junction",
+   "name": "Grand Junction",
+   "geoid": "4730280",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Graysville",
+   "name": "Graysville",
+   "geoid": "4730760",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Greenback",
+   "name": "Greenback",
+   "geoid": "4730880",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Greenbrier",
+   "name": "Greenbrier",
+   "geoid": "4730960",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Greeneville",
+   "name": "Greeneville",
+   "geoid": "4730980",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Greenfield",
+   "name": "Greenfield",
+   "geoid": "4731000",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Gruetli-Laager",
+   "name": "Gruetli-Laager",
+   "geoid": "4731490",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Guys",
+   "name": "Guys",
+   "geoid": "4731680",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Halls",
+   "name": "Halls",
+   "geoid": "4731820",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Harriman",
+   "name": "Harriman",
+   "geoid": "4732520",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Harrogate",
+   "name": "Harrogate",
+   "geoid": "4732640",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Hartsville",
+   "name": "Hartsville",
+   "geoid": "4732742",
+   "n": 20,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Henderson",
+   "name": "Henderson",
+   "geoid": "4733260",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Henning",
+   "name": "Henning",
+   "geoid": "4733360",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Henry",
+   "name": "Henry",
+   "geoid": "4733400",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Hickory Valley",
+   "name": "Hickory Valley",
+   "geoid": "4733920",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Hohenwald",
+   "name": "Hohenwald",
+   "geoid": "4735160",
+   "n": 4,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Hollow Rock",
+   "name": "Hollow Rock",
+   "geoid": "4735280",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Hornbeak",
+   "name": "Hornbeak",
+   "geoid": "4736000",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Hornsby",
+   "name": "Hornsby",
+   "geoid": "4736080",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Humboldt",
+   "name": "Humboldt",
+   "geoid": "4736460",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Huntingdon",
+   "name": "Huntingdon",
+   "geoid": "4736580",
+   "n": 8,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Huntland",
+   "name": "Huntland",
+   "geoid": "4736600",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Huntsville",
+   "name": "Huntsville",
+   "geoid": "4736640",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Jacksboro",
+   "name": "Jacksboro",
+   "geoid": "4737600",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Jackson",
+   "name": "Jackson",
+   "geoid": "4737640",
+   "n": 10,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Jamestown",
+   "name": "Jamestown",
+   "geoid": "4737780",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Jasper",
+   "name": "Jasper",
+   "geoid": "4737820",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Jefferson City",
+   "name": "Jefferson City",
+   "geoid": "4737960",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Jellico",
+   "name": "Jellico",
+   "geoid": "4738020",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Johnson City",
+   "name": "Johnson City",
+   "geoid": "4738320",
+   "n": 4,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Jonesborough",
+   "name": "Jonesborough",
+   "geoid": "4738540",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Kenton",
+   "name": "Kenton",
+   "geoid": "4739140",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Kimball",
+   "name": "Kimball",
+   "geoid": "4739400",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Kingsport",
+   "name": "Kingsport",
+   "geoid": "4739560",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Kingston",
+   "name": "Kingston",
+   "geoid": "4739620",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Kingston Springs",
+   "name": "Kingston Springs",
+   "geoid": "4739660",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Knoxville",
+   "name": "Knoxville",
+   "geoid": "4740000",
+   "n": 10,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "La Grange",
+   "name": "La Grange",
+   "geoid": "4740200",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "La Vergne",
+   "name": "La Vergne",
+   "geoid": "4741200",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "LaFollette",
+   "name": "La Follette",
+   "geoid": "4740180",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Lafayette",
+   "name": "Lafayette",
+   "geoid": "4740160",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Lakeland",
+   "name": "Lakeland",
+   "geoid": "4740350",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Lakesite",
+   "name": "Lakesite",
+   "geoid": "4740540",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Lawrenceburg",
+   "name": "Lawrenceburg",
+   "geoid": "4741340",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Lebanon",
+   "name": "Lebanon",
+   "geoid": "4741520",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Lenoir City",
+   "name": "Lenoir City",
+   "geoid": "4741760",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Lewisburg",
+   "name": "Lewisburg",
+   "geoid": "4741860",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Lexington",
+   "name": "Lexington",
+   "geoid": "4741980",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Liberty",
+   "name": "Liberty",
+   "geoid": "4742040",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Linden",
+   "name": "Linden",
+   "geoid": "4742720",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Livingston",
+   "name": "Livingston",
+   "geoid": "4743140",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Lobelville",
+   "name": "Lobelville",
+   "geoid": "4743160",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Lookout Mountain",
+   "name": "Lookout Mountain",
+   "geoid": "4743640",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Loretto",
+   "name": "Loretto",
+   "geoid": "4743700",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Loudon",
+   "name": "Loudon",
+   "geoid": "4743780",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Louisville",
+   "name": "Louisville",
+   "geoid": "4743820",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Luttrell",
+   "name": "Luttrell",
+   "geoid": "4744300",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Lynchburg",
+   "name": "Lynchburg",
+   "geoid": "4744382",
+   "n": 15,
+   "kind": "Metro Councilmember"
+  },
+  {
+   "org": "Lynnville",
+   "name": "Lynnville",
+   "geoid": "4744420",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Madisonville",
+   "name": "Madisonville",
+   "geoid": "4745320",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Manchester",
+   "name": "Manchester",
+   "geoid": "4745500",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Martin",
+   "name": "Martin",
+   "geoid": "4746240",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Maryville",
+   "name": "Maryville",
+   "geoid": "4746380",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Mason",
+   "name": "Mason",
+   "geoid": "4746420",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Maury City",
+   "name": "Maury City",
+   "geoid": "4746540",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Maynardville",
+   "name": "Maynardville",
+   "geoid": "4746700",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "McEwen",
+   "name": "McEwen",
+   "geoid": "4744840",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "McKenzie",
+   "name": "McKenzie",
+   "geoid": "4744940",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "McLemoresville",
+   "name": "McLemoresville",
+   "geoid": "4745000",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "McMinnville",
+   "name": "McMinnville",
+   "geoid": "4745100",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Medina",
+   "name": "Medina",
+   "geoid": "4747000",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Medon",
+   "name": "Medon",
+   "geoid": "4747020",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Memphis",
+   "name": "Memphis",
+   "geoid": "4748000",
+   "n": 14,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Michie",
+   "name": "Michie",
+   "geoid": "4748180",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Middleton",
+   "name": "Middleton",
+   "geoid": "4748340",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Milan",
+   "name": "Milan",
+   "geoid": "4748660",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Milledgeville",
+   "name": "Milledgeville",
+   "geoid": "4748920",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Millersville",
+   "name": "Millersville",
+   "geoid": "4748980",
+   "n": 4,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Millington",
+   "name": "Millington",
+   "geoid": "4749060",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Minor Hill",
+   "name": "Minor Hill",
+   "geoid": "4749360",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Mitchellville",
+   "name": "Mitchellville",
+   "geoid": "4749460",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Monteagle",
+   "name": "Monteagle",
+   "geoid": "4749740",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Monterey",
+   "name": "Monterey",
+   "geoid": "4749760",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Morrison",
+   "name": "Morrison",
+   "geoid": "4750220",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Morristown",
+   "name": "Morristown",
+   "geoid": "4750280",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Moscow",
+   "name": "Moscow",
+   "geoid": "4750300",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Mosheim",
+   "name": "Mosheim",
+   "geoid": "4750320",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Mount Carmel",
+   "name": "Mount Carmel",
+   "geoid": "4750580",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Mount Pleasant",
+   "name": "Mount Pleasant",
+   "geoid": "4751080",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Mountain City",
+   "name": "Mountain City",
+   "geoid": "4750400",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Mt. Juliet",
+   "name": "Mount Juliet",
+   "geoid": "4750780",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Munford",
+   "name": "Munford",
+   "geoid": "4751540",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Murfreesboro",
+   "name": "Murfreesboro",
+   "geoid": "4751560",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Nashville",
+   "name": "Nashville",
+   "geoid": "4752006",
+   "n": 42,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "New Hope",
+   "name": "New Hope",
+   "geoid": "4752780",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "New Johnsonville",
+   "name": "New Johnsonville",
+   "geoid": "4752820",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "New Market",
+   "name": "New Market",
+   "geoid": "4752940",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "New Tazewell",
+   "name": "New Tazewell",
+   "geoid": "4753140",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Newbern",
+   "name": "Newbern",
+   "geoid": "4752400",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Newport",
+   "name": "Newport",
+   "geoid": "4753000",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Niota",
+   "name": "Niota",
+   "geoid": "4753380",
+   "n": 6,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Nolensville",
+   "name": "Nolensville",
+   "geoid": "4753460",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Normandy",
+   "name": "Normandy",
+   "geoid": "4753580",
+   "n": 1,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Norris",
+   "name": "Norris",
+   "geoid": "4753600",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Oak Hill",
+   "name": "Oak Hill",
+   "geoid": "4754780",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Oak Ridge",
+   "name": "Oak Ridge",
+   "geoid": "4755120",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Oakdale",
+   "name": "Oakdale",
+   "geoid": "4754280",
+   "n": 1,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Oakland",
+   "name": "Oakland",
+   "geoid": "4754920",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Obion",
+   "name": "Obion",
+   "geoid": "4755240",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Oliver Springs",
+   "name": "Oliver Springs",
+   "geoid": "4755800",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Oneida",
+   "name": "Oneida",
+   "geoid": "4755860",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Orlinda",
+   "name": "Orlinda",
+   "geoid": "4756020",
+   "n": 4,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Orme",
+   "name": "Orme",
+   "geoid": "4756040",
+   "n": 2,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Palmer",
+   "name": "Palmer",
+   "geoid": "4756560",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Paris",
+   "name": "Paris",
+   "geoid": "4756720",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Parker's Crossroads",
+   "name": "Parker's Crossroads",
+   "geoid": "4756870",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Parrottsville",
+   "name": "Parrottsville",
+   "geoid": "4757040",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Parsons",
+   "name": "Parsons",
+   "geoid": "4757080",
+   "n": 8,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Pegram",
+   "name": "Pegram",
+   "geoid": "4757480",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Petersburg",
+   "name": "Petersburg",
+   "geoid": "4757740",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Philadelphia",
+   "name": "Philadelphia",
+   "geoid": "4757900",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Pigeon Forge",
+   "name": "Pigeon Forge",
+   "geoid": "4758080",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Pikeville",
+   "name": "Pikeville",
+   "geoid": "4758120",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Piperton",
+   "name": "Piperton",
+   "geoid": "4758840",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Pittman Center",
+   "name": "Pittman Center",
+   "geoid": "4758940",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Plainview",
+   "name": "Plainview",
+   "geoid": "4759020",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Pleasant Hill",
+   "name": "Pleasant Hill",
+   "geoid": "4759240",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Pleasant View",
+   "name": "Pleasant View",
+   "geoid": "4759560",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Portland",
+   "name": "Portland",
+   "geoid": "4760280",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Powells Crossroads",
+   "name": "Powells Crossroads",
+   "geoid": "4760500",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Pulaski",
+   "name": "Pulaski",
+   "geoid": "4761040",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Puryear",
+   "name": "Puryear",
+   "geoid": "4761160",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ramer",
+   "name": "Ramer",
+   "geoid": "4761520",
+   "n": 8,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Red Bank",
+   "name": "Red Bank",
+   "geoid": "4761960",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Red Boiling Springs",
+   "name": "Red Boiling Springs",
+   "geoid": "4762000",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Ridgely",
+   "name": "Ridgely",
+   "geoid": "4763060",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ridgeside",
+   "name": "Ridgeside",
+   "geoid": "4763080",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Ridgetop",
+   "name": "Ridgetop",
+   "geoid": "4763140",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Ripley",
+   "name": "Ripley",
+   "geoid": "4763340",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Rives",
+   "name": "Rives",
+   "geoid": "4763800",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Rockford",
+   "name": "Rockford",
+   "geoid": "4764160",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Rockwood",
+   "name": "Rockwood",
+   "geoid": "4764440",
+   "n": 8,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Rocky Top",
+   "name": "Rocky Top",
+   "geoid": "4764668",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Rogersville",
+   "name": "Rogersville",
+   "geoid": "4764820",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Rossville",
+   "name": "Rossville",
+   "geoid": "4765240",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Rutherford",
+   "name": "Rutherford",
+   "geoid": "4765760",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Rutledge",
+   "name": "Rutledge",
+   "geoid": "4765820",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Saltillo",
+   "name": "Saltillo",
+   "geoid": "4766340",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Samburg",
+   "name": "Samburg",
+   "geoid": "4766360",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Sardis",
+   "name": "Sardis",
+   "geoid": "4766660",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Saulsbury",
+   "name": "Saulsbury",
+   "geoid": "4766680",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Savannah",
+   "name": "Savannah",
+   "geoid": "4766720",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Scotts Hill",
+   "name": "Scotts Hill",
+   "geoid": "4766880",
+   "n": 8,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Selmer",
+   "name": "Selmer",
+   "geoid": "4766940",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Sevierville",
+   "name": "Sevierville",
+   "geoid": "4767120",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Sharon",
+   "name": "Sharon",
+   "geoid": "4767540",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Shelbyville",
+   "name": "Shelbyville",
+   "geoid": "4767760",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Signal Mountain",
+   "name": "Signal Mountain",
+   "geoid": "4768540",
+   "n": 5,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Silerton",
+   "name": "Silerton",
+   "geoid": "4768560",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Slayden",
+   "name": "Slayden",
+   "geoid": "4769080",
+   "n": 4,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Smithville",
+   "name": "Smithville",
+   "geoid": "4769320",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Smyrna",
+   "name": "Smyrna",
+   "geoid": "4769420",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Sneedville",
+   "name": "Sneedville",
+   "geoid": "4769460",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Soddy-Daisy",
+   "name": "Soddy-Daisy",
+   "geoid": "4769560",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Somerville",
+   "name": "Somerville",
+   "geoid": "4769620",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "South Carthage",
+   "name": "South Carthage",
+   "geoid": "4769680",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "South Fulton",
+   "name": "South Fulton",
+   "geoid": "4769900",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "South Pittsburg",
+   "name": "South Pittsburg",
+   "geoid": "4770060",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Sparta",
+   "name": "Sparta",
+   "geoid": "4770180",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Spencer",
+   "name": "Spencer",
+   "geoid": "4770240",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Spring City",
+   "name": "Spring City",
+   "geoid": "4770400",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Spring Hill",
+   "name": "Spring Hill",
+   "geoid": "4770580",
+   "n": 9,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Springfield",
+   "name": "Springfield",
+   "geoid": "4770500",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "St. Joseph",
+   "name": "St. Joseph",
+   "geoid": "4766160",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Stanton",
+   "name": "Stanton",
+   "geoid": "4770820",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Stantonville",
+   "name": "Stantonville",
+   "geoid": "4770840",
+   "n": 2,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Sunbright",
+   "name": "Sunbright",
+   "geoid": "4772140",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Surgoinsville",
+   "name": "Surgoinsville",
+   "geoid": "4772380",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Sweetwater",
+   "name": "Sweetwater",
+   "geoid": "4772540",
+   "n": 6,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Tazewell",
+   "name": "Tazewell",
+   "geoid": "4773120",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Tellico Plains",
+   "name": "Tellico Plains",
+   "geoid": "4773260",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Tennessee Ridge",
+   "name": "Tennessee Ridge",
+   "geoid": "4773460",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Thompson's Station",
+   "name": "Thompson's Station",
+   "geoid": "4773900",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Three Way",
+   "name": "Three Way",
+   "geoid": "4774100",
+   "n": 4,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Tiptonville",
+   "name": "Tiptonville",
+   "geoid": "4774540",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Toone",
+   "name": "Toone",
+   "geoid": "4774640",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Townsend",
+   "name": "Townsend",
+   "geoid": "4774860",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Tracy City",
+   "name": "Tracy City",
+   "geoid": "4774880",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Trenton",
+   "name": "Trenton",
+   "geoid": "4775000",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Trezevant",
+   "name": "Trezevant",
+   "geoid": "4775100",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Trimble",
+   "name": "Trimble",
+   "geoid": "4775160",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Troy",
+   "name": "Troy",
+   "geoid": "4775240",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Tullahoma",
+   "name": "Tullahoma",
+   "geoid": "4775320",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Tusculum",
+   "name": "Tusculum",
+   "geoid": "4775560",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Unicoi",
+   "name": "Unicoi",
+   "geoid": "4775820",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Union City",
+   "name": "Union City",
+   "geoid": "4775940",
+   "n": 7,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Vanleer",
+   "name": "Vanleer",
+   "geoid": "4776860",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Viola",
+   "name": "Viola",
+   "geoid": "4777400",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Vonore",
+   "name": "Vonore",
+   "geoid": "4777480",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Walden",
+   "name": "Walden",
+   "geoid": "4777540",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Wartburg",
+   "name": "Wartburg",
+   "geoid": "4778100",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Wartrace",
+   "name": "Wartrace",
+   "geoid": "4778120",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Watauga",
+   "name": "Watauga",
+   "geoid": "4778240",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Watertown",
+   "name": "Watertown",
+   "geoid": "4778320",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Waverly",
+   "name": "Waverly",
+   "geoid": "4778560",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Waynesboro",
+   "name": "Waynesboro",
+   "geoid": "4778600",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Westmoreland",
+   "name": "Westmoreland",
+   "geoid": "4779420",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "White Bluff",
+   "name": "White Bluff",
+   "geoid": "4779980",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "White House",
+   "name": "White House",
+   "geoid": "4780200",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "White Pine",
+   "name": "White Pine",
+   "geoid": "4780360",
+   "n": 6,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Whiteville",
+   "name": "Whiteville",
+   "geoid": "4780540",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Whitwell",
+   "name": "Whitwell",
+   "geoid": "4780620",
+   "n": 5,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Williston",
+   "name": "Williston",
+   "geoid": "4781020",
+   "n": 3,
+   "kind": "Commissioner"
+  },
+  {
+   "org": "Winchester",
+   "name": "Winchester",
+   "geoid": "4781080",
+   "n": 6,
+   "kind": "Councilmember"
+  },
+  {
+   "org": "Winfield",
+   "name": "Winfield",
+   "geoid": "4781280",
+   "n": 5,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Woodbury",
+   "name": "Woodbury",
+   "geoid": "4781560",
+   "n": 7,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Woodland Mills",
+   "name": "Woodland Mills",
+   "geoid": "4781700",
+   "n": 3,
+   "kind": "Alderman"
+  },
+  {
+   "org": "Yorkville",
+   "name": "Yorkville",
+   "geoid": "4782360",
+   "n": 3,
+   "kind": "Commissioner"
+  }
+ ]
+}
