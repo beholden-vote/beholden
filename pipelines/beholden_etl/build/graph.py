@@ -96,6 +96,26 @@ def cosponsorship_edges(
     return edges
 
 
+def agreement_matrix(
+    members: list[str],
+    positions: dict[str, dict[str, str]],
+) -> dict[tuple[str, str], tuple[list[str], int]]:
+    """The pairwise co-voting agreement matrix. `positions` is person_id ->
+    {roll_call_id -> 'yea'|'nay'} (decided votes only). Returns (a, b) with
+    a < b -> (shared roll_call_ids sorted, number on which both cast the same
+    position), for every pair sharing at least MIN_SHARED_VOTES decided votes.
+    co_voting_edges and the position layout (build/positions.py) both read it."""
+    member_set = [m for m in members if m in positions]
+    out = {}
+    for a, b in combinations(sorted(member_set), 2):
+        pa, pb = positions[a], positions[b]
+        shared = sorted(set(pa) & set(pb))      # deterministic sample order
+        if len(shared) < MIN_SHARED_VOTES:
+            continue
+        out[(a, b)] = (shared, sum(1 for rc in shared if pa[rc] == pb[rc]))
+    return out
+
+
 def co_voting_edges(
     members: list[str],
     positions: dict[str, dict[str, str]],
@@ -107,14 +127,8 @@ def co_voting_edges(
     cast a decided position on the SAME roll_call_id (deterministic). weight is
     the agreement percentage over their shared decided votes, published only at
     or above MIN_SHARED_VOTES. Evidence is a sample of shared roll-call refs."""
-    member_set = [m for m in members if m in positions]
     edges = []
-    for a, b in combinations(sorted(member_set), 2):
-        pa, pb = positions[a], positions[b]
-        shared = sorted(set(pa) & set(pb))      # deterministic sample order
-        if len(shared) < MIN_SHARED_VOTES:
-            continue
-        agree = sum(1 for rc in shared if pa[rc] == pb[rc])
+    for (a, b), (shared, agree) in agreement_matrix(members, positions).items():
         pct = round(100.0 * agree / len(shared), 1)
         edges.append({
             "type": "co_voting", "a": a, "b": b,

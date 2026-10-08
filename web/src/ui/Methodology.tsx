@@ -14,6 +14,8 @@
  *    #donor-rollups  FEC employer aggregates (sources/fec.py by_employer)
  *    #state-donor-rollups  WA PDC employer aggregates (jobs/build.py, WO-19)
  *    #shared-donors  graph shared-donor edge (build/graph.py shared_donor_edges)
+ *    #position-profile (+ #with-own-party #with-other-party #missed-votes
+ *                    #party-line #similarity-layout)  build/measures.py, build/positions.py
  *    #sources        pointer to the Sources registry overlay
  *
  *  Rendered inside the existing info overlay (chrome.tsx InfoOverlay), so it
@@ -26,7 +28,8 @@ import type { InfoPage } from "./chrome";
  *  to (e.g. #methodology/key-votes scrolls here). */
 const SECTION_IDS = [
   "source-quality", "dw-nominate", "key-votes", "co-voting", "donor-rollups",
-  "state-donor-rollups", "shared-donors", "sources",
+  "state-donor-rollups", "shared-donors", "position-profile", "with-own-party",
+  "with-other-party", "missed-votes", "party-line", "similarity-layout", "sources",
 ] as const;
 
 export function Methodology({ anchor, onOpenInfo }: {
@@ -227,6 +230,85 @@ recency_bonus = 0.25 × (rank / n)                 # newest vote → 0.25`}</pre
         The same honesty governs the dossier's "Money &amp; votes, side by side":
         contributions and votes are shown next to each other as two independent
         public records, and their adjacency implies no causal relationship.
+      </p>
+
+      {/* ---- WO-36 position profile (build/positions.py, build/measures.py) ---- */}
+      <h2 id="position-profile">Position profile</h2>
+      <p>
+        A member's position profile is a set of separate measures, each with its own
+        formula below. There is no overall score: no measure is added to, averaged
+        with, weighted against or ranked by any other, because any single number
+        would be a choice of weights presented as a fact. Every measure is computed
+        the same way for every member, whatever their party. The two DW-NOMINATE
+        dimensions shown alongside are Voteview's, republished verbatim (see the
+        ideology score above); either is left blank, never zero, when Voteview
+        publishes none.
+      </p>
+      <p>
+        All four measures use the party-agreement rule above: only{" "}
+        <em>yea</em> and <em>nay</em> votes are decided votes; a party's position on a
+        roll call is its majority; a party split evenly has no position and that
+        roll call counts toward neither side. Each measure is published as a count
+        <span className="mono"> n</span> of a base <span className="mono">of</span>,
+        both always exact. The percentage is withheld when the base is below the
+        same minimum as party agreement.
+      </p>
+
+      <h3 id="with-own-party">With own party</h3>
+      <pre className="method-formula mono">{`with_own_party = decided votes matching the member's own party majority
+               / decided votes where that party had a majority`}</pre>
+      <p>
+        This is exactly the party-agreement figure on the member's full voting
+        record (<span className="mono">build/measures.py · with_own_party</span>).
+      </p>
+
+      <h3 id="with-other-party">With the other party</h3>
+      <pre className="method-formula mono">{`population       = roll calls where both major parties had a majority
+                   and the two majorities differed
+with_other_party = decided votes matching the other major party's majority
+                 / decided votes in that population`}</pre>
+      <p>
+        It is left blank for a member of neither major party. Such a member has no
+        single "other" party to compare against, and we do not pick one for them
+        (<span className="mono">build/measures.py · with_other_party</span>).
+      </p>
+
+      <h3 id="missed-votes">Missed votes</h3>
+      <pre className="method-formula mono">{`missed = roll calls recorded as not voting
+       / roll calls the member was eligible for`}</pre>
+      <p>
+        A roll call held before the member took office is not counted at all, so
+        it is never counted as missed. A <em>present</em> vote is not a missed vote
+        (<span className="mono">build/measures.py · missed</span>).
+      </p>
+
+      <h3 id="party-line">With own party, by policy area</h3>
+      <p>
+        The with-own-party formula, computed separately over the roll calls on
+        bills in each congress.gov policy area. Roll calls with no policy area, such
+        as nominations and procedural motions, are left out of this breakdown
+        only. An area whose base is below the minimum is not shown for that member
+        (<span className="mono">build/measures.py · party_line_by_policy_area</span>).
+      </p>
+
+      <h3 id="similarity-layout">Similarity map</h3>
+      <p>
+        The similarity map places members of a chamber so that members who vote
+        alike sit close together. It starts from the same pairwise agreement as the
+        "votes together" edge: for each pair, the share of shared decided roll calls
+        on which both cast the same position. The distance between a pair is
+        1 − agreement, and the map is a classical multidimensional scaling of those
+        distances onto two axes.
+      </p>
+      <p>
+        The procedure is deterministic, so the same votes give the same map. Each
+        axis is turned so that the first member by identifier is on its positive
+        side, a rule that does not look at party. Both axes are scaled to run from
+        −1 to 1 and rounded to three decimals. A member is placed only with at least
+        as many decided votes as the "votes together" edge requires.{" "}
+        <strong>The axes have no meaning.</strong> The map names no group, bloc or
+        side, and a member's place on it is not a score
+        (<span className="mono">build/positions.py · layout</span>).
       </p>
 
       {/* ---- Sources pointer ---- */}

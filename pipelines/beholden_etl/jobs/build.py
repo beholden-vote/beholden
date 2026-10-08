@@ -25,6 +25,7 @@ from ..build import dossiers, graph, key_votes, stylefeeds
 from ..build.context import BuildContext
 from ..build import areas as area_facts                         # WO-34 (county/city facts; `areas` is a loop var below)
 from ..build import votes                                       # WO-23a (votes/rollcalls/bills)
+from ..build import positions                                   # WO-36 (positions/{chamber})
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
@@ -305,6 +306,7 @@ ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
     # --- insertion point: one line per writer, in dependency order ---
     ("areas", area_facts.publish),   # WO-34
     ("votes", votes.publish),        # WO-23a
+    ("positions", positions.publish),  # WO-36
 ]
 
 

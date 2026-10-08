@@ -91,6 +91,9 @@ def to_score_rows(csv_text: str, congress: int, icpsr_to_person: dict[str, str],
             "person_id": person_id,
             "scheme": "dw_nominate_dim1",
             "score": None if pending else float(row["nominate_dim1"]),
+            # WO-36: the second dimension, same row, same floor; blank -> None.
+            "nominate_dim2": None if pending or not (row.get("nominate_dim2") or "").strip()
+                             else float(row["nominate_dim2"]),
             "status": "pending_insufficient_votes" if pending else "ok",
             "scope": str(congress),
             "computed_as_of": (as_of or "")[:10] or row.get("congress_end_date")
