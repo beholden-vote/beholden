@@ -18,6 +18,7 @@ from beholden_etl.jobs import build, transform
 from beholden_etl import divisions
 from beholden_etl.sources import legislators
 from beholden_etl.sources import tn_local
+from beholden_etl.sources.roster import RosterRow
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -3074,24 +3075,36 @@ def test_provenance_refuses_ungraded_unregistered_source():
 
 # --- WO-22 local tier: Sumner County + Hendersonville, TN --------------------
 # Local government is where the source data is worst, so the gates matter most
-# here. Fixtures are synthetic rosters in the SHAPE the official pages publish;
-# the parsers themselves are exercised against small verbatim markup samples.
+# here. The gates run on synthetic rows in the shape the adapters emit; the
+# pipeline runs on the real pages (tests/fixtures/roster, WO-22b), landed exactly
+# as the fetcher lands them.
 
 SUMNER_ROSTER = [
-    {"full_name": f"Commissioner {n}", "district": n,
-     "email": f"c{n}@sumnercountytn.gov", "photo_url": None,
-     "source_record_url": f"https://sumnercountytn.gov/commissioner-{n}/"}
+    RosterRow(name=f"Commissioner {n}", office_title="County Commissioner",
+              seat_label=f"District {n}", contact={"email": f"c{n}@sumnercountytn.gov"},
+              source_row_url=f"https://sumnercountytn.gov/commissioner-{n}/")
     for n in range(1, 25)
 ]
 HVILLE_ROSTER = (
-    [{"full_name": "Pat Mayor", "role_title": "Mayor", "ward": None,
-      "email": "mayor@hvilletn.org", "phone": "6155550100", "photo_url": None,
-      "source_record_url": tn_local.HENDERSONVILLE_URL}]
-    + [{"full_name": f"Alder {w}{s}", "role_title": f"Alderman - Ward {w}", "ward": w,
-        "email": f"a{w}{s}@hvilletn.org", "phone": None, "photo_url": None,
-        "source_record_url": tn_local.HENDERSONVILLE_URL}
+    [RosterRow(name="Pat Mayor", office_title="Mayor", seat_label=None,
+               contact={"email": "mayor@hvilletn.org", "phone": "6155550100"},
+               source_row_url=tn_local.HENDERSONVILLE_URL)]
+    + [RosterRow(name=f"Alder {w}{s}", office_title="Alderman", seat_label=f"Ward {w}",
+                 contact={"email": f"a{w}{s}@hvilletn.org"},
+                 source_row_url=tn_local.HENDERSONVILLE_URL)
        for w in range(1, 7) for s in ("a", "b")]
 )
+ROSTER_FIXTURES = Path(__file__).parent / "fixtures" / "roster"
+
+
+def land_local_rosters(raw: Path, manifest: dict) -> None:
+    """Land both real roster pages and their manifest rows, as roster.fetch does."""
+    for spec in tn_local.SPECS:
+        key = spec.source.source_key
+        (raw / key).mkdir(parents=True, exist_ok=True)
+        (raw / key / "roster.html").write_bytes((ROSTER_FIXTURES / f"{key}.html").read_bytes())
+        manifest["sources"][key] = {"retrieved_at": RETRIEVED_AT,
+                                    "source_url": spec.source.url, "count": 1}
 
 
 @pytest.fixture(scope="module")
@@ -3103,13 +3116,8 @@ def local_dirs(tmp_path_factory):
     raw = tmp / "raw"
     (raw / "unitedstates_legislators").mkdir(parents=True)
     (raw / "unitedstates_legislators" / "legislators-current.json").write_text(json.dumps(LEGS))
-    for key, roster in (("sumner_county", SUMNER_ROSTER), ("hendersonville", HVILLE_ROSTER)):
-        (raw / key).mkdir(parents=True)
-        (raw / key / "roster.json").write_text(json.dumps(roster))
     manifest = json.loads(json.dumps(MANIFEST))
-    for key in ("sumner_county", "hendersonville"):
-        manifest["sources"][key] = {"retrieved_at": RETRIEVED_AT,
-                                    "source_url": "https://example.gov/", "count": 1}
+    land_local_rosters(raw, manifest)
     (raw / "manifest.json").write_text(json.dumps(manifest))
     db = str(tmp / "wh.duckdb")
     # raw_dir as a STR on purpose. transform.run is typed `str | Path` and the
@@ -3164,11 +3172,11 @@ def test_sumner_roster_gate_rejects_a_missing_seat():
     reshapes and yields 23 of 24 districts must halt, not publish a county
     government with one district silently unrepresented."""
     with pytest.raises(tn_local.RosterError, match=r"missing districts \[7\]"):
-        tn_local.check_sumner_roster([r for r in SUMNER_ROSTER if r["district"] != 7])
+        tn_local.check_sumner_roster([r for r in SUMNER_ROSTER if r.seat_label != "District 7"])
 
 
 def test_sumner_roster_gate_rejects_a_duplicate_seat():
-    dupe = SUMNER_ROSTER[:-1] + [dict(SUMNER_ROSTER[0])]
+    dupe = SUMNER_ROSTER[:-1] + [SUMNER_ROSTER[0]]
     with pytest.raises(tn_local.RosterError, match="duplicated"):
         tn_local.check_sumner_roster(dupe)
 
@@ -3176,12 +3184,12 @@ def test_sumner_roster_gate_rejects_a_duplicate_seat():
 def test_hendersonville_gate_rejects_wrong_ward_count():
     with pytest.raises(tn_local.RosterError, match="wrong number of aldermen"):
         tn_local.check_hendersonville_roster(
-            [r for r in HVILLE_ROSTER if r["role_title"] != "Alderman - Ward 3"])
+            [r for r in HVILLE_ROSTER if r.seat_label != "Ward 3"])
 
 
 def test_hendersonville_gate_rejects_two_mayors():
     with pytest.raises(tn_local.RosterError, match="2 mayor"):
-        tn_local.check_hendersonville_roster(HVILLE_ROSTER + [dict(HVILLE_ROSTER[0])])
+        tn_local.check_hendersonville_roster(HVILLE_ROSTER + [HVILLE_ROSTER[0]])
 
 
 def test_parsers_read_the_official_markup():
@@ -3266,7 +3274,10 @@ def test_local_dossiers_publish_identity_only(local_dirs):
 
 def test_local_contact_comes_from_the_official_page(local_dirs):
     d = _by_role(local_dirs, "Mayor")[0]
-    assert d["identity"]["contact"]["email"] == "mayor@hvilletn.org"
+    published = [r for r in tn_local.parse_hendersonville(
+        (ROSTER_FIXTURES / "hendersonville.html").read_text(encoding="utf-8"))
+        if r["ward"] is None][0]
+    assert d["identity"]["contact"]["email"] == published["email"]
 
 
 def test_served_layers_all_publish_pins(local_dirs):

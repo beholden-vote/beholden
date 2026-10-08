@@ -113,6 +113,8 @@ export const STRINGS = {
   // Provenance
   sourceLabel: "Source",
   retrievedLabel: { checked: "checked", unchanged: "unchanged since" },
+  // WO-22b: a local roster names the government it is "as reported by".
+  reportedLabel: { by: "as reported by", retrieved: "retrieved" },
 
   // Credibility grades (WO-28) — DESCRIPTIVE OF METHOD, NEVER OF THE OFFICIAL.
   // A grade says how Beholden obtained a fact, not how trustworthy the person

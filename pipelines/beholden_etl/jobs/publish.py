@@ -91,6 +91,17 @@ STALE_FRACTION = 0.02
 # Stale keys printed per prefix. The count is always exact; the cap only keeps
 # a first run against a bucket nobody has ever swept from flooding the log.
 STALE_LIST_CAP = 200
+# WO-22b: written by build beside dist/data (so it is never uploaded). "live" =
+# keys of a WITHHELD roster locality: its last good objects stay served, so they
+# are never stale, whatever this build produced (DATA-CONTRACTS §8.8). "migrated"
+# = old seat-keyed id -> new person-keyed one: listed as an id change, not as an
+# official who left. Absent file = no hints.
+HINTS_FILE = "publish_hints.json"
+
+
+def _hints(data_dir: Path) -> dict:
+    f = data_dir.parent / HINTS_FILE
+    return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
 
 # ── Write budget ─────────────────────────────────────────────────────────────
 CLASS_A_FREE_PER_MONTH = 1_000_000
@@ -362,7 +373,8 @@ def _delete(client, keys: list[str]) -> None:
 
 
 def _settle_stale(client, stale: dict[str, list[str]], tripped: list[str], *,
-                  delete: bool, allow_mass_delete: bool, dry_run: bool, tag: str) -> None:
+                  delete: bool, allow_mass_delete: bool, dry_run: bool, tag: str,
+                  migrated: dict | None = None) -> None:
     """Report the stale keys — always — and delete them only when asked.
 
     Deletion is opt-in (--delete-stale): listing is free of consequences and
@@ -381,7 +393,9 @@ def _settle_stale(client, stale: dict[str, list[str]], tripped: list[str], *,
         print(f"{tag}: no stale objects under any managed prefix")
     for prefix, keys in stale.items():
         print(f"{tag}: {len(keys)} stale under {prefix} ({verb})"
-              + "".join(f"\n  - {k}" for k in keys[:STALE_LIST_CAP])
+              + "".join(f"\n  - {k}" + ("  (id migration, not a departure)"
+                                         if k in (migrated or {}) else "")
+                        for k in keys[:STALE_LIST_CAP])
               + (f"\n  … and {len(keys) - STALE_LIST_CAP} more"
                  if len(keys) > STALE_LIST_CAP else ""))
     doomed = [k for keys in stale.values() for k in keys]
@@ -473,14 +487,17 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
             f"{BULK_WRITE_LIMIT} single-run limit. Nothing was written. If this is "
             "intended, pass --allow-bulk-writes.")
     serving_keys = {key for _, key in serving}
+    hints = _hints(data_dir)
+    live_keys = serving_keys | set(hints.get("live", []))     # WO-22b: withheld = live
     skipped = len(serving) - len(to_put)
 
     if dry_run:
-        stale, tripped, lists = _find_stale(client, serving_keys)
+        stale, tripped, lists = _find_stale(client, live_keys)
         for _, key in to_put:
             print(f"publish[dry-run] would upload {key}")
         _settle_stale(client, stale, tripped, delete=delete_stale,
-                      allow_mass_delete=allow_mass_delete, dry_run=True, tag="publish[dry-run]")
+                      allow_mass_delete=allow_mass_delete, dry_run=True, tag="publish[dry-run]",
+                      migrated=hints.get("migrated"))
         print(f"publish[dry-run]: {len(to_put)}/{len(serving)} serving ({skipped} unchanged, "
               f"skipped) + {len(raw)} raw + {len(to_copy)}/{len(mirror)} latest-pointer; "
               f"{sum(map(len, stale.values()))} stale. Nothing written, nothing deleted.")
@@ -502,11 +519,12 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
 
     # ── Stale objects: last, so everything this run produced is already live
     # and a tripwire stops only the deletion. Listed always; deleted on request.
-    stale, tripped, lists = _find_stale(client, serving_keys)
+    stale, tripped, lists = _find_stale(client, live_keys)
     _budget_line(writes + lists)
     _bytes_line(to_put, raw)
     _settle_stale(client, stale, tripped, delete=delete_stale,
-                  allow_mass_delete=allow_mass_delete, dry_run=False, tag="publish")
+                  allow_mass_delete=allow_mass_delete, dry_run=False, tag="publish",
+                  migrated=hints.get("migrated"))
     return len(serving) + len(raw)
 
 

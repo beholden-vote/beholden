@@ -26,8 +26,10 @@ from ..build.context import BuildContext
 from ..build import areas as area_facts                         # WO-34 (county/city facts; `areas` is a loop var below)
 from ..build import votes                                       # WO-23a (votes/rollcalls/bills)
 from ..build import positions                                   # WO-36 (positions/{chamber})
+from ..build import coverage_divisions, pin_shards              # WO-22b (coverage/{st}, pins/{layer}/{st})
 from ..sources import congress_gov, house_clerk, voteview, wikidata
 from ..sources import legislators as L
+from ..sources import roster                                    # WO-22b (reported_by)
 from ..sources import openstates_votes                          # WO-17 (state votes/bills)
 from .transform import DEFAULT_DB
 from .. import store
@@ -237,14 +239,6 @@ METHODOLOGY_DONORS = "donor-rollups"       # FEC by_employer top contributors (f
 METHODOLOGY_DONORS_STATE = "state-donor-rollups"  # WO-19: WA PDC employer rollups (below)
 
 
-def _local_name(ocd_id: str, kind: str) -> str:
-    """Human name of the county/place segment of an ocd id ('st_clair' ->
-    'St. Clair'). The slug is lossy by design (the registry's rule collapses
-    punctuation), so this is a display convenience only — never a join key."""
-    seg = ocd_id.split(f"{kind}:")[1].split("/")[0] if f"{kind}:" in ocd_id else ""
-    return seg.replace("_", " ").replace("~", "'").title()
-
-
 def _office_display(chamber: str, ocd_id: str) -> str:
     tail = ocd_id.split("/")[-1]
     state = ocd_id.split("state:")[1].split("/")[0].upper() if "state:" in ocd_id else "?"
@@ -257,16 +251,14 @@ def _office_display(chamber: str, ocd_id: str) -> str:
         return f"{state} State Senate · District {seat}"
     if chamber == "lower":
         return f"{state} State House · District {seat}"
-    # WO-22 local levels. The body's own name comes from the ocd path, so a new
-    # county needs no code here: .../county:sumner/council_district:3 and
-    # .../place:hendersonville/ward:1 both read back their parent's name.
-    if chamber == "county_commission":
-        return f"{_local_name(ocd_id, 'county')} County Commission · District {seat}"
-    if chamber == "board_of_aldermen":
-        return f"{_local_name(ocd_id, 'place')} Board of Aldermen · Ward {seat}"
-    if "/place:" in ocd_id and chamber is None:
-        return f"Mayor of {_local_name(ocd_id, 'place')}"
     return f"{state} · {seat}"
+
+
+def _display(h: dict) -> str:
+    """WO-22b: a roster-built official's office title is generated from its
+    spec at transform time and rides in terms.meta; everyone else's from the
+    chamber and ocd path."""
+    return h.get("local_display") or _office_display(h["chamber"], h["ocd_id"])
 
 
 # Federal chambers carry ideology + a legislative record. State chambers (E4)
@@ -307,6 +299,8 @@ ARTIFACT_WRITERS: list[tuple[str, Callable[[BuildContext], dict]]] = [
     ("areas", area_facts.publish),   # WO-34
     ("votes", votes.publish),        # WO-23a
     ("positions", positions.publish),  # WO-36
+    ("pin_shards", pin_shards.publish),                  # WO-22b (after core pins)
+    ("coverage_divisions", coverage_divisions.publish),  # WO-22b
 ]
 
 
@@ -391,6 +385,7 @@ def _current_holders(con) -> list[dict]:
                t.meta->>'image'            AS image_url,
                t.meta->>'source_url'       AS source_url,
                t.meta->>'source_key'       AS source_key,
+               t.meta->>'office_display'   AS local_display,
                t.meta->>'contact'          AS state_contact_json,
                t.meta->>'social'           AS state_social_json,
                i.score  AS ideology_score,
@@ -830,6 +825,9 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         src = h.get("source_url")
         identity_prov = _provenance(h["source_key"],
                                     src or SOURCES[h["source_key"]].base_url, manifest)
+        # WO-22b: name the government the roster is "as reported by" on the
+        # provenance line (grade B rides in from the registry).
+        identity_prov["reported_by"] = roster.reported_by(h["source_key"])
         links = [{"type": "official", "url": src}] if src else []
     else:
         src = h.get("source_url")
@@ -840,7 +838,7 @@ def _dossier(h: dict, photo: dict, manifest: dict, medians: dict,
         "full_name": h["full_name"],
         "photo_url": photo_url,
         "office": {"role": h["role"], "ocd_id": h["ocd_id"],
-                   "display": _office_display(h["chamber"], h["ocd_id"]),
+                   "display": _display(h),
                    "chamber": h["chamber"]},
         "party": {"code": h["party"], "display": PARTY_DISPLAY.get(h["party"], h["party"])},
         "tenure": {"first_took_office": h["first_took_office"],
@@ -1066,7 +1064,7 @@ def _build_graph(out: Path, holders: list[dict], all_sponsorships: dict,
         node_by_id[h["person_id"]] = {
             "person_id": h["person_id"], "name": h["full_name"],
             "party": h["party"],
-            "office_display": _office_display(h["chamber"], h["ocd_id"]),
+            "office_display": _display(h),
             "ideology_dim1": h["ideology_score"]}
     members = list(node_by_id.values())
 
@@ -1104,6 +1102,9 @@ def _build_graph(out: Path, holders: list[dict], all_sponsorships: dict,
         edges += graph.committee_edges(ids, committee_ids, window)
 
     docs = graph.neighborhoods(members, edges, as_of)
+    # WO-22b (§8.8): no empty graph document for a roster-built local official.
+    roster_built = {h["person_id"] for h in holders if h.get("local_display")}
+    docs = {pid: d for pid, d in docs.items() if d["edges"] or pid not in roster_built}
     return graph.publish(docs, out / "graph" / "neighborhood")
 
 
@@ -1229,7 +1230,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
         # never fans out dossier fetches just to label a polygon (contract §3).
         return [{"person_id": h["person_id"], "ocd_id": _tile_ocd(h["ocd_id"]),
                  "full_name": h["full_name"],
-                 "office": _office_display(h["chamber"], h["ocd_id"]),
+                 "office": _display(h),
                  "chamber": h["chamber"], "vacant": bool(h["is_vacant_marker"]),
                  "lat": None, "lng": None,
                  "photo_url": h.get("image_url") or photo.get(h.get("bioguide")),
@@ -1247,7 +1248,7 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
     # One row per current officeholder across every layer — the same fields for
     # every official (symmetric by construction). Lazy-loaded client-side. ---
     people = [{"person_id": h["person_id"], "full_name": h["full_name"],
-               "office": _office_display(h["chamber"], h["ocd_id"]),
+               "office": _display(h),
                "party": h["party"], "ocd_id": h["ocd_id"]}
               for h in holders if h["full_name"]]
     people.sort(key=lambda r: r["full_name"])

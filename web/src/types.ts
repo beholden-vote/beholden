@@ -15,6 +15,8 @@ export interface Provenance {
   grade?: "A" | "B" | "C" | "D";
   /** Registered reason implying the grade, e.g. "official_document_ocr". */
   grade_reason?: string;
+  /** WO-22b: the government a local roster fact is "as reported by" (local rosters only). */
+  reported_by?: string;
 }
 
 /** Tile-contract properties on a division polygon (data-contracts v1 §5, emitted
