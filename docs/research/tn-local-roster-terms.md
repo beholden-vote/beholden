@@ -1,6 +1,6 @@
 # Terms of reuse: Sumner County and Hendersonville, TN roster pages
 
-> **Status: Accepted by the owner on 2026-10-08 for names, offices and public contact details
+> **Status: Accepted by the owner on 2026-10-08 for names, offices and public contact details (plus Sumner County's linked official photographs, as its site states no restriction)
 > only (facts-only reading); no photos from Hendersonville; source quality shown as grade B.**
 >
 > "Accepted" means the owner's written approval in chat on that date. It is our own
@@ -101,5 +101,5 @@ copied or re-hosted. Its terms place no restriction on reuse.
 ## Sign-off
 
 - [x] 2026-10-08: the owner accepted, in writing in chat, the facts-only reading above:
-  names, offices and public contact details; no Hendersonville photos; grade B. This
+  names, offices and public contact details, plus Sumner County's linked photographs; no Hendersonville photos; grade B. This
   records our own determination. It is not permission from either government.
