@@ -199,5 +199,5 @@ def regenerate(export_csv: str, gazetteer_place_txt: str) -> None:
             titles[r.office_title] += r.seat_label == MEMBER and r.office_title in BODIES
         c["n"] = len(rows)
         c["kind"] = max(BODIES, key=lambda t: (titles[t], t == "Alderman"))
-    TABLE.write_text(json.dumps({"as_of": TERM_START, "excluded": dict(sorted(excluded.items())),
+    TABLE.write_text(json.dumps({"as_of": "2026-10-08", "excluded": dict(sorted(excluded.items())),
                                  "cities": cities}, indent=1) + "\n", encoding="utf-8")
