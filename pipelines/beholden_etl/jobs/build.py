@@ -1197,6 +1197,12 @@ def run(db_path: str = DEFAULT_DB, out_dir: str | Path = PAGES_DIST,
             layer = "place"
         elif layer is None and h["chamber"] is None and "/county:" in h["ocd_id"]:
             layer = "county"                                     # WO-22b: a county mayor
+        # A roster-built official is on the layer of the government it sits in, whatever
+        # the body is called: keying this on the chamber name dropped every council
+        # member whose chamber was not listed above (MTAS cities, 2026-10-10).
+        if layer is None and h.get("local_display"):
+            layer = ("place" if "/place:" in h["ocd_id"]
+                     else "county" if "/county:" in h["ocd_id"] else None)
         if layer:
             by_layer[layer].append(h)
 
