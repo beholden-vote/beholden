@@ -70,8 +70,10 @@ class Bucket:
         self.puts.append(Key)
 
     def copy_object(self, Bucket, CopySource, Key, ContentType, CacheControl,
-                    MetadataDirective):
-        self.objects[Key] = {"body": self.objects[CopySource["Key"]]["body"], "meta": {}}
+                    MetadataDirective, Metadata=None):
+        assert MetadataDirective == "REPLACE"              # else Metadata is ignored
+        self.objects[Key] = {"body": self.objects[CopySource["Key"]]["body"],
+                             "meta": dict(Metadata or {})}
         self.copies.append(Key)
 
     def put_bucket_cors(self, Bucket, CORSConfiguration):
@@ -531,9 +533,9 @@ def _raw(tmp_path, files: dict[str, bytes]):
 
 
 def test_latest_mirror_copies_only_files_whose_bytes_changed(tmp_path, bucket):
-    """raw/latest/ is compared on raw bytes (ETag vs local MD5): there are no
-    stamps to look past in a source snapshot. The dated partition is the
-    reproducibility record and is written whole every run, as before."""
+    """raw/latest/ is compared on raw bytes (the SHA-256 stored with it, WO-41):
+    there are no stamps to look past in a source snapshot. Since WO-41 the
+    dated partition gets only the files that changed (test_retention.py)."""
     root = _tree(tmp_path, {"coverage.json": b"{}"})
     raw = _raw(tmp_path, {"manifest.json": b'{"generated_at":"2026-09-12T06:00:00+00:00"}',
                           "voteview/members.csv": b"a,b\n", "fec/totals/H1.json": b"{}"})
@@ -548,32 +550,13 @@ def test_latest_mirror_copies_only_files_whose_bytes_changed(tmp_path, bucket):
     (raw / "manifest.json").write_bytes(b'{"generated_at":"2026-09-13T06:00:00+00:00"}')
     publish.run(data_dir=root, raw_dir=raw, dry_run=False)
     assert bucket.copies == ["raw/latest/manifest.json"]              # only what moved
-    assert sorted(k for k in bucket.puts if k.startswith("raw/")) == [  # the lake: as before
-        "raw/2026-09-13/fec/totals/H1.json", "raw/2026-09-13/manifest.json",
-        "raw/2026-09-13/voteview/members.csv"]
+    assert sorted(k for k in bucket.puts if k.startswith("raw/")) == [  # and only it lands
+        "raw/2026-09-13/manifest.json"]
     assert bucket.objects["raw/latest/manifest.json"]["body"] == (raw / "manifest.json").read_bytes()
 
     bucket.copies.clear()
     publish.run(data_dir=root, raw_dir=raw, dry_run=False, force_all=True)
     assert len(bucket.copies) == 3
-
-
-def test_latest_mirror_never_reads_a_multipart_etag_as_a_digest(tmp_path):
-    f = tmp_path / "x.csv"
-    f.write_bytes(b"a,b\n")
-    md5 = hashlib.md5(b"a,b\n", usedforsecurity=False).hexdigest()
-
-    class Head:
-        def __init__(self, resp):
-            self.resp = resp
-
-        def head_object(self, Bucket, Key):
-            return self.resp
-
-    assert publish._same_bytes(Head({"ETag": f'"{md5}"'}), "raw/latest/x.csv", f)
-    assert not publish._same_bytes(Head({"ETag": f'"{md5}-4"'}), "raw/latest/x.csv", f)
-    assert not publish._same_bytes(Head({"ETag": '"0"'}), "raw/latest/x.csv", f)
-    assert not publish._same_bytes(Head({}), "raw/latest/x.csv", f)       # no ETag at all
 
 
 # --- 5. stale objects ----------------------------------------------------------
@@ -734,7 +717,8 @@ def test_class_a_line_counts_puts_copies_and_lists(tmp_path, bucket, capsys):
                           "voteview/members.csv": b"a,b\n"})
     publish.run(data_dir=root, raw_dir=raw, dry_run=False)
     n = len(bucket.puts) + len(bucket.copies) + bucket.lists      # the bucket's own count
-    assert n == 3 + 2 + 2 + 2          # serving PUTs, raw PUTs, mirror COPYs, LISTs (2 prefixes)
+    # serving PUTs, raw PUTs, mirror COPYs, LISTs (2 managed prefixes + raw/ for retention)
+    assert n == 3 + 2 + 2 + 3
     out = capsys.readouterr().out
     assert f"publish: class-A this run = {n} (≈ {n * 30} per month of 1,000,000 free)" in out
     assert "::warning::" not in out
@@ -746,11 +730,11 @@ def test_class_a_line_counts_puts_copies_and_lists(tmp_path, bucket, capsys):
     assert "publish: bytes written this run = serving 6 B (0.0 MiB) + raw 48 B " in out
 
     publish.run(data_dir=root, raw_dir=raw, dry_run=False)        # a quiet night
-    n = 2 + 0 + 2                      # raw PUTs (dated partition), no copies, LISTs
+    n = 0 + 0 + 3                      # WO-41: no raw PUTs, no copies; LISTs only
     out = capsys.readouterr().out
     assert f"publish: class-A this run = {n} " in out
-    # Nothing served changed, and the lake still grew by its full size.
-    assert "publish: bytes written this run = serving 0 B (0.0 MiB) + raw 48 B " in out
+    # Nothing served changed, and the lake did not grow.
+    assert "publish: bytes written this run = serving 0 B (0.0 MiB) + raw 0 B " in out
 
 
 def test_budget_warning_when_the_month_projects_past_700k(capsys):

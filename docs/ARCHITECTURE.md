@@ -52,7 +52,7 @@ so none was ever byte-identical to the previous night's and the byte comparison 
 | Operation | Count | Note |
 |---|---|---|
 | Serving PUT | objects whose facts changed | Target: well under 1,000 on a quiet night. All ~15,900 on the first run after deploy (no stored digests yet) and on any `full_rebuild`. |
-| Raw PUT, `raw/{date}/…` | 2,158 | Unchanged by WO-33: the dated partition is the reproducibility record and every key is new. This is now the floor — about 65,000 a month. |
+| Raw PUT, `raw/{date}/…` | files whose bytes changed | Was the whole lake every night (2,158, later 3,581) until WO-41; see below. |
 | Latest-pointer COPY, `raw/latest/…` | files whose bytes changed | At most 2,158. |
 | LIST | one per 1,000 keys under each managed prefix | About 20. |
 
@@ -65,11 +65,39 @@ Two guards sit in publish rather than in anyone's memory: a GitHub `::warning::`
 run projects past 700,000 a month, and a refusal to start a run that would make more than
 200,000 writes without `--force-all` or `--allow-bulk-writes`.
 
-**Storage is the other budget, and it is unmeasured.** `raw/{date}/` adds the lake's full
-size every night and nothing removes it, against 10 GB free. Publish now prints the bytes
-it wrote, serving and raw separately; the raw figure times the nights retained is the
-lake's footprint. De-duplicating the dated partition is a follow-on, to be sized from
-that number.
+**Storage is the other budget (WO-41).** Until WO-41 `raw/{date}/` added the lake's full
+size every night and nothing removed it, against 10 GB free. What the nightly logs show
+(2026-10-11; no bucket listing was made, so storage is an estimate built on them):
+
+| | Measured (nightly log) | Estimated |
+|---|---|---|
+| Dated nights published | 83 (2026-07-14 to 2026-10-11) | Earlier runs print no publish summary: unknown, not counted |
+| Raw objects per night | 2,143–2,160 to 2026-10-03; 2,724 on 10-08; 3,581 since 10-10 | ~182,000 dated objects in all |
+| Raw bytes per night | 70.8 MiB (10-03), 78.2 MiB (10-08), 79.6 MiB (10-10, 10-11) | Nights before 10-03 taken as 70.8 MiB |
+| `raw/` footprint | — | ~5.8 GiB dated + ~0.08 GiB `raw/latest/`, growing ~2.3 GiB a month |
+| Unchanged since the night before | 3,580 of 3,581 files on 10-11; 2,159 of 2,160 on 10-03 (the latest-pointer byte comparison) | — |
+
+At that rate the 10 GB tier is gone in roughly six weeks, and every quiet night spent
+~3,580 class-A PUTs writing bytes the bucket already held.
+
+**From WO-41**, a raw file is uploaded only when its bytes differ from `raw/latest/`
+(SHA-256 stored as object metadata, compared on a HEAD; anything uncertain uploads). The
+dated partition therefore holds only what changed that night, and night *D*'s lake is,
+for each path, the newest `raw/{date}/` copy with date ≤ *D* (`raw/latest/` is that for
+the newest night). A retention pass keeps the last 14 nights plus the last night of
+every month, and for each path keeps the copy every kept night resolves to; everything
+else under `raw/{date}/` is deletable. It never touches `raw/latest/`, `tiles/` or
+`fonts/`, refuses when `raw/latest/` is missing or holds fewer files than the lake just
+published, refuses on any unrecognised key under `raw/`, deletes at most 10,000 objects
+a run (oldest first), and logs every dated prefix it would delete. It ships in
+**dry-run**: the nightly prints the listing and deletes nothing until the
+`--raw-retention-delete` line in `etl-nightly.yml` is enabled.
+
+Projected: a quiet night's raw class-A falls from ~3,580 to the files that changed
+(1 on 10-11) plus about one LIST per 1,000 keys under `raw/`; the first night after
+deploy re-uploads the whole lake once (no stored hashes yet). Storage stops growing by
+~80 MiB a night at once; with deletion on, `raw/` settles near 0.5 GiB (one full
+baseline, `raw/latest/`, three legacy month-end nights, and deltas).
 
 ## 2. The only non-free line items (be honest about them)
 
