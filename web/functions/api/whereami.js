@@ -7,6 +7,7 @@
 // "locate me" button (browser geolocation) is separate and stays on the device.
 
 export function onRequestGet({ request }) {
+  if (!sameOrigin(request)) return new Response("Forbidden", { status: 403, headers: { "cache-control": "private, no-store" } });
   const cf = request.cf || {};
   const lat = parseFloat(cf.latitude);
   const lng = parseFloat(cf.longitude);
@@ -16,10 +17,16 @@ export function onRequestGet({ request }) {
   return new Response(JSON.stringify(body), {
     headers: {
       "content-type": "application/json; charset=utf-8",
-      // Vary by IP is implicit; keep it uncached so a shared edge cache can't
-      // hand one visitor's city to another.
-      "cache-control": "no-store",
-      "access-control-allow-origin": "*",
+      // Per-visitor answer: never let a shared cache hand one visitor's city to another.
+      "cache-control": "private, no-store",
     },
   });
+}
+
+// Same-origin only: browsers set Sec-Fetch-Site (unforgeable from page JS); fall back to Origin.
+function sameOrigin(request) {
+  const site = request.headers.get("sec-fetch-site");
+  if (site) return site === "same-origin";
+  const o = request.headers.get("origin");
+  return !!o && o === new URL(request.url).origin;
 }

@@ -138,6 +138,15 @@ beholden/
 | Traffic makes Pages file limits awkward | Move all dossiers to R2 behind the same domain | Path structure unchanged; clients never notice. |
 | Local officials (Phase 3) | Licensed feed adapter + `place`/`county` divisions | Schema already accepts arbitrary OCD depth. |
 
+### 5.0 Edge endpoints: `/api/geocode` and `/api/whereami`
+
+Both are Pages Functions on the site host and answer **same-origin requests only**
+(`Sec-Fetch-Site: same-origin`, else matching `Origin`); anything else gets 403 and no CORS
+header is ever sent. `/api/whereami` returns coarse lat/lng/city/region, never the IP, with
+`Cache-Control: private, no-store`. `/api/geocode` accepts only `?q=` (4-200 chars), calls the
+Census geocoder with an identifying User-Agent, caps the upstream body, and may cache privately
+for 5 minutes. Rate limiting is a Cloudflare dashboard rule owned by the maintainer.
+
 ### 5.1 The constraint: never put a Worker in front of `data.beholden.vote`
 
 This is the one scale-up move that looks obvious and is wrong, so it is written
