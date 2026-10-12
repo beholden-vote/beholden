@@ -1023,6 +1023,7 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .vr-table td, .vr-table tbody th { display: flex; gap: 10px; padding: 2px 0; border: 0; }
   .vr-table td::before { content: attr(data-label); flex: none; width: 76px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding-top: 2px; }
   .vr-table td > a, .vr-table td > .vr-bill { flex: 1; }
+}
 /* ---------- WO-37: area card, coverage fills, coverage page ----------
    Coverage is DATA, never chrome and never party. One neutral lightness ramp
    (covered light, partial mid, withheld dark) plus a pattern per step, so the
