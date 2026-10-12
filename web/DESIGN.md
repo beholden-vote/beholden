@@ -85,6 +85,26 @@ relative luminance of the three fills moves by under 0.01 in each, so the ramp
 order is preserved; being near-achromatic it cannot be read as red/blue or
 green/red. The legend and the area card state each state in words.
 
+### Position ramp (WO-38) — data, never party
+The map can colour U.S. House districts by a published measure instead of party. Both
+numeric modes use ONE neutral ramp, generated and checked by `src/ui/stand/ramp.check.mjs`:
+nine stops at a single OKLab lightness (L 0.66; relative luminance 0.27 to 0.29), the same
+chroma at both ends, neutral grey in the middle:
+```
+low  #a47dcf  #9f83c1  #9b89b1  #968ea2  #929292  #96937d  #9b9467  #a0944c  #a49325  high
+violet                                    mid grey                                olive
+```
+The midpoint is stated in the legend: 0 for DW-NOMINATE dimension 1, the House median for
+the with-own-party rate. Direction is arbitrary and the legend says neither end is better.
+Cool violet against olive is a blue-yellow axis, which protan and deutan viewers keep:
+simulated with Machado matrices the end-to-end OKLab distance is 0.24 (normal), 0.24
+(protanopia), 0.22 (deuteranopia). Tritanopia collapses it (0.05); that is why colour is
+never the only carrier: the district's number is in the dossier, plots use position and a
+ring, and a table sits beside every plot. A district with no value keeps its party colour
+and the legend counts them. The U.S. Senate and state chambers keep party colour, counties
+and cities keep the coverage scale. Plots: one dot size and opacity for every member, party
+as the data hue only, the viewed member ringed in amber (the selection colour, same for all).
+
 Roles: **amber = the only chromatic action color** (anti-slop: no teal, one accent).
 Party hues are tuned to matched luminance so neither reads "louder." `--flag`/
 `--bad` are deliberately off the party-red hue so accountability signals never

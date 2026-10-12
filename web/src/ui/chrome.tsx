@@ -7,6 +7,7 @@ import { STRINGS } from "../strings";
 import { GRADES, type Grade } from "./gradeFilter";
 // Layers sorted by level of government — the axis users actually think in.
 // Shared with the stack panel so the two can never disagree (lib/levels.ts).
+import { ColourModeControl } from "./stand/ColourModeControl";   // WO-38
 import { CoverageLegend, LineLegend } from "./places/CoverageLegend";   // WO-37
 import { GATES, PANEL_SECTIONS as LEVEL_GROUPS, type Gate, type GateId } from "../lib/levels";
 
@@ -233,6 +234,7 @@ export function LayerControl({
           </div>
         ))}
         <GradeFilter minGrade={minGrade} onMinGrade={onMinGrade} />
+        <ColourModeControl />{/* WO-38 */}
         <Legend showSplit={!!visible.states} />
         <LineLegend />
         {(visible.county || visible.place) && <CoverageLegend />}

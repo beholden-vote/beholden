@@ -1023,6 +1023,7 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .vr-table td, .vr-table tbody th { display: flex; gap: 10px; padding: 2px 0; border: 0; }
   .vr-table td::before { content: attr(data-label); flex: none; width: 76px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding-top: 2px; }
   .vr-table td > a, .vr-table td > .vr-bill { flex: 1; }
+}
 /* ---------- WO-37: area card, coverage fills, coverage page ----------
    Coverage is DATA, never chrome and never party. One neutral lightness ramp
    (covered light, partial mid, withheld dark) plus a pattern per step, so the
@@ -1078,3 +1079,41 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
 .line-primary { border-top: 1px solid #2a6486; }
 .line-ref { border-top: 1px dashed #4a7f9d; opacity: 0.6; }
 .level-showing { margin: 0 0 6px; font-family: var(--font-mono); font-size: 11px; color: var(--ink); }
+
+/* ===== WO-38: where they stand (profile, plots, colour modes, compare) ===========
+   Every rule applies to every member and both parties alike. Party appears only as the
+   data hue on a dot; the ring is the one highlight (--sig, as for any selection). */
+.stand-note, .stand-prov { color: var(--mut); font-size: 12px; line-height: 1.5; margin: 6px 0; }
+.stand-prov { font-size: 11px; color: var(--dim); }
+.stand-h { margin: 14px 0 4px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mut); }
+.stand-measures { margin: 6px 0; display: grid; gap: 6px; }
+.stand-measure { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+.stand-measure dt { color: var(--mut); font-size: 13px; }
+.stand-measure dd { margin: 0; font-size: 13px; text-align: right; }
+.stand-na { color: var(--mut); font-style: normal; }
+.stand-areas { margin: 8px 0; }
+.stand-areas summary, .stand-plot-table summary { cursor: pointer; color: var(--sig); font-size: 12px; }
+.stand-plot { margin: 14px 0 6px; }
+.stand-plot-title { font-size: 12px; color: var(--mut); margin-bottom: 6px; }
+.stand-plot-svg { width: 100%; max-width: 420px; height: auto; display: block; background: var(--bg); border: 2px solid var(--line); }
+.stand-plot-frame { fill: none; stroke: var(--line-2); stroke-width: 1; }
+.stand-plot-axis { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.stand-dot { opacity: 0.8; }
+.stand-ring { fill: none; stroke: var(--sig); stroke-width: 2; }
+.stand-mark-b .stand-ring { stroke-dasharray: 4 3; }
+.stand-mark-label { fill: var(--ink); font: 700 11px var(--font-mono); }
+.stand-axis-name { fill: var(--mut); font: 10px var(--font-mono); }
+.stand-plot-scroll { max-height: 260px; overflow: auto; margin-top: 6px; border: 1px solid var(--line); }
+.stand-plot-scroll:focus-visible { outline: 2px solid var(--sig); outline-offset: 1px; }
+.stand-plot-table tr.is-marked th, .stand-plot-table tr.is-marked td { background: var(--surf2); }
+.stand-unplaced { font-size: 12px; color: var(--mut); line-height: 1.6; }
+.stand-compare { margin-top: 12px; }
+.stand-together { font-size: 16px !important; }
+.stand-compare-table th, .stand-compare-table td { vertical-align: top; }
+.ramp-bar { height: 10px; border: 1px solid rgba(234, 242, 248, 0.18); margin: 4px 0 2px; }
+.ramp-ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--mut); }
+.ramp-legend .layer-ctl-hint { display: block; margin-top: 4px; }
+@media (max-width: 560px) {
+  .stand-measure { flex-direction: column; gap: 2px; }
+  .stand-measure dd { text-align: left; }
+}

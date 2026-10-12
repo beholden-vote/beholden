@@ -38,7 +38,7 @@ export const RECORD_VIEWS: {
 } = {
   bill: lazy(() => import("../votes/BillView")),       // WO-23b
   vote: lazy(() => import("../votes/RollCallView")),   // WO-23b
-  // compare: WO-38
+  compare: lazy(() => import("../stand/CompareView")),   // WO-38
 };
 
 /** Crumb label until a record view names itself. */
