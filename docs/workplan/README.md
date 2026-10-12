@@ -109,6 +109,9 @@ sequentially — the WOs touch the same files.
 | 36 | Position profile (measures + layout, no composite) | P (after 23a) | open — [`WO-36`](WO-36-position-profile.md) |
 | 37 | Places UI: city layer, area card, coverage fills, sharded pins, coverage page | F (after 21, 34, 35) | open — [`WO-37`](WO-37-places-ui.md) |
 | 39 | Metros through Legistar | P (after 22b-A, 23a, R-B) | **gated** — [`WO-39`](WO-39-legistar-metros.md) |
+| 38 | Where they stand: profile card, chamber plot, similarity map, colour modes, compare | F (after 36) | open — [`WO-38`](WO-38-where-they-stand.md) |
+| 40a | Edge hardening: geocode and whereami same-origin | F/edge | open — [`WO-40a`](WO-40a-edge-hardening.md) |
+| 41 | Raw lake retention and skip-unchanged raw uploads | P | open — [`WO-41`](WO-41-raw-lake-retention.md) |
 
 **WO-1…16 merged (2026-07-06).** WO-11…16 were the depth round: dossier tabs, cited
 drill-downs, an interactive connections graph, per-level map fills, and the
