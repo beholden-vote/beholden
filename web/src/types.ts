@@ -282,3 +282,28 @@ export interface CoverageDivision {
 }
 /** /coverage/{st}.json */
 export interface CoverageShard { state: string; divisions: Record<string, CoverageDivision> }
+
+// WO-38 ----------------------------------------------------------------------
+// /positions/{chamber}.json (contracts 8.7). No composite exists or is ever added.
+/** One measure: n of `of`, always exact; `pct` is null below the vote floor. */
+export interface Measure { n: number; of: number; pct: number | null }
+export interface PositionMember {
+  person_id: string; name: string; party: string; state: string;
+  /** Voteview coordinates; either may be null, never 0-filled. */
+  nominate: { dim1: number | null; dim2: number | null } | null;
+  measures: {
+    with_own_party: Measure | null;
+    /** null for a member of neither major party (not applicable). */
+    with_other_party: Measure | null;
+    missed: Measure | null;
+    party_line_by_policy_area: (Measure & { policy_area: string })[];
+  };
+  /** Similarity map coordinates in [-1, 1]; null below the vote floor. */
+  layout: { x: number; y: number } | null;
+}
+export interface PositionsFile {
+  schema_version: string; chamber: "house" | "senate"; generated_at: string; scope: string;
+  members: PositionMember[];
+  methodology_ids: Record<string, string>;
+  provenance: Provenance;
+}

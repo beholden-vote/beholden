@@ -1,0 +1,622 @@
+{
+ "chamber": "senate",
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "members": [
+  {
+   "layout": {
+    "x": -0.231,
+    "y": 0.264
+   },
+   "measures": {
+    "missed": {
+     "n": 4,
+     "of": 915,
+     "pct": 0.4
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 31,
+      "of": 40,
+      "pct": 77.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 34,
+      "of": 40,
+      "pct": 85.0,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 31,
+      "of": 40,
+      "pct": 77.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 26,
+     "of": 800,
+     "pct": 3.2
+    },
+    "with_own_party": {
+     "n": 867,
+     "of": 900,
+     "pct": 96.3
+    }
+   },
+   "name": "Fixture Senator 01",
+   "nominate": {
+    "dim1": -0.552,
+    "dim2": 0.224
+   },
+   "party": "D",
+   "person_id": "fixture-s0001",
+   "state": "VA"
+  },
+  {
+   "layout": {
+    "x": -0.481,
+    "y": 0.694
+   },
+   "measures": {
+    "missed": {
+     "n": 39,
+     "of": 915,
+     "pct": 4.3
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 29,
+      "of": 40,
+      "pct": 72.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 35,
+      "of": 40,
+      "pct": 87.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 38,
+      "of": 40,
+      "pct": 95.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 10,
+     "of": 800,
+     "pct": 1.2
+    },
+    "with_own_party": {
+     "n": 860,
+     "of": 900,
+     "pct": 95.6
+    }
+   },
+   "name": "Fixture Senator 02",
+   "nominate": {
+    "dim1": -0.525,
+    "dim2": 0.21
+   },
+   "party": "D",
+   "person_id": "fixture-s0002",
+   "state": "WA"
+  },
+  {
+   "layout": {
+    "x": -0.706,
+    "y": 0.655
+   },
+   "measures": {
+    "missed": {
+     "n": 15,
+     "of": 915,
+     "pct": 1.6
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 20,
+      "of": 40,
+      "pct": 50.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 32,
+      "of": 40,
+      "pct": 80.0,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 31,
+      "of": 40,
+      "pct": 77.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 6,
+     "of": 800,
+     "pct": 0.8
+    },
+    "with_own_party": {
+     "n": 871,
+     "of": 900,
+     "pct": 96.8
+    }
+   },
+   "name": "Fixture Senator 03",
+   "nominate": {
+    "dim1": -0.246,
+    "dim2": -0.063
+   },
+   "party": "D",
+   "person_id": "fixture-s0003",
+   "state": "NM"
+  },
+  {
+   "layout": {
+    "x": -0.723,
+    "y": 0.63
+   },
+   "measures": {
+    "missed": {
+     "n": 30,
+     "of": 915,
+     "pct": 3.3
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 23,
+      "of": 40,
+      "pct": 57.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 28,
+      "of": 40,
+      "pct": 70.0,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 23,
+      "of": 40,
+      "pct": 57.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 18,
+     "of": 800,
+     "pct": 2.2
+    },
+    "with_own_party": {
+     "n": 879,
+     "of": 900,
+     "pct": 97.7
+    }
+   },
+   "name": "Fixture Senator 04",
+   "nominate": {
+    "dim1": -0.675,
+    "dim2": -0.475
+   },
+   "party": "D",
+   "person_id": "fixture-s0004",
+   "state": "MN"
+  },
+  {
+   "layout": {
+    "x": 0.542,
+    "y": 0.219
+   },
+   "measures": {
+    "missed": {
+     "n": 11,
+     "of": 915,
+     "pct": 1.2
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 31,
+      "of": 40,
+      "pct": 77.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 34,
+      "of": 40,
+      "pct": 85.0,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 33,
+      "of": 40,
+      "pct": 82.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 14,
+     "of": 800,
+     "pct": 1.8
+    },
+    "with_own_party": {
+     "n": 889,
+     "of": 900,
+     "pct": 98.8
+    }
+   },
+   "name": "Fixture Senator 05",
+   "nominate": {
+    "dim1": 0.248,
+    "dim2": -0.207
+   },
+   "party": "R",
+   "person_id": "fixture-s0005",
+   "state": "TX"
+  },
+  {
+   "layout": {
+    "x": 0.71,
+    "y": -0.403
+   },
+   "measures": {
+    "missed": {
+     "n": 23,
+     "of": 915,
+     "pct": 2.5
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 22,
+      "of": 40,
+      "pct": 55.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 27,
+      "of": 40,
+      "pct": 67.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 36,
+      "of": 40,
+      "pct": 90.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 24,
+     "of": 800,
+     "pct": 3.0
+    },
+    "with_own_party": {
+     "n": 856,
+     "of": 900,
+     "pct": 95.1
+    }
+   },
+   "name": "Fixture Senator 06",
+   "nominate": {
+    "dim1": 0.298,
+    "dim2": 0.19
+   },
+   "party": "R",
+   "person_id": "fixture-s0006",
+   "state": "OH"
+  },
+  {
+   "layout": {
+    "x": 0.221,
+    "y": 0.398
+   },
+   "measures": {
+    "missed": {
+     "n": 27,
+     "of": 915,
+     "pct": 3.0
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 27,
+      "of": 40,
+      "pct": 67.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 31,
+      "of": 40,
+      "pct": 77.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 22,
+      "of": 40,
+      "pct": 55.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 6,
+     "of": 800,
+     "pct": 0.8
+    },
+    "with_own_party": {
+     "n": 841,
+     "of": 900,
+     "pct": 93.4
+    }
+   },
+   "name": "Fixture Senator 07",
+   "nominate": {
+    "dim1": 0.607,
+    "dim2": 0.356
+   },
+   "party": "R",
+   "person_id": "fixture-s0007",
+   "state": "WY"
+  },
+  {
+   "layout": {
+    "x": 0.465,
+    "y": 0.295
+   },
+   "measures": {
+    "missed": {
+     "n": 22,
+     "of": 915,
+     "pct": 2.4
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 38,
+      "of": 40,
+      "pct": 95.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 21,
+      "of": 40,
+      "pct": 52.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 27,
+      "of": 40,
+      "pct": 67.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 25,
+     "of": 800,
+     "pct": 3.1
+    },
+    "with_own_party": {
+     "n": 896,
+     "of": 900,
+     "pct": 99.6
+    }
+   },
+   "name": "Fixture Senator 08",
+   "nominate": {
+    "dim1": 0.489,
+    "dim2": 0.067
+   },
+   "party": "R",
+   "person_id": "fixture-s0008",
+   "state": "KY"
+  },
+  {
+   "layout": {
+    "x": -0.456,
+    "y": -0.567
+   },
+   "measures": {
+    "missed": {
+     "n": 37,
+     "of": 915,
+     "pct": 4.0
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 21,
+      "of": 40,
+      "pct": 52.5,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 37,
+      "of": 40,
+      "pct": 92.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 34,
+      "of": 40,
+      "pct": 85.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": null,
+    "with_own_party": {
+     "n": 844,
+     "of": 900,
+     "pct": 93.8
+    }
+   },
+   "name": "Fixture Senator 09",
+   "nominate": {
+    "dim1": -0.426,
+    "dim2": -0.339
+   },
+   "party": "I",
+   "person_id": "fixture-s0009",
+   "state": "VT"
+  },
+  {
+   "layout": {
+    "x": -0.263,
+    "y": -0.396
+   },
+   "measures": {
+    "missed": {
+     "n": 37,
+     "of": 915,
+     "pct": 4.0
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 28,
+      "of": 40,
+      "pct": 70.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 26,
+      "of": 40,
+      "pct": 65.0,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 21,
+      "of": 40,
+      "pct": 52.5,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": null,
+    "with_own_party": {
+     "n": 873,
+     "of": 900,
+     "pct": 97.0
+    }
+   },
+   "name": "Fixture Senator 10",
+   "nominate": {
+    "dim1": -0.166,
+    "dim2": 0.372
+   },
+   "party": "I",
+   "person_id": "fixture-s0010",
+   "state": "ME"
+  },
+  {
+   "layout": null,
+   "measures": {
+    "missed": {
+     "n": 34,
+     "of": 915,
+     "pct": 3.7
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 26,
+      "of": 40,
+      "pct": 65.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 29,
+      "of": 40,
+      "pct": 72.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 28,
+      "of": 40,
+      "pct": 70.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 4,
+     "of": 800,
+     "pct": 0.5
+    },
+    "with_own_party": {
+     "n": 7,
+     "of": 7,
+     "pct": null
+    }
+   },
+   "name": "Fixture Senator 11",
+   "nominate": {
+    "dim1": 0.603,
+    "dim2": -0.038
+   },
+   "party": "R",
+   "person_id": "fixture-s0011",
+   "state": "AK"
+  },
+  {
+   "layout": {
+    "x": -0.575,
+    "y": -0.091
+   },
+   "measures": {
+    "missed": {
+     "n": 6,
+     "of": 915,
+     "pct": 0.7
+    },
+    "party_line_by_policy_area": [
+     {
+      "n": 36,
+      "of": 40,
+      "pct": 90.0,
+      "policy_area": "Economics and Public Finance"
+     },
+     {
+      "n": 37,
+      "of": 40,
+      "pct": 92.5,
+      "policy_area": "Immigration"
+     },
+     {
+      "n": 22,
+      "of": 40,
+      "pct": 55.0,
+      "policy_area": "International Affairs"
+     }
+    ],
+    "with_other_party": {
+     "n": 9,
+     "of": 800,
+     "pct": 1.1
+    },
+    "with_own_party": {
+     "n": 885,
+     "of": 900,
+     "pct": 98.3
+    }
+   },
+   "name": "Fixture Senator 12",
+   "nominate": {
+    "dim1": null,
+    "dim2": null
+   },
+   "party": "D",
+   "person_id": "fixture-s0012",
+   "state": "HI"
+  }
+ ],
+ "methodology_ids": {
+  "layout": "similarity-layout",
+  "missed": "missed-votes",
+  "party_line": "party-line",
+  "with_other_party": "with-other-party",
+  "with_own_party": "with-own-party"
+ },
+ "provenance": {
+  "grade": "A",
+  "pipeline_version": "fixture",
+  "retrieved_at": "2026-10-03T00:00:00+00:00",
+  "source": "voteview"
+ },
+ "schema_version": "1.0",
+ "scope": "119th Congress"
+}

@@ -13,6 +13,7 @@ import { DATA } from "./lib/data";
 import { loadStateCoverage } from "./lib/coverage";
 import { BANDS, bandAt, bandStart, type BandStop } from "./lib/levels";
 import type { DivisionProps } from "./types";
+import { colourFor, colourState, loadCdPeople, loadPositions, modeValue, reportColour, scaleFor, subscribeColour } from "./lib/positions";   // WO-38
 
 export type { DivisionProps };
 
@@ -125,9 +126,11 @@ const refExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
 
 // Join a style feed to already-loaded geometry via feature-state — tiles stay
 // immutable, colors update daily, and map + dossier can never disagree (§5).
-function applyFeed(map: maplibregl.Map, source: string, sourceLayer: string, feed: StyleFeed) {
+function applyFeed(map: maplibregl.Map, source: string, sourceLayer: string, feed: StyleFeed,
+                   override?: Map<string, string> | null) {
   for (const [ocdId, row] of Object.entries(feed)) {
-    map.setFeatureState({ source, sourceLayer, id: ocdId }, { fill: fillFor(row) });
+    // WO-38 colour mode: a member's value colour where there is one, else party colour.
+    map.setFeatureState({ source, sourceLayer, id: ocdId }, { fill: (!row.vacant && override?.get(ocdId)) || fillFor(row) });
   }
 }
 
@@ -251,6 +254,45 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     }
   };
   const applyAllVis = () => LAYERS.forEach((L) => applyVis(L.id));
+
+  // ---- WO-38 colour modes: party (default) | position | with-own-party rate ----
+  // Only U.S. House districts have a per-member value on the map (the Senate layer is a
+  // two-member delegation and state chambers have no published positions); those, and
+  // any House member with no value, keep party colour, and the legend says so. Local
+  // layers keep coverage colours whatever the mode.
+  const feeds = new Map<string, StyleFeed>();
+  const applied = new Set<string>();
+  let cdOverride: Map<string, string> | null = null;
+  let colourRun = 0;
+  const refreshColour = async () => {
+    const run = ++colourRun;
+    const { mode } = colourState();
+    const repaint = () => {
+      const L = LAYERS.find((x) => x.id === "cd")!;
+      if (applied.has("cd")) applyFeed(map, L.archive, L.sourceLayer, feeds.get("cd") ?? {}, cdOverride);
+    };
+    if (mode === "party") { cdOverride = null; repaint(); return; }
+    const [file, people] = await Promise.all([loadPositions("house"), loadCdPeople()]);
+    if (run !== colourRun) return;
+    if (!file) { cdOverride = null; repaint(); reportColour({ status: "unavailable", placed: 0, fallback: 0, scale: null }); return; }
+    const scale = scaleFor(mode, file.members);
+    const byId = new Map(file.members.map((m) => [m.person_id, m]));
+    const next = new Map<string, string>();
+    let fallback = 0;
+    for (const [ocd, row] of Object.entries(feeds.get("cd") ?? {})) {
+      if (row.vacant) continue;
+      const m = byId.get(people.get(ocd) ?? "");
+      const v = m ? modeValue(m, mode) : null;
+      if (v === null) fallback++; else next.set(ocd, colourFor(v, scale));
+    }
+    cdOverride = next;
+    repaint();
+    reportColour({ status: "ready", placed: next.size, fallback, scale });
+  };
+  let seenMode = colourState().mode;
+  subscribeColour(() => {   // reportColour also notifies; only a mode change repaints
+    if (colourState().mode !== seenMode) { seenMode = colourState().mode; void refreshColour(); }
+  });
 
   map.on("load", async () => {
     map.addImage("cov-dots", patternImage("dots"));
@@ -427,18 +469,17 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     });
 
     // Load every feed up front; apply once the matching source has tiles.
-    const feeds = new Map<string, StyleFeed>();
     await Promise.all(LAYERS.map(async (L) => feeds.set(L.id, await loadStyleFeed(L.id))));
 
-    const applied = new Set<string>();
     map.on("sourcedata", (e) => {
       if (!e.isSourceLoaded) return;
       for (const L of LAYERS) {
         if (L.archive !== e.sourceId || applied.has(L.id)) continue;
-        applyFeed(map, L.archive, L.sourceLayer, feeds.get(L.id) ?? {});
+        applyFeed(map, L.archive, L.sourceLayer, feeds.get(L.id) ?? {}, L.id === "cd" ? cdOverride : null);
         applied.add(L.id);
       }
     });
+    void refreshColour();
   });
 
   // ---- coverage fills (WO-37): one shard per state the reader has reached ----

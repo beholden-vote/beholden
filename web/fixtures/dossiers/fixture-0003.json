@@ -1,0 +1,53 @@
+{
+ "schema_version": "1.0",
+ "person_id": "fixture-0003",
+ "generated_at": "2026-10-03T00:00:00+00:00",
+ "identity": {
+  "full_name": "Fixture Member Three",
+  "photo_url": null,
+  "office": {
+   "role": "U.S. House",
+   "ocd_id": "ocd-division/country:us/state:tn/cd:3",
+   "display": "U.S. House",
+   "chamber": "house"
+  },
+  "party": {
+   "code": "I",
+   "display": "Independent"
+  },
+  "tenure": {
+   "first_took_office": "2023-01-03",
+   "current_term_ends": "2027-01-03"
+  },
+  "next_election": null,
+  "status": "incumbent",
+  "official_links": [],
+  "provenance": {
+   "source": "fixture",
+   "source_url": "https://example.invalid/fixture",
+   "retrieved_at": "2026-10-03T00:00:00+00:00",
+   "pipeline_version": "fixture",
+   "methodology_id": null,
+   "grade": "A"
+  }
+ },
+ "ideology": {
+  "scheme": "dw-nominate",
+  "score": 0.1,
+  "status": "ok",
+  "context": {
+   "party_median": null,
+   "chamber_median": null
+  },
+  "scope": "119th Congress",
+  "explainer_url": "",
+  "provenance": {
+   "source": "fixture",
+   "source_url": "https://example.invalid/fixture",
+   "retrieved_at": "2026-10-03T00:00:00+00:00",
+   "pipeline_version": "fixture",
+   "methodology_id": null,
+   "grade": "A"
+  }
+ }
+}

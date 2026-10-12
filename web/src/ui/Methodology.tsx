@@ -254,6 +254,15 @@ recency_bonus = 0.25 × (rank / n)                 # newest vote → 0.25`}</pre
         same minimum as party agreement.
       </p>
 
+      <p>
+        The map can colour U.S. House districts by a member's first DW-NOMINATE
+        dimension (<a href="#methodology/dw-nominate">formula</a>) or by their{" "}
+        <a href="#methodology/with-own-party">with-own-party</a> rate. Both use one
+        neutral ramp of a single lightness, so neither end is louder and neither is
+        a party. The legend states the midpoint: 0 for the first dimension, and the
+        House median for the rate. A district with no value keeps its party colour.
+      </p>
+
       <h3 id="with-own-party">With own party</h3>
       <pre className="method-formula mono">{`with_own_party = decided votes matching the member's own party majority
                / decided votes where that party had a majority`}</pre>
