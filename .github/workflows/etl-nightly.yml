@@ -91,9 +91,10 @@ jobs:
           flags="$flags --delete-stale"
           # WO-41 raw-lake retention runs every night in DRY-RUN: the step log
           # lists each raw/{date}/ prefix it would delete and deletes nothing.
-          # Enable deletion (a separate one-line PR, after the owner has read
-          # one night's listing) by uncommenting the next line.
-          # flags="$flags --raw-retention-delete"
+          # Deletion enabled 2026-10-11 on the owner's instruction, before a
+          # dry-run listing was read. Guards unchanged: raw/YYYY-MM-DD/ only,
+          # never raw/latest/, refuses on a missing or short latest, capped per run.
+          flags="$flags --raw-retention-delete"
           if [ "${{ github.event.inputs.allow_mass_delete }}" = "true" ]; then
             flags="$flags --allow-mass-delete"
           fi
