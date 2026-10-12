@@ -2,8 +2,11 @@
 
 The CDN is the database: every serving file lands at the bucket root so the
 client reads `https://data.beholden.vote/{stylefeeds,pins,dossiers}/…` directly.
-Raw snapshots land under `raw/{date}/{source}/…` — immutable, so any published
-fact stays reproducible from the lake (contracts §7). Tiles are published
+Raw snapshots land under `raw/{date}/{source}/…`, and only those whose bytes
+differ from `raw/latest/` (WO-41): night D's lake is, per path, the newest dated
+copy at or before D, so any published fact stays reproducible from the lake
+(contracts §7). jobs/retention.py prunes dated nights (dry-run unless
+--raw-retention-delete). Tiles are published
 separately (spike/publish_tiles.sh) and are immutable per vintage; serving JSON
 refreshes daily, so it carries a short max-age.
 
@@ -41,6 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ..config import PAGES_DIST, R2_BUCKET, RAW_DIST
+from . import retention
 
 # Independent per-file requests — a thread pool trades wall-clock for nothing
 # but connection count, and R2/S3 handles far more than this concurrently.
@@ -56,6 +60,10 @@ RAW_CACHE_CONTROL = "public, max-age=31536000, immutable"
 LATEST_PREFIX = "raw/latest/"
 LATEST_CACHE_CONTROL = "no-cache, max-age=0"
 REQUIRED_ENV = ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+
+# WO-41: object-metadata key holding the SHA-256 of a raw object's exact bytes —
+# set on the dated PUT and on the raw/latest/ copy, from the bytes that PUT sent.
+RAW_META = "sha256"
 
 # ── What "unchanged" means (DATA-CONTRACTS §8.1) ─────────────────────────────
 # Object-metadata key holding the stamp-insensitive digest of the stored body.
@@ -82,7 +90,10 @@ ENVELOPE_KEYS = frozenset({"provenance", "votes_provenance", "committees_provena
 # managed set is derived from what this build wrote; this refusal is hard-coded
 # on top of that so an artifact that one day writes dist/data/tiles/… cannot
 # widen it. raw/ is the reproducibility record; tiles/ and fonts/ are published
-# by other tools and are never present in a build's output.
+# by other tools and are never present in a build's output. WO-41 narrows the
+# raw/ refusal for ONE caller only: jobs/retention.py may delete keys matching
+# raw/YYYY-MM-DD/… (never raw/latest/), through its own guarded delete. The
+# stale sweep below still never touches raw/.
 NEVER_DELETE = ("raw/", "tiles/", "fonts/")
 # A bug in build must not be able to empty the bucket: more stale keys under one
 # prefix than max(STALE_FLOOR, STALE_FRACTION of that prefix) raises instead.
@@ -262,24 +273,28 @@ def _already_stored(client, key: str, path: Path) -> bool:
     return meta.get(STABLE_META) == digest
 
 
-def _same_bytes(client, key: str, path: Path) -> bool:
-    """True when R2 already holds exactly these bytes under `key` — for the raw
-    mirror, where there are no stamps to look past. R2 returns the content MD5
-    as the ETag of a single-part upload, which every raw file is (put_object
-    never splits, and a server-side copy of a single-part object keeps its ETag).
-    Fails open like _already_stored."""
+def _sha256(body: bytes) -> str:
+    return hashlib.sha256(body).hexdigest()
+
+
+def _raw_unchanged(client, latest_key: str, path: Path) -> bool:
+    """True only when raw/latest/ positively vouches that it holds exactly these
+    bytes: the SHA-256 stored with the object equals the local file's (WO-41).
+    Then neither the dated PUT nor the latest COPY is needed — the newest dated
+    copy of this path already holds these bytes (it is what raw/latest/ was
+    copied from), and retention never deletes a path's newest copy.
+
+    Fails OPEN like _already_stored: absent object, HEAD error, no stored hash
+    (every object written before WO-41), or a different hash -> upload. A
+    wrongly skipped raw file would make a night unreproducible; a needless one
+    costs two class-A operations."""
     from botocore.exceptions import BotoCoreError, ClientError
     try:
-        etag = client.head_object(Bucket=R2_BUCKET, Key=key)["ETag"].strip('"')
-    except (BotoCoreError, ClientError, KeyError):
+        meta = client.head_object(Bucket=R2_BUCKET, Key=latest_key).get("Metadata") or {}
+    except (BotoCoreError, ClientError):
         return False
-    # A multipart ETag is '{md5-of-part-digests}-{partcount}' — not a digest of
-    # the content, so it must never be read as one. Belt-and-braces: the equality
-    # below already cannot match a suffixed ETag. It is here so that anyone who
-    # later "fixes" the comparison to be laxer has to delete this line first.
-    if "-" in etag:
-        return False
-    return etag == hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
+    stored = meta.get(RAW_META)
+    return bool(stored) and stored == _sha256(path.read_bytes())
 
 
 def _put_batch(client, batch: list[tuple[Path, str]], cache_control: str,
@@ -303,18 +318,36 @@ def _put_batch(client, batch: list[tuple[Path, str]], cache_control: str,
     return len(batch)
 
 
-def _copy_batch_to_latest(client, mirror: list[tuple[Path, str, str]]) -> int:
+def _put_raw(client, batch: list[tuple[Path, str]]) -> dict[str, str]:
+    """PUT the dated raw files, each with the SHA-256 of the exact bytes sent as
+    metadata. Returns {raw_key: sha256} so the latest-pointer copy carries the
+    hash of what THIS run put, not of a second read of the file."""
+    def _put_one(p: Path, key: str) -> tuple[str, str]:
+        body = p.read_bytes()
+        digest = _sha256(body)
+        client.put_object(Bucket=R2_BUCKET, Key=key, Body=body, ContentType=_content_type(p),
+                          CacheControl=RAW_CACHE_CONTROL, Metadata={RAW_META: digest})
+        return key, digest
+
+    return dict(_pool(_put_one, batch))
+
+
+def _copy_batch_to_latest(client, mirror: list[tuple[Path, str, str]],
+                          shas: dict[str, str]) -> int:
     """WO-10 last-good pointer: mirror raw/{date}/… objects to raw/latest/… via a
     server-side R2 CopyObject instead of re-uploading the same bytes from the
-    runner a second time. `mirror` is (file, raw_key, latest_key).
+    runner a second time. `mirror` is (file, raw_key, latest_key); every raw_key
+    was PUT by this run and `shas` holds the hash of the bytes that PUT sent.
     MetadataDirective='REPLACE' is required: without it CopyObject inherits the
     SOURCE object's immutable, 1-year CacheControl, which would leave the
-    incrementally-hydrated pointer cached instead of always-fresh."""
+    incrementally-hydrated pointer cached instead of always-fresh — so the hash
+    is passed again explicitly (WO-41)."""
     def _copy_one(p: Path, raw_key: str, latest_key: str) -> None:
         client.copy_object(
             Bucket=R2_BUCKET, CopySource={"Bucket": R2_BUCKET, "Key": raw_key},
             Key=latest_key, ContentType=_content_type(p),
-            CacheControl=LATEST_CACHE_CONTROL, MetadataDirective="REPLACE")
+            CacheControl=LATEST_CACHE_CONTROL, MetadataDirective="REPLACE",
+            Metadata={RAW_META: shas[raw_key]})
 
     _pool(_copy_one, mirror)
     return len(mirror)
@@ -425,21 +458,21 @@ def _budget_line(class_a: int, tag: str = "publish") -> None:
 def _bytes_line(to_put: list[tuple[Path, str]], raw: list[tuple[Path, str]],
                 tag: str = "publish") -> None:
     """Bytes sent this run, serving and raw apart, because they cost differently.
-    A serving PUT overwrites its object in place. The raw figure is NEW storage
-    on every run: the dated partition never reuses a key, so this number times
-    the nights retained is what the lake occupies. (The latest-pointer copies
+    A serving PUT overwrites its object in place. The raw figure is NEW storage:
+    the dated partition gets only the files whose bytes changed (WO-41) and
+    keeps them until retention prunes the night. (The latest-pointer copies
     are server-side and overwrite in place: no bytes sent, no growth.)"""
     serving_b = sum(p.stat().st_size for p, _ in to_put)
     raw_b = sum(p.stat().st_size for p, _ in raw)
     print(f"{tag}: bytes written this run = serving {serving_b:,} B "
           f"({serving_b / 2**20:.1f} MiB) + raw {raw_b:,} B ({raw_b / 2**20:.1f} MiB, "
-          "new storage every run)")
+          "new storage)")
 
 
 def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
         dry_run: bool | None = None, force_all: bool = False,
         delete_stale: bool = False, allow_mass_delete: bool = False,
-        allow_bulk_writes: bool = False) -> int:
+        allow_bulk_writes: bool = False, raw_retention_delete: bool = False) -> int:
     data_dir = Path(data_dir)
     serving = [(p, p.relative_to(data_dir).as_posix())              # bucket-root keys
                for p in sorted(data_dir.rglob("*")) if p.is_file()]
@@ -467,23 +500,25 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
 
     client = _client()
     # ── Plan: reads only. Decide every write before making the first one. ──
-    # Serving artifacts are compared on their stable digest; the raw mirror on
-    # its bytes. The dated raw partition is not compared at all: its keys are
-    # date-partitioned, so every object is a new key and a HEAD would only ever
-    # 404. --force-all skips the comparison — the point of a full rebuild is to
-    # replace whatever is in the bucket regardless of what the bucket says.
+    # Serving artifacts are compared on their stable digest. A raw file is
+    # compared on the SHA-256 stored with its raw/latest/ copy (WO-41): equal
+    # means neither the dated PUT nor the latest COPY is made. --force-all skips
+    # the comparison — the point of a full rebuild is to replace whatever is in
+    # the bucket regardless of what the bucket says.
     if force_all:
         to_put, to_copy = serving, mirror
     else:
         same = _pool(lambda p, key: _already_stored(client, key, p), serving)
         to_put = [item for item, hit in zip(serving, same) if not hit]
-        same = _pool(lambda p, _raw_key, latest_key: _same_bytes(client, latest_key, p), mirror)
+        same = _pool(lambda p, _raw_key, latest_key: _raw_unchanged(client, latest_key, p),
+                     mirror)
         to_copy = [item for item, hit in zip(mirror, same) if not hit]
-    writes = len(to_put) + len(raw) + len(to_copy)
+    raw_put = [(p, raw_key) for p, raw_key, _ in to_copy]   # changed raw files only
+    writes = len(to_put) + len(raw_put) + len(to_copy)
     if writes > BULK_WRITE_LIMIT and not (force_all or allow_bulk_writes):
         raise RuntimeError(
             f"publish: this run would make {writes} writes ({len(to_put)} serving + "
-            f"{len(raw)} raw + {len(to_copy)} latest-pointer), over the "
+            f"{len(raw_put)} raw +{len(to_copy)} latest-pointer), over the "
             f"{BULK_WRITE_LIMIT} single-run limit. Nothing was written. If this is "
             "intended, pass --allow-bulk-writes.")
     serving_keys = {key for _, key in serving}
@@ -493,38 +528,44 @@ def run(data_dir: str | Path = PAGES_DIST, raw_dir: str | Path = RAW_DIST,
 
     if dry_run:
         stale, tripped, lists = _find_stale(client, live_keys)
+        kept = retention.plan(client, len(mirror))
         for _, key in to_put:
             print(f"publish[dry-run] would upload {key}")
         _settle_stale(client, stale, tripped, delete=delete_stale,
                       allow_mass_delete=allow_mass_delete, dry_run=True, tag="publish[dry-run]",
                       migrated=hints.get("migrated"))
         print(f"publish[dry-run]: {len(to_put)}/{len(serving)} serving ({skipped} unchanged, "
-              f"skipped) + {len(raw)} raw + {len(to_copy)}/{len(mirror)} latest-pointer; "
-              f"{sum(map(len, stale.values()))} stale. Nothing written, nothing deleted.")
-        _budget_line(writes + lists, "publish[dry-run]")
-        _bytes_line(to_put, raw, "publish[dry-run]")
+              f"skipped) + {len(raw_put)}/{len(raw)} raw + {len(to_copy)}/{len(mirror)} "
+              f"latest-pointer; {sum(map(len, stale.values()))} stale. Nothing written, "
+              "nothing deleted.")
+        _budget_line(writes + lists + kept["lists"], "publish[dry-run]")
+        _bytes_line(to_put, raw_put, "publish[dry-run]")
+        retention.settle(client, kept, delete=False, tag="retention[dry-run]")
         return len(serving) + len(raw)
 
     _ensure_cors(client)
     _put_batch(client, to_put, CACHE_CONTROL, with_digest=True)
-    _put_batch(client, raw, RAW_CACHE_CONTROL)              # immutable lake partition
+    shas = _put_raw(client, raw_put)                        # changed raw files only
     # --- WO-10: write the last-good pointer AFTER the run's raw lake is uploaded,
     # so it only ever names a fully-landed lake. A file whose bytes raw/latest/
-    # already holds is not copied again.
-    _copy_batch_to_latest(client, to_copy)
+    # already holds is neither re-uploaded nor copied again.
+    _copy_batch_to_latest(client, to_copy, shas)
     print(f"publish: {len(to_put)}/{len(serving)} serving "
-          f"({skipped} unchanged, skipped) + {len(raw)} raw "
+          f"({skipped} unchanged, skipped) + {len(raw_put)}/{len(raw)} raw "
+          f"({len(raw) - len(raw_put)} unchanged, skipped) "
           f"+ {len(to_copy)}/{len(mirror)} latest-pointer (server-side copy) "
           f"-> r2://{R2_BUCKET}/")
 
     # ── Stale objects: last, so everything this run produced is already live
     # and a tripwire stops only the deletion. Listed always; deleted on request.
     stale, tripped, lists = _find_stale(client, live_keys)
-    _budget_line(writes + lists)
-    _bytes_line(to_put, raw)
+    kept = retention.plan(client, len(mirror))              # WO-41: read-only listing
+    _budget_line(writes + lists + kept["lists"])
+    _bytes_line(to_put, raw_put)
     _settle_stale(client, stale, tripped, delete=delete_stale,
                   allow_mass_delete=allow_mass_delete, dry_run=False, tag="publish",
                   migrated=hints.get("migrated"))
+    retention.settle(client, kept, delete=raw_retention_delete)
     return len(serving) + len(raw)
 
 
@@ -544,7 +585,11 @@ if __name__ == "__main__":
                          "objects trips the mass-delete tripwire")
     ap.add_argument("--allow-bulk-writes", action="store_true",
                     help=f"permit more than {BULK_WRITE_LIMIT} writes in one run")
+    ap.add_argument("--raw-retention-delete", action="store_true",
+                    help="WO-41: delete the dated raw objects retention lists (without "
+                         "it the listing is printed and nothing is deleted)")
     args = ap.parse_args()
     run(dry_run=args.dry_run, force_all=args.force_all,
         delete_stale=args.delete_stale, allow_mass_delete=args.allow_mass_delete,
-        allow_bulk_writes=args.allow_bulk_writes)
+        allow_bulk_writes=args.allow_bulk_writes,
+        raw_retention_delete=args.raw_retention_delete)

@@ -89,6 +89,11 @@ jobs:
           # Enabled after two consecutive nightlies showed the same stale set
           # (officials who left office); raw/, tiles/ and fonts/ are never deleted.
           flags="$flags --delete-stale"
+          # WO-41 raw-lake retention runs every night in DRY-RUN: the step log
+          # lists each raw/{date}/ prefix it would delete and deletes nothing.
+          # Enable deletion (a separate one-line PR, after the owner has read
+          # one night's listing) by uncommenting the next line.
+          # flags="$flags --raw-retention-delete"
           if [ "${{ github.event.inputs.allow_mass_delete }}" = "true" ]; then
             flags="$flags --allow-mass-delete"
           fi
