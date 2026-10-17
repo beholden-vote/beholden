@@ -691,14 +691,35 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900;
     let area = 0;
     let tries = 0;
+    // Nothing known of this division yet (a cold #/d/ link, nothing viewed): go to
+    // its state, which is always loaded, then in to the layer's own minzoom so its
+    // tiles load, and fit once they have. Never a dead button.
+    const stateOcd = /^(.*\/state:[a-z]{2})/.exec(ocdId)?.[1];
+    const SL = LAYERS.find((x) => x.id === "states")!;
+    let approached = false;
+    const approach = (): boolean => {
+      if (approached || !stateOcd || stateOcd === ocdId) return false;
+      for (const f of map.querySourceFeatures(SL.archive, { sourceLayer: SL.sourceLayer })) {
+        if (String(f.id) === stateOcd) extendSeen(stateOcd, f.geometry);
+      }
+      const sb = seenBounds.get(stateOcd);
+      if (!sb || sb.isEmpty()) return false;
+      approached = true;
+      // Registered first: with no animation (reduced motion) moveend fires inside fitBounds.
+      map.once("moveend", () => {
+        if (map.getZoom() < L.minzoom + 0.3) map.easeTo({ zoom: L.minzoom + 0.3, duration });
+      });
+      map.fitBounds(sb, { padding, duration, maxZoom: 11 });
+      return true;
+    };
     const fit = () => {
       const b = bounds();
-      if (!b) return;
+      if (!b) { if ((approach() || approached) && ++tries < 8) map.once("idle", fit); return; }
       const a = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth());
       if (a <= area * 1.05) return;            // nothing new loaded: done
       area = a;
       map.fitBounds(b, { padding, duration, maxZoom: 11 });
-      if (++tries < 4) map.once("idle", fit);
+      if (++tries < 8) map.once("idle", fit);
     };
     fit();
   };
