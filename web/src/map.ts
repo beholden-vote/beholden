@@ -11,6 +11,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
 import { loadStateCoverage } from "./lib/coverage";
+import { layerOfOcd } from "./ui/place/divisions";
 import { BANDS, bandAt, bandStart, type BandStop } from "./lib/levels";
 import type { DivisionProps } from "./types";
 import { colourFor, colourState, loadCdPeople, loadPositions, modeValue, reportColour, scaleFor, subscribeColour } from "./lib/positions";   // WO-38
@@ -106,6 +107,7 @@ const FILL_OPACITY_CASE = [
   0.8,
 ] as const;
 const SELECTED = ["boolean", ["feature-state", "selected"], false];
+const EMPH = ["boolean", ["feature-state", "emph"], false];   // panel row hover / focus
 
 // MapLibre requires "zoom" to be the DIRECT input of a top-level "interpolate",
 // so the zoom ramp is the outer expression and per-feature cases live in its stop
@@ -120,7 +122,8 @@ const fillExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
   off ? 0 : manual ? FILL_OPACITY_CASE
     : ramp(BANDS[id], (p) => (p > 0 ? FILL_OPACITY_CASE : ["case", SELECTED, 0.95, 0]));
 const lineExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
-  off ? ["case", SELECTED, 1, 0] : manual ? 1 : ramp(BANDS[id], (p) => ["case", SELECTED, 1, p]);
+  off ? ["case", SELECTED, 1, EMPH, 0.9, 0]
+    : manual ? 1 : ramp(BANDS[id], (p) => ["case", SELECTED, 1, EMPH, 0.9, p]);
 const refExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
   off || manual ? 0 : ramp(BANDS[id], (_p, r) => r);
 
@@ -187,6 +190,10 @@ export interface BeholdenMap {
   setLayerMode(mode: LayerMode): void;
   /** Which state chamber auto mode draws (one at a time; both = manual only). */
   setChamber(chamber: "sldl" | "sldu"): void;
+  /** Outline one division (panel row hover/focus); null clears it. Not a selection. */
+  highlight(ocdId: string | null): void;
+  /** Fit the map to one division and make it the single selected one. */
+  showDivision(ocdId: string): void;
   /** Drop/move the "you are here" marker. precise=false renders the fainter
    *  "approximate area" style (coarse IP location); true = exact (geolocation). */
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
@@ -356,12 +363,14 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
           "line-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false], "#9fd4ff",
+            ["boolean", ["feature-state", "emph"], false], "#7fb2d4",
             ["boolean", ["feature-state", "hover"], false], "#5f93b8",
             "#2a6486",
           ],
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.2,
+            ["boolean", ["feature-state", "emph"], false], 1.5,
             ["boolean", ["feature-state", "hover"], false], 1.4,
             0.9,
           ],
@@ -539,6 +548,18 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
   map.on("mouseout", () => setHover(null));
 
   // ---- click: resolve the full stack at the point, topmost first ----
+  // What has been seen of each division's outline (clicks and loaded tiles), so
+  // "Show on map" can fit a level whose tiles are not loaded at the current zoom.
+  const seenBounds = new Map<string, maplibregl.LngLatBounds>();
+  const extendSeen = (ocdId: string, geometry: unknown) => {
+    const b = seenBounds.get(ocdId) ?? new maplibregl.LngLatBounds();
+    const walk = (c: unknown): void => {
+      if (Array.isArray(c) && typeof c[0] === "number") b.extend(c as [number, number]);
+      else if (Array.isArray(c)) c.forEach(walk);
+    };
+    walk((geometry as { coordinates?: unknown }).coordinates);
+    seenBounds.set(ocdId, b);
+  };
   let selected: FeatRef[] = [];
   const clearSelection = () => {
     for (const ref of selected) map.setFeatureState(ref, { selected: false });
@@ -556,6 +577,19 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     clearSelection();
     const seen = new Set<string>();
     const hits: RawStackHit[] = [];
+    // ONE division is selected on the map: the one drawn as the primary boundary
+    // here (the first wins a tie, and feats is topmost-first). The rest of the
+    // stack still goes to the panel, but gets no outline and no fill, and does
+    // not keep its layer on screen -- the zoom table alone decides that.
+    const z = map.getZoom();
+    let primaryId: string | null = null;
+    let best = -1;
+    for (const f of feats) if (f.id != null) extendSeen(String(f.id), f.geometry);
+    for (const f of feats) {
+      const l = f.layer.id.replace(/-fill$/, "") as LayerId;
+      const p = chamberOff(l) ? -0.5 : bandAt(l, z).primary;
+      if (f.id != null && p > best) { best = p; primaryId = `${l}:${f.id}`; }
+    }
     for (const f of feats) {
       const layer = f.layer.id.replace(/-fill$/, "") as LayerId;
       if (f.id == null || seen.has(layer)) continue;   // one hit per level
@@ -565,13 +599,12 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       // standing in it. Tile properties, not a lookup — no extra request.
       hits.push({ layer, ocdId: String(f.id), props: (f.properties ?? {}) as DivisionProps });
       if (LOCAL.includes(layer)) reach([(f.properties as DivisionProps).state]);
+      if (primaryId !== `${layer}:${f.id}`) continue;
       const ref = { source: f.source, sourceLayer: f.sourceLayer!, id: String(f.id) };
       map.setFeatureState(ref, { selected: true });
       selected.push(ref);
-      selectedLayers.add(layer);   // never auto-hide a level in the live selection
+      selectedLayers.add(layer);   // keeps ITS OWN layer present, nothing else
     }
-    // Keep every selected level present (e.g. a sld* hit clicked below its fade
-    // floor stays interactive until the panel closes).
     applyAllVis();
     onSelect(hits, lngLat);
   };
@@ -619,6 +652,77 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     applyPaint();
     applyAllVis();
   };
+  // Panel row hover / focus: one subtler outline on that division, nothing persistent.
+  let emph: FeatRef | null = null;
+  const highlight = (ocdId: string | null) => {
+    if (emph) map.setFeatureState(emph, { emph: false });
+    emph = null;
+    if (!ocdId) return;
+    const L = LAYERS.find((x) => x.id === layerOfOcd(ocdId));
+    if (!L) return;
+    emph = { source: L.archive, sourceLayer: L.sourceLayer, id: ocdId };
+    map.setFeatureState(emph, { emph: true });
+  };
+  // "Show on map" (panel row): fit the map to one division and make it THE selected
+  // one. Tiles hold only the parts of a division near what has been viewed, so the
+  // bounds are re-read after each move settles and the fit repeats while they grow.
+  const showDivision = (ocdId: string) => {
+    const layer = layerOfOcd(ocdId);
+    const L = LAYERS.find((x) => x.id === layer);
+    if (!L || !layer) return;
+    flight++;                                  // overtakes any pending arrival
+    clearSelection();
+    const ref = { source: L.archive, sourceLayer: L.sourceLayer, id: ocdId };
+    map.setFeatureState(ref, { selected: true });
+    selected.push(ref);
+    selectedLayers.add(layer);
+    applyAllVis();
+    const bounds = () => {
+      for (const f of map.querySourceFeatures(L.archive, { sourceLayer: L.sourceLayer })) {
+        if (String(f.id) === ocdId) extendSeen(ocdId, f.geometry);
+      }
+      const b = seenBounds.get(ocdId);
+      return b && !b.isEmpty() ? b : null;
+    };
+    const narrow = window.matchMedia("(max-width: 719px)").matches;
+    const padding = narrow
+      ? { top: 90, left: 24, right: 24, bottom: Math.round(window.innerHeight * 0.5) + 16 }
+      : { top: 90, left: 40, bottom: 40, right: 460 };
+    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900;
+    let area = 0;
+    let tries = 0;
+    // Nothing known of this division yet (a cold #/d/ link, nothing viewed): go to
+    // its state, which is always loaded, then in to the layer's own minzoom so its
+    // tiles load, and fit once they have. Never a dead button.
+    const stateOcd = /^(.*\/state:[a-z]{2})/.exec(ocdId)?.[1];
+    const SL = LAYERS.find((x) => x.id === "states")!;
+    let approached = false;
+    const approach = (): boolean => {
+      if (approached || !stateOcd || stateOcd === ocdId) return false;
+      for (const f of map.querySourceFeatures(SL.archive, { sourceLayer: SL.sourceLayer })) {
+        if (String(f.id) === stateOcd) extendSeen(stateOcd, f.geometry);
+      }
+      const sb = seenBounds.get(stateOcd);
+      if (!sb || sb.isEmpty()) return false;
+      approached = true;
+      // Registered first: with no animation (reduced motion) moveend fires inside fitBounds.
+      map.once("moveend", () => {
+        if (map.getZoom() < L.minzoom + 0.3) map.easeTo({ zoom: L.minzoom + 0.3, duration });
+      });
+      map.fitBounds(sb, { padding, duration, maxZoom: 11 });
+      return true;
+    };
+    const fit = () => {
+      const b = bounds();
+      if (!b) { if ((approach() || approached) && ++tries < 8) map.once("idle", fit); return; }
+      const a = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth());
+      if (a <= area * 1.05) return;            // nothing new loaded: done
+      area = a;
+      map.fitBounds(b, { padding, duration, maxZoom: 11 });
+      if (++tries < 8) map.once("idle", fit);
+    };
+    fit();
+  };
   const setChamber = (next: "sldl" | "sldu") => {
     chamber = next;
     applyPaint();
@@ -638,5 +742,5 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     userMarker.getElement().classList.toggle("you-marker-approx", !precise);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, setUserLocation };
+  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, highlight, showDivision, setUserLocation };
 }

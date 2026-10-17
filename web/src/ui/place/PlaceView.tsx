@@ -60,13 +60,19 @@ export function ArrivePrompt({ onDismiss, ...fix }: FixProps & { onDismiss: () =
  *  line is deliberately thin: identifiers we publish (FIPS/GEOID, the OCD id)
  *  plus counts over the pins already on screen. No party breakdown -- every
  *  row below carries its own chip. */
-function DivisionCard({ entry }: { entry: StackEntry }) {
+function DivisionCard({ entry, onShow }: { entry: StackEntry; onShow?: (ocdId: string) => void }) {
   const geoid = entry.props?.geoid;
   const seats = entry.pins.length;
   const vacant = entry.pins.filter((p) => p.vacant).length;
   return (
     <div className="division-card">
       <h4 className="division-name">{divisionName(entry.layer, entry.props ?? {}, entry.ocdId)}</h4>
+      {onShow && (
+        <button type="button" className="show-on-map" onClick={() => onShow(entry.ocdId)}
+                aria-label={`Show ${divisionName(entry.layer, entry.props ?? {}, entry.ocdId)} on the map`}>
+          Show on map
+        </button>
+      )}
       <p className="division-meta mono">
         <span>{LEVEL_TITLES[entry.layer] ?? entry.layer}</span>
         {geoid && <span title="Census GEOID / FIPS code">FIPS {geoid}</span>}
@@ -86,8 +92,10 @@ function emptyNote(layer: StackEntry["layer"]): string {
 
 /** One collapsible level (Federal / State / Local). The officeholder count
  *  stays visible when collapsed, so the level's weight reads at a glance. */
-function LevelSection({ level, entries, loading, onOpen }: {
+function LevelSection({ level, entries, loading, onOpen, onHighlight, onShow }: {
   level: string; entries: StackEntry[]; loading: boolean; onOpen: (pin: Pin) => void;
+  onHighlight?: (ocdId: string | null) => void;
+  onShow?: (ocdId: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const count = entries.reduce((n, e) => n + e.pins.length, 0);
@@ -102,8 +110,13 @@ function LevelSection({ level, entries, loading, onOpen }: {
         </button>
       </h3>
       {open && entries.map((entry) => (
-        <div className="stack-level" key={`${entry.layer}:${entry.ocdId}`}>
-          <DivisionCard entry={entry} />
+        // Hover or keyboard focus outlines this one division on the map; leaving clears it.
+        <div className="stack-level" key={`${entry.layer}:${entry.ocdId}`}
+             onPointerEnter={(e) => { if (e.pointerType === "mouse") onHighlight?.(entry.ocdId); }}
+             onPointerLeave={() => onHighlight?.(null)}
+             onFocus={() => onHighlight?.(entry.ocdId)}
+             onBlur={() => onHighlight?.(null)}>
+          <DivisionCard entry={entry} onShow={onShow} />
           {/* WO-37: coverage and Census facts for a county or city. */}
           {(entry.layer === "county" || entry.layer === "place") && <AreaCard entry={entry} />}
           {loading || shardPending(entry.ocdId) ? <EmptyNote>{STRINGS.placeLoading}</EmptyNote>
@@ -152,16 +165,19 @@ function CopyLink({ ocdId }: { ocdId: string }) {
   );
 }
 
-export function PlaceView({ view, pins, onOpenPerson, fix }: {
+export function PlaceView({ view, pins, onOpenPerson, onHighlight, onShow, fix }: {
   view: PlaceState;
   /** null while the pin feeds are still loading. */
   pins: PinIndex | null;
   onOpenPerson: (pin: Pin) => void;
+  onHighlight?: (ocdId: string | null) => void;
+  onShow?: (ocdId: string) => void;
   fix: FixProps;
 }) {
   // Forgetting changes storage, not props; re-read it.
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => () => onHighlight?.(null), [onHighlight]);
   // WO-37: the county / city pins live in per-state shards (contracts 8.11),
   // fetched when this place first needs them and then kept for the session.
   useEffect(() => {
@@ -208,7 +224,7 @@ export function PlaceView({ view, pins, onOpenPerson, fix }: {
         const here = entries.filter((e) => sec.layers.includes(e.layer));
         if (here.length === 0) return null;   // no division at this level: no section
         return <LevelSection key={sec.level} level={sec.level} entries={here}
-                             loading={pins === null} onOpen={onOpenPerson} />;
+                             loading={pins === null} onOpen={onOpenPerson} onHighlight={onHighlight} onShow={onShow} />;
       })}
 
       {/* Below the list, not above it: on a phone the first thing under the

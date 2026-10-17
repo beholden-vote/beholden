@@ -237,7 +237,9 @@ export const nav = {
       if (v.kind === "home") break;
       // One crumb per view, however many entries it holds: an info page laid
       // over it, or the same dossier reached again on another tab by a typed link.
-      if (above && (v === above || (v.kind === "person" && above.kind === "person" && v.personId === above.personId))) continue;
+      if (above && (v === above ||
+          // The same place reached twice in a row (own place, then a click inside it).
+          (v.kind === "place" && above.kind === "place" && titleOf(v) === titleOf(above)) || (v.kind === "person" && above.kind === "person" && v.personId === above.personId))) continue;
       above = v;
       out.unshift({ label: titleOf(v), href: urlFor(v), delta: j - cur });
     }
