@@ -1117,3 +1117,10 @@ h4 { margin: 14px 0 7px; font-size: 11px; color: var(--mut); text-transform: upp
   .stand-measure { flex-direction: column; gap: 2px; }
   .stand-measure dd { text-align: left; }
 }
+
+/* WO-37 fix: per-division "Show on map" control in the place panel. */
+.division-card .show-on-map {
+  margin: 0 0 6px; padding: 2px 8px; min-height: 24px; font: 500 11px var(--font-mono);
+  background: none; color: var(--sig); border: 1px solid var(--sig); border-radius: 0; cursor: pointer;
+}
+.division-card .show-on-map:hover, .division-card .show-on-map:focus-visible { background: var(--sig); color: var(--on-sig); }

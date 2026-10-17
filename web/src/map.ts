@@ -192,6 +192,8 @@ export interface BeholdenMap {
   setChamber(chamber: "sldl" | "sldu"): void;
   /** Outline one division (panel row hover/focus); null clears it. Not a selection. */
   highlight(ocdId: string | null): void;
+  /** Fit the map to one division and make it the single selected one. */
+  showDivision(ocdId: string): void;
   /** Drop/move the "you are here" marker. precise=false renders the fainter
    *  "approximate area" style (coarse IP location); true = exact (geolocation). */
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
@@ -546,6 +548,18 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
   map.on("mouseout", () => setHover(null));
 
   // ---- click: resolve the full stack at the point, topmost first ----
+  // What has been seen of each division's outline (clicks and loaded tiles), so
+  // "Show on map" can fit a level whose tiles are not loaded at the current zoom.
+  const seenBounds = new Map<string, maplibregl.LngLatBounds>();
+  const extendSeen = (ocdId: string, geometry: unknown) => {
+    const b = seenBounds.get(ocdId) ?? new maplibregl.LngLatBounds();
+    const walk = (c: unknown): void => {
+      if (Array.isArray(c) && typeof c[0] === "number") b.extend(c as [number, number]);
+      else if (Array.isArray(c)) c.forEach(walk);
+    };
+    walk((geometry as { coordinates?: unknown }).coordinates);
+    seenBounds.set(ocdId, b);
+  };
   let selected: FeatRef[] = [];
   const clearSelection = () => {
     for (const ref of selected) map.setFeatureState(ref, { selected: false });
@@ -570,6 +584,7 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     const z = map.getZoom();
     let primaryId: string | null = null;
     let best = -1;
+    for (const f of feats) if (f.id != null) extendSeen(String(f.id), f.geometry);
     for (const f of feats) {
       const l = f.layer.id.replace(/-fill$/, "") as LayerId;
       const p = chamberOff(l) ? -0.5 : bandAt(l, z).primary;
@@ -648,6 +663,45 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     emph = { source: L.archive, sourceLayer: L.sourceLayer, id: ocdId };
     map.setFeatureState(emph, { emph: true });
   };
+  // "Show on map" (panel row): fit the map to one division and make it THE selected
+  // one. Tiles hold only the parts of a division near what has been viewed, so the
+  // bounds are re-read after each move settles and the fit repeats while they grow.
+  const showDivision = (ocdId: string) => {
+    const layer = layerOfOcd(ocdId);
+    const L = LAYERS.find((x) => x.id === layer);
+    if (!L || !layer) return;
+    flight++;                                  // overtakes any pending arrival
+    clearSelection();
+    const ref = { source: L.archive, sourceLayer: L.sourceLayer, id: ocdId };
+    map.setFeatureState(ref, { selected: true });
+    selected.push(ref);
+    selectedLayers.add(layer);
+    applyAllVis();
+    const bounds = () => {
+      for (const f of map.querySourceFeatures(L.archive, { sourceLayer: L.sourceLayer })) {
+        if (String(f.id) === ocdId) extendSeen(ocdId, f.geometry);
+      }
+      const b = seenBounds.get(ocdId);
+      return b && !b.isEmpty() ? b : null;
+    };
+    const narrow = window.matchMedia("(max-width: 719px)").matches;
+    const padding = narrow
+      ? { top: 90, left: 24, right: 24, bottom: Math.round(window.innerHeight * 0.5) + 16 }
+      : { top: 90, left: 40, bottom: 40, right: 460 };
+    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 900;
+    let area = 0;
+    let tries = 0;
+    const fit = () => {
+      const b = bounds();
+      if (!b) return;
+      const a = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth());
+      if (a <= area * 1.05) return;            // nothing new loaded: done
+      area = a;
+      map.fitBounds(b, { padding, duration, maxZoom: 11 });
+      if (++tries < 4) map.once("idle", fit);
+    };
+    fit();
+  };
   const setChamber = (next: "sldl" | "sldu") => {
     chamber = next;
     applyPaint();
@@ -667,5 +721,5 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     userMarker.getElement().classList.toggle("you-marker-approx", !precise);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, highlight, setUserLocation };
+  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, highlight, showDivision, setUserLocation };
 }
