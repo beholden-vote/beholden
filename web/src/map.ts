@@ -11,6 +11,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { DATA } from "./lib/data";
 import { loadStateCoverage } from "./lib/coverage";
+import { layerOfOcd } from "./ui/place/divisions";
 import { BANDS, bandAt, bandStart, type BandStop } from "./lib/levels";
 import type { DivisionProps } from "./types";
 import { colourFor, colourState, loadCdPeople, loadPositions, modeValue, reportColour, scaleFor, subscribeColour } from "./lib/positions";   // WO-38
@@ -106,6 +107,7 @@ const FILL_OPACITY_CASE = [
   0.8,
 ] as const;
 const SELECTED = ["boolean", ["feature-state", "selected"], false];
+const EMPH = ["boolean", ["feature-state", "emph"], false];   // panel row hover / focus
 
 // MapLibre requires "zoom" to be the DIRECT input of a top-level "interpolate",
 // so the zoom ramp is the outer expression and per-feature cases live in its stop
@@ -120,7 +122,8 @@ const fillExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
   off ? 0 : manual ? FILL_OPACITY_CASE
     : ramp(BANDS[id], (p) => (p > 0 ? FILL_OPACITY_CASE : ["case", SELECTED, 0.95, 0]));
 const lineExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
-  off ? ["case", SELECTED, 1, 0] : manual ? 1 : ramp(BANDS[id], (p) => ["case", SELECTED, 1, p]);
+  off ? ["case", SELECTED, 1, EMPH, 0.9, 0]
+    : manual ? 1 : ramp(BANDS[id], (p) => ["case", SELECTED, 1, EMPH, 0.9, p]);
 const refExpr = (id: LayerId, manual: boolean, off: boolean): unknown =>
   off || manual ? 0 : ramp(BANDS[id], (_p, r) => r);
 
@@ -187,6 +190,8 @@ export interface BeholdenMap {
   setLayerMode(mode: LayerMode): void;
   /** Which state chamber auto mode draws (one at a time; both = manual only). */
   setChamber(chamber: "sldl" | "sldu"): void;
+  /** Outline one division (panel row hover/focus); null clears it. Not a selection. */
+  highlight(ocdId: string | null): void;
   /** Drop/move the "you are here" marker. precise=false renders the fainter
    *  "approximate area" style (coarse IP location); true = exact (geolocation). */
   setUserLocation(lng: number, lat: number, precise?: boolean): void;
@@ -356,12 +361,14 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
           "line-color": [
             "case",
             ["boolean", ["feature-state", "selected"], false], "#9fd4ff",
+            ["boolean", ["feature-state", "emph"], false], "#7fb2d4",
             ["boolean", ["feature-state", "hover"], false], "#5f93b8",
             "#2a6486",
           ],
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.2,
+            ["boolean", ["feature-state", "emph"], false], 1.5,
             ["boolean", ["feature-state", "hover"], false], 1.4,
             0.9,
           ],
@@ -556,6 +563,18 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     clearSelection();
     const seen = new Set<string>();
     const hits: RawStackHit[] = [];
+    // ONE division is selected on the map: the one drawn as the primary boundary
+    // here (the first wins a tie, and feats is topmost-first). The rest of the
+    // stack still goes to the panel, but gets no outline and no fill, and does
+    // not keep its layer on screen -- the zoom table alone decides that.
+    const z = map.getZoom();
+    let primaryId: string | null = null;
+    let best = -1;
+    for (const f of feats) {
+      const l = f.layer.id.replace(/-fill$/, "") as LayerId;
+      const p = chamberOff(l) ? -0.5 : bandAt(l, z).primary;
+      if (f.id != null && p > best) { best = p; primaryId = `${l}:${f.id}`; }
+    }
     for (const f of feats) {
       const layer = f.layer.id.replace(/-fill$/, "") as LayerId;
       if (f.id == null || seen.has(layer)) continue;   // one hit per level
@@ -565,13 +584,12 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
       // standing in it. Tile properties, not a lookup — no extra request.
       hits.push({ layer, ocdId: String(f.id), props: (f.properties ?? {}) as DivisionProps });
       if (LOCAL.includes(layer)) reach([(f.properties as DivisionProps).state]);
+      if (primaryId !== `${layer}:${f.id}`) continue;
       const ref = { source: f.source, sourceLayer: f.sourceLayer!, id: String(f.id) };
       map.setFeatureState(ref, { selected: true });
       selected.push(ref);
-      selectedLayers.add(layer);   // never auto-hide a level in the live selection
+      selectedLayers.add(layer);   // keeps ITS OWN layer present, nothing else
     }
-    // Keep every selected level present (e.g. a sld* hit clicked below its fade
-    // floor stays interactive until the panel closes).
     applyAllVis();
     onSelect(hits, lngLat);
   };
@@ -619,6 +637,17 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     applyPaint();
     applyAllVis();
   };
+  // Panel row hover / focus: one subtler outline on that division, nothing persistent.
+  let emph: FeatRef | null = null;
+  const highlight = (ocdId: string | null) => {
+    if (emph) map.setFeatureState(emph, { emph: false });
+    emph = null;
+    if (!ocdId) return;
+    const L = LAYERS.find((x) => x.id === layerOfOcd(ocdId));
+    if (!L) return;
+    emph = { source: L.archive, sourceLayer: L.sourceLayer, id: ocdId };
+    map.setFeatureState(emph, { emph: true });
+  };
   const setChamber = (next: "sldl" | "sldu") => {
     chamber = next;
     applyPaint();
@@ -638,5 +667,5 @@ export function initMap(container: HTMLElement, onSelect: SelectHandler,
     userMarker.getElement().classList.toggle("you-marker-approx", !precise);
   };
 
-  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, setUserLocation };
+  return { map, goTo, clearSelection, setLayerVisible, setLayerMode, setChamber, highlight, setUserLocation };
 }

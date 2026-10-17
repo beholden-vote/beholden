@@ -137,6 +137,8 @@ export function App({ mapRef, handleRef }: {
 
   useEffect(() => { mapRef.current?.setChamber(chamber); }, [chamber, mapRef]);
 
+  const highlight = useCallback((id: string | null) => mapRef.current?.highlight(id), [mapRef]);
+
   /* ---- opening things ---------------------------------------------------- */
 
   const openPerson = useCallback((personId: string, title?: string) => {
@@ -346,7 +348,7 @@ export function App({ mapRef, handleRef }: {
         <Sheet sheetRef={sheetRef} label={titleOf(view)} stop={stop} onStop={setStop} onClose={nav.close}
                header={<Breadcrumb trail={nav.trail()} />}>
           {view.kind === "place" && (
-            <PlaceView view={view} pins={pins} fix={fix}
+            <PlaceView view={view} pins={pins} fix={fix} onHighlight={highlight}
                        onOpenPerson={(pin) => openPerson(pin.person_id, pin.full_name)} />
           )}
           {view.kind === "person" && (
