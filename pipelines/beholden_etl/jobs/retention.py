@@ -42,7 +42,7 @@ DATED = re.compile(r"raw/(\d{4}-\d{2}-\d{2})/(.+)")
 # list is the second lock on the same door.
 NEVER_DELETE = ("raw/latest/", "tiles/", "fonts/")
 KEEP_NIGHTS = 14
-DELETE_CAP = 10_000
+DELETE_CAP = 50_000
 
 
 def _night(key: str) -> tuple[str, str] | None:
